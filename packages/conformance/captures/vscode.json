@@ -1,0 +1,480 @@
+{
+  "adapter": "vscode",
+  "workspace": {
+    "workspaceId": "ws_nRiVkGm1aAw-o3r0jcpOlkcT",
+    "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+    "name": "typescript-project",
+    "roots": [
+      {
+        "rootId": "root_ioAYK9foT1DwmSZWnP5puV8H",
+        "name": "typescript-project",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project"
+      }
+    ],
+    "workspaceEpoch": 0,
+    "trust": "trusted"
+  },
+  "requestedUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+  "documentSymbols": {
+    "document": {
+      "workspaceId": "ws_nRiVkGm1aAw-o3r0jcpOlkcT",
+      "rootId": "root_ioAYK9foT1DwmSZWnP5puV8H",
+      "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+      "logicalPath": "src/circle.ts",
+      "revision": {
+        "editorVersion": 1,
+        "contentHash": "sha256:b1ab4a12fb75abc84152195b9e93051bdefbff31ee628bef2c63321412ffa503",
+        "workspaceEpoch": 0
+      },
+      "positionEncoding": "utf-16",
+      "languageId": "typescript",
+      "isDirty": false
+    },
+    "symbols": [
+      {
+        "handle": {
+          "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+          "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+          "id": "sym_f835TaCCsKidMoHYId-5rJWo",
+          "validUntilEpoch": 0
+        },
+        "locator": {
+          "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+          "name": "Circle",
+          "kind": "class",
+          "selectionRange": {
+            "start": {
+              "line": 16,
+              "character": 13
+            },
+            "end": {
+              "line": 16,
+              "character": 19
+            }
+          },
+          "positionEncoding": "utf-16",
+          "fingerprint": "sha256:44414cc5c32e002def0eac99b83be618361d4ed055f19a0dbb4d309e27e360d6"
+        },
+        "range": {
+          "start": {
+            "line": 16,
+            "character": 0
+          },
+          "end": {
+            "line": 48,
+            "character": 1
+          }
+        },
+        "children": [
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_-JvplLo6jEELe8dg9DR8C_2z",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "constructor",
+              "kind": "constructor",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 23,
+                  "character": 2
+                },
+                "end": {
+                  "line": 31,
+                  "character": 3
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:2971b247df28806b5c9a20b14d1186c8eca9f91f629f540b1528a645fb1e86d7"
+            },
+            "range": {
+              "start": {
+                "line": 23,
+                "character": 2
+              },
+              "end": {
+                "line": 31,
+                "character": 3
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_LVM71nsFax07GBdfZ41wEVfq",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "area",
+              "kind": "method",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 33,
+                  "character": 2
+                },
+                "end": {
+                  "line": 33,
+                  "character": 6
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:2bcb4e6e783c30ab0c1335e38a4fd5423507ee8f6854a6ea3da7a0baf45f42ef"
+            },
+            "range": {
+              "start": {
+                "line": 33,
+                "character": 2
+              },
+              "end": {
+                "line": 35,
+                "character": 3
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_qPunFZyodIQwY4wHlM-Yed59",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "id",
+              "kind": "property",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 17,
+                  "character": 11
+                },
+                "end": {
+                  "line": 17,
+                  "character": 13
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:ce1309fdd04a61843d068f07ecbed5f867a8bb435871dc6890fac489d8bff096"
+            },
+            "range": {
+              "start": {
+                "line": 17,
+                "character": 2
+              },
+              "end": {
+                "line": 17,
+                "character": 22
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_uej53_Wjs9gTUfrhv_I70k2S",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "label",
+              "kind": "property",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 18,
+                  "character": 11
+                },
+                "end": {
+                  "line": 18,
+                  "character": 16
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:fdf4c8015de9e3b74d6227f4c0b9664623ccb5a2d2405ac8bae65afce5a4a52b"
+            },
+            "range": {
+              "start": {
+                "line": 18,
+                "character": 2
+              },
+              "end": {
+                "line": 18,
+                "character": 25
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_L1d9v5EoVCcwSVcgZxul9RRM",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "perimeter",
+              "kind": "method",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 45,
+                  "character": 2
+                },
+                "end": {
+                  "line": 45,
+                  "character": 11
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:17f2064b3c2e066ad617b12dd2351f4034b19479fa6a7c731d0a8e1ccceace1e"
+            },
+            "range": {
+              "start": {
+                "line": 45,
+                "character": 2
+              },
+              "end": {
+                "line": 47,
+                "character": 3
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_DgAteN--_qQCqzaonRm5ZRkN",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "radius",
+              "kind": "property",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 24,
+                  "character": 13
+                },
+                "end": {
+                  "line": 24,
+                  "character": 19
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:00785b6be841d6fdf6cdaa890f5e7eeceddc5856f1638386ca33534c7bc641bc"
+            },
+            "range": {
+              "start": {
+                "line": 24,
+                "character": 4
+              },
+              "end": {
+                "line": 24,
+                "character": 27
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+              "sessionId": "session_vHVwT9cxfY_px1oGHD_YtDeF",
+              "id": "sym_bdCuGyaofQ92JkQ6uxHj-ioM",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+              "name": "scale",
+              "kind": "method",
+              "containerName": "Circle",
+              "selectionRange": {
+                "start": {
+                  "line": 37,
+                  "character": 2
+                },
+                "end": {
+                  "line": 37,
+                  "character": 7
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:929a931f45d8afa2ba5c9f6fca9dfc98de1677933d4eefa7a51c8c64f98c3e58"
+            },
+            "range": {
+              "start": {
+                "line": 37,
+                "character": 2
+              },
+              "end": {
+                "line": 40,
+                "character": 3
+              }
+            },
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "hierarchy": {
+    "locations": [
+      {
+        "location": {
+          "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+          "range": {
+            "start": {
+              "line": 45,
+              "character": 2
+            },
+            "end": {
+              "line": 45,
+              "character": 11
+            }
+          },
+          "positionEncoding": "utf-16"
+        }
+      },
+      {
+        "location": {
+          "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/tests/circle.test.ts",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 0
+            }
+          },
+          "positionEncoding": "utf-16"
+        }
+      }
+    ],
+    "truncated": false
+  },
+  "editPlan": {
+    "planId": "plan_CDfUFGVEDtIgNL1MadZ9YzOK",
+    "adapterId": "adapter_navCiQ-AXB4tNvei4IvbULy2",
+    "sessionId": "session_jzLuxX5cZWHTmKyp3rZzvJzm",
+    "workspaceId": "ws_nRiVkGm1aAw-o3r0jcpOlkcT",
+    "expiresAt": "2026-08-15T10:56:16.577Z",
+    "operation": "rename",
+    "guarantee": "semantic",
+    "atomicity": "text-only",
+    "preconditions": [
+      {
+        "type": "documentRevision",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+        "editorVersion": 1,
+        "contentHash": "sha256:b1ab4a12fb75abc84152195b9e93051bdefbff31ee628bef2c63321412ffa503",
+        "workspaceEpoch": 0
+      },
+      {
+        "type": "documentRevision",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/index.ts",
+        "editorVersion": 1,
+        "contentHash": "sha256:616978f3c71c8597db04b58de65ec84ed06a2b9b12dd32d285cb9887b82af87e",
+        "workspaceEpoch": 0
+      },
+      {
+        "type": "documentRevision",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/tests/circle.test.ts",
+        "editorVersion": 1,
+        "contentHash": "sha256:ea844702f375b5685aebbcee3aed1d1969748d6ac7e6c6ab69c502820c3359f5",
+        "workspaceEpoch": 0
+      }
+    ],
+    "changes": [
+      {
+        "kind": "textEdit",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+        "editCount": 1
+      },
+      {
+        "kind": "textEdit",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/index.ts",
+        "editCount": 3
+      },
+      {
+        "kind": "textEdit",
+        "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/tests/circle.test.ts",
+        "editCount": 3
+      }
+    ],
+    "warnings": [
+      "Applying this plan saves every modified document to disk and cannot be undone through IDE Bridge on VS Code."
+    ]
+  },
+  "modification": {
+    "modifiedDocuments": [
+      {
+        "document": {
+          "workspaceId": "ws_nRiVkGm1aAw-o3r0jcpOlkcT",
+          "rootId": "root_ioAYK9foT1DwmSZWnP5puV8H",
+          "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/circle.ts",
+          "logicalPath": "src/circle.ts",
+          "revision": {
+            "editorVersion": 2,
+            "contentHash": "sha256:38784554ec86d305ab32f6912d0c64dc99d0f34a8dfb062169955a4cfa314f78",
+            "workspaceEpoch": 0
+          },
+          "positionEncoding": "utf-16",
+          "languageId": "typescript",
+          "isDirty": false
+        },
+        "beforeHash": "sha256:b1ab4a12fb75abc84152195b9e93051bdefbff31ee628bef2c63321412ffa503",
+        "afterHash": "sha256:38784554ec86d305ab32f6912d0c64dc99d0f34a8dfb062169955a4cfa314f78"
+      },
+      {
+        "document": {
+          "workspaceId": "ws_nRiVkGm1aAw-o3r0jcpOlkcT",
+          "rootId": "root_ioAYK9foT1DwmSZWnP5puV8H",
+          "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/src/index.ts",
+          "logicalPath": "src/index.ts",
+          "revision": {
+            "editorVersion": 2,
+            "contentHash": "sha256:bd55e83fcd74c2e9257a031ff442ea0a0da09385b6139080a8f8d30c5860fb06",
+            "workspaceEpoch": 0
+          },
+          "positionEncoding": "utf-16",
+          "languageId": "typescript",
+          "isDirty": false
+        },
+        "beforeHash": "sha256:616978f3c71c8597db04b58de65ec84ed06a2b9b12dd32d285cb9887b82af87e",
+        "afterHash": "sha256:bd55e83fcd74c2e9257a031ff442ea0a0da09385b6139080a8f8d30c5860fb06"
+      },
+      {
+        "document": {
+          "workspaceId": "ws_nRiVkGm1aAw-o3r0jcpOlkcT",
+          "rootId": "root_ioAYK9foT1DwmSZWnP5puV8H",
+          "uri": "file:///Users/pauldelifer/dev/moneta/examples/typescript-project/tests/circle.test.ts",
+          "logicalPath": "tests/circle.test.ts",
+          "revision": {
+            "editorVersion": 2,
+            "contentHash": "sha256:c67cd7f8b2271a0d4048bc2d0c386a9a521803365a1b62799faa90f11cd92586",
+            "workspaceEpoch": 0
+          },
+          "positionEncoding": "utf-16",
+          "languageId": "typescript",
+          "isDirty": false
+        },
+        "beforeHash": "sha256:ea844702f375b5685aebbcee3aed1d1969748d6ac7e6c6ab69c502820c3359f5",
+        "afterHash": "sha256:c67cd7f8b2271a0d4048bc2d0c386a9a521803365a1b62799faa90f11cd92586"
+      }
+    ]
+  }
+}

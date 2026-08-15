@@ -1,0 +1,490 @@
+{
+  "adapter": "jetbrains",
+  "requestedUri": "temp:///src/Service.java",
+  "workspace": {
+    "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+    "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+    "name": "a consumer reads symbols and diagnostics and renames through the real daemon",
+    "roots": [
+      {
+        "rootId": "root_yPcvwJ5aV35j3-a27JRvG1Zt",
+        "name": "src",
+        "uri": "temp:///src"
+      }
+    ],
+    "workspaceEpoch": 0,
+    "trust": "trusted"
+  },
+  "documentSymbols": {
+    "document": {
+      "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+      "rootId": "root_yPcvwJ5aV35j3-a27JRvG1Zt",
+      "uri": "temp:///src/Service.java",
+      "logicalPath": "Service.java",
+      "revision": {
+        "editorVersion": 0,
+        "contentHash": "sha256:9b5b6c1dddfe2403448ab662e554f2d43b61694e96205a88dea51a4019caee7a",
+        "workspaceEpoch": 0
+      },
+      "positionEncoding": "utf-16",
+      "languageId": "java",
+      "isDirty": false
+    },
+    "symbols": [
+      {
+        "handle": {
+          "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+          "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+          "id": "sym_fePNm_YBhvyzdv2g7YiUaZ8I",
+          "validUntilEpoch": 0
+        },
+        "locator": {
+          "documentUri": "temp:///src/Service.java",
+          "name": "Service",
+          "kind": "class",
+          "declarationType": "CLASS",
+          "selectionRange": {
+            "start": {
+              "line": 0,
+              "character": 6
+            },
+            "end": {
+              "line": 0,
+              "character": 13
+            }
+          },
+          "positionEncoding": "utf-16",
+          "fingerprint": "sha256:4b97975616148394a6ff156447f1015af74348dcb9f8b5235a8e1301a97a3a36"
+        },
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 0
+          },
+          "end": {
+            "line": 6,
+            "character": 1
+          }
+        },
+        "children": [
+          {
+            "handle": {
+              "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+              "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+              "id": "sym_T2_777yrRUut7QpY7hjzvwBe",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "temp:///src/Service.java",
+              "name": "count",
+              "kind": "field",
+              "declarationType": "FIELD",
+              "containerName": "Service",
+              "selectionRange": {
+                "start": {
+                  "line": 1,
+                  "character": 16
+                },
+                "end": {
+                  "line": 1,
+                  "character": 21
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:c8ad2806b1d8b7cf38842a8a3841d0d5bd363db10e4f5125d10ed566f4865777"
+            },
+            "range": {
+              "start": {
+                "line": 1,
+                "character": 4
+              },
+              "end": {
+                "line": 1,
+                "character": 37
+              }
+            },
+            "children": []
+          },
+          {
+            "handle": {
+              "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+              "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+              "id": "sym_dFWIKDy7lNTxwkAjIbzTDHqF",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "temp:///src/Service.java",
+              "name": "run",
+              "kind": "method",
+              "declarationType": "METHOD",
+              "containerName": "Service",
+              "selectionRange": {
+                "start": {
+                  "line": 3,
+                  "character": 9
+                },
+                "end": {
+                  "line": 3,
+                  "character": 12
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:58eccd34d7e91aa9258805621b7197bec62fc778b1c398ca100311636e4de20e"
+            },
+            "range": {
+              "start": {
+                "line": 3,
+                "character": 4
+              },
+              "end": {
+                "line": 5,
+                "character": 5
+              }
+            },
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "unspelledDocumentSymbols": {
+    "requestedUri": "temp:///src/Registry.kt",
+    "document": {
+      "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+      "rootId": "root_yPcvwJ5aV35j3-a27JRvG1Zt",
+      "uri": "temp:///src/Registry.kt",
+      "logicalPath": "Registry.kt",
+      "revision": {
+        "editorVersion": 0,
+        "contentHash": "sha256:b9c19395d42f08e50724689f845ec379f5eb57398c8e2ea4f4d46f8c465469ad",
+        "workspaceEpoch": 0
+      },
+      "positionEncoding": "utf-16",
+      "languageId": "kotlin",
+      "isDirty": false
+    },
+    "symbols": [
+      {
+        "handle": {
+          "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+          "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+          "id": "sym_JecDyMSVCnB6B40xXDLaBH3B",
+          "validUntilEpoch": 0
+        },
+        "locator": {
+          "documentUri": "temp:///src/Registry.kt",
+          "name": "Registry",
+          "kind": "class",
+          "declarationType": "CLASS",
+          "selectionRange": {
+            "start": {
+              "line": 0,
+              "character": 6
+            },
+            "end": {
+              "line": 0,
+              "character": 14
+            }
+          },
+          "positionEncoding": "utf-16",
+          "fingerprint": "sha256:c9d4e266839df42f17fb6b32401dd789c969f887d568c31b98f04b8e364dc39c"
+        },
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 0
+          },
+          "end": {
+            "line": 6,
+            "character": 1
+          }
+        },
+        "children": [
+          {
+            "handle": {
+              "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+              "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+              "id": "sym__c3gfwKABs147241N2KnXy8R",
+              "validUntilEpoch": 0
+            },
+            "locator": {
+              "documentUri": "temp:///src/Registry.kt",
+              "name": "Companion",
+              "kind": "unknown",
+              "declarationType": "OBJECT_DECLARATION",
+              "containerName": "Registry",
+              "selectionRange": {
+                "start": {
+                  "line": 1,
+                  "character": 14
+                },
+                "end": {
+                  "line": 1,
+                  "character": 14
+                }
+              },
+              "positionEncoding": "utf-16",
+              "fingerprint": "sha256:2d2666f449df1f3de2e14250ff73269a4bd1545deb34dc0ed2f364c082cabe69"
+            },
+            "range": {
+              "start": {
+                "line": 1,
+                "character": 4
+              },
+              "end": {
+                "line": 5,
+                "character": 5
+              }
+            },
+            "children": [
+              {
+                "handle": {
+                  "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+                  "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+                  "id": "sym_L_JvqNDR-fZchY8qKgO9LiLI",
+                  "validUntilEpoch": 0
+                },
+                "locator": {
+                  "documentUri": "temp:///src/Registry.kt",
+                  "name": "LIMIT",
+                  "kind": "property",
+                  "declarationType": "PROPERTY",
+                  "containerName": "Companion",
+                  "selectionRange": {
+                    "start": {
+                      "line": 2,
+                      "character": 18
+                    },
+                    "end": {
+                      "line": 2,
+                      "character": 23
+                    }
+                  },
+                  "positionEncoding": "utf-16",
+                  "fingerprint": "sha256:516e7c24a266f82d04c1904d6dd307172788f7f659a110898d75bca43ec93e6d"
+                },
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 8
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 27
+                  }
+                },
+                "children": []
+              },
+              {
+                "handle": {
+                  "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+                  "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+                  "id": "sym_l1TxTPTAx8OLxsa5sqpsLBP_",
+                  "validUntilEpoch": 0
+                },
+                "locator": {
+                  "documentUri": "temp:///src/Registry.kt",
+                  "name": "make",
+                  "kind": "function",
+                  "declarationType": "FUN",
+                  "containerName": "Companion",
+                  "selectionRange": {
+                    "start": {
+                      "line": 4,
+                      "character": 12
+                    },
+                    "end": {
+                      "line": 4,
+                      "character": 16
+                    }
+                  },
+                  "positionEncoding": "utf-16",
+                  "fingerprint": "sha256:d9e566f43fbd2a88b1717fb982d751256ccaff15432a14300a167555424208d6"
+                },
+                "range": {
+                  "start": {
+                    "line": 4,
+                    "character": 8
+                  },
+                  "end": {
+                    "line": 4,
+                    "character": 21
+                  }
+                },
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "searchSymbols": {
+    "requestedLimit": 50,
+    "symbols": [
+      {
+        "handle": {
+          "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+          "sessionId": "session_3g7ydlOFYjDCkS7RoSXsVzEy",
+          "id": "sym_bldjx-2kTReMWtm_1YDBpXHU",
+          "validUntilEpoch": 0
+        },
+        "locator": {
+          "documentUri": "temp:///src/Registry.kt",
+          "name": "Companion",
+          "kind": "unknown",
+          "declarationType": "OBJECT_DECLARATION",
+          "selectionRange": {
+            "start": {
+              "line": 1,
+              "character": 14
+            },
+            "end": {
+              "line": 1,
+              "character": 14
+            }
+          },
+          "positionEncoding": "utf-16",
+          "fingerprint": "sha256:a48dc585b61fdae896b8bb5578c9e5c27093de2f5a58033fbabef68ff64ada43"
+        },
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 4
+          },
+          "end": {
+            "line": 5,
+            "character": 5
+          }
+        },
+        "children": []
+      }
+    ],
+    "truncated": false
+  },
+  "diagnostics": {
+    "documents": [
+      {
+        "document": {
+          "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+          "rootId": "root_yPcvwJ5aV35j3-a27JRvG1Zt",
+          "uri": "temp:///src/Service.java",
+          "logicalPath": "Service.java",
+          "revision": {
+            "editorVersion": 0,
+            "contentHash": "sha256:9b5b6c1dddfe2403448ab662e554f2d43b61694e96205a88dea51a4019caee7a",
+            "workspaceEpoch": 0
+          },
+          "positionEncoding": "utf-16",
+          "languageId": "java",
+          "isDirty": false
+        },
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 1,
+                "character": 24
+              },
+              "end": {
+                "line": 1,
+                "character": 37
+              }
+            },
+            "positionEncoding": "utf-16",
+            "severity": "error",
+            "message": "Incompatible types. Found: 'java.lang.String', required: 'int'",
+            "availableFixes": [
+              {
+                "fixId": "aae4dce2042cd5778df6347df5880b4c",
+                "title": "Migrate 'count' type to 'String'"
+              },
+              {
+                "fixId": "8a5e78835b3908e06f297cba954c2965",
+                "title": "Change field 'count' type to 'String'"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "capturedAt": "2026-08-15T11:16:09.116815Z",
+    "truncated": false
+  },
+  "hierarchy": {
+    "locations": [
+      {
+        "location": {
+          "uri": "temp:///src/Service.java",
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 16
+            },
+            "end": {
+              "line": 1,
+              "character": 21
+            }
+          },
+          "positionEncoding": "utf-16"
+        }
+      }
+    ],
+    "truncated": false
+  },
+  "editPlan": {
+    "planId": "plan_VTEk3AVLNtwisCAxNw791Kq9",
+    "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+    "sessionId": "session_N56vPOg_vtCzfwFNObC9kNIi",
+    "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+    "expiresAt": "2026-08-15T11:18:09.124Z",
+    "operation": "rename",
+    "guarantee": "semantic",
+    "atomicity": "semantic",
+    "preconditions": [
+      {
+        "type": "documentRevision",
+        "uri": "temp:///src/Service.java",
+        "contentHash": "sha256:9b5b6c1dddfe2403448ab662e554f2d43b61694e96205a88dea51a4019caee7a",
+        "workspaceEpoch": 0
+      }
+    ],
+    "changes": [
+      {
+        "kind": "textEdit",
+        "uri": "temp:///src/Service.java",
+        "editCount": 1
+      }
+    ],
+    "warnings": []
+  },
+  "modification": {
+    "modifiedDocuments": [
+      {
+        "document": {
+          "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+          "rootId": "root_yPcvwJ5aV35j3-a27JRvG1Zt",
+          "uri": "temp:///src/Service.java",
+          "logicalPath": "Service.java",
+          "revision": {
+            "editorVersion": 0,
+            "contentHash": "sha256:076446329d64c3ef9b957301109a308b9659217be8b12844c975ef3f392454f4",
+            "workspaceEpoch": 0
+          },
+          "positionEncoding": "utf-16",
+          "languageId": "java",
+          "isDirty": false
+        },
+        "beforeHash": "sha256:9b5b6c1dddfe2403448ab662e554f2d43b61694e96205a88dea51a4019caee7a",
+        "afterHash": "sha256:076446329d64c3ef9b957301109a308b9659217be8b12844c975ef3f392454f4"
+      }
+    ],
+    "undoToken": {
+      "id": "undo_XekRBga7vPGx5c2sjnyXCoJH",
+      "adapterId": "adapter_wmZETfnZeX4hPvuaeZhlZUkI",
+      "sessionId": "session_N56vPOg_vtCzfwFNObC9kNIi",
+      "workspaceId": "ws_dogHhw5vWwma19q-DPAUdnpp",
+      "expiresAt": "2026-08-15T11:21:09.183Z"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+# Internal platform API this plugin knowingly depends on.
+#
+# The Plugin Verifier's `failureLevel` is all-or-nothing: dropping INTERNAL_API_USAGES from it would
+# also hide the next such dependency someone adds. This baseline expresses the real constraint —
+# these entries and no others — and `checkInternalApiSurface` fails on anything new.
+#
+# Every entry needs a reason. See ADR-0027 for why no public alternative exists for reading the
+# IDE's diagnostics, and why running inspections through the public API was rejected as a
+# misrepresentation rather than an equivalent.
+#
+# Matching is by the identifiers below, so a reworded verifier message does not silently pass.
+
+# ADR-0027: the only route to a diagnostic's severity and message. Contained to IntelliJDiagnostics.
+com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl.getHighlights | com.idebridge.jetbrains.platform.IntelliJDiagnostics
+com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl | com.idebridge.jetbrains.platform.IntelliJDiagnostics

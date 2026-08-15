@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/bridge.schema.json",
+  "title": "IDEBP local administration method contracts",
+  "$defs": {
+    "bridgeGetStatusRequest": {
+      "title": "bridge/getStatus request",
+      "allOf": [
+        {
+          "$ref": "#/$defs/administrationRequestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "bridge/getStatus"
+            }
+          }
+        }
+      ]
+    },
+    "bridgeGetStatusResponse": {
+      "title": "bridge/getStatus response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "daemonVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "protocol": {
+              "type": "object",
+              "properties": {
+                "minimum": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+                },
+                "maximum": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+                }
+              },
+              "required": ["minimum", "maximum"],
+              "additionalProperties": false
+            },
+            "startedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "uptimeMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "adapterCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "workspaceCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sessionCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "metrics": {
+              "description": "Counters the daemon keeps about its own traffic. Optional: a daemon that keeps none omits the field rather than reporting zeroes, which would be indistinguishable from an idle daemon. Read-only, in-memory, reset by a restart (ADR-0035).",
+              "type": "object",
+              "properties": {
+                "methods": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "calls": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "refusals": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "p50": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "p95": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": ["method", "calls", "refusals", "p50", "p95"],
+                    "additionalProperties": false
+                  }
+                },
+                "refusals": {
+                  "description": "Refusals per normalized error code, highest first.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "description": "The normalized error code counted. A string rather than the canonical enum on purpose: this is a histogram key, and a code a given version does not recognize should still be reported instead of invalidating the whole status response.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": ["code", "count"],
+                    "additionalProperties": false
+                  }
+                },
+                "incomplete": {
+                  "description": "Responses that carried `truncated`, per method.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": ["method", "count"],
+                    "additionalProperties": false
+                  }
+                },
+                "queries": {
+                  "description": "Recent queries consumers issued, newest first, from a capped in-memory ring. User text by nature: kept in memory only, never written to the structured log, and bounded by queryRingCapacity (ADR-0035).",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "query": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "method": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "at": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": ["query", "method", "at"],
+                    "additionalProperties": false
+                  }
+                },
+                "queryRingCapacity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": ["methods", "refusals", "incomplete", "queries", "queryRingCapacity"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "daemonVersion",
+            "protocol",
+            "startedAt",
+            "uptimeMs",
+            "adapterCount",
+            "workspaceCount",
+            "sessionCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "bridgeListAdaptersRequest": {
+      "title": "bridge/listAdapters request",
+      "allOf": [
+        {
+          "$ref": "#/$defs/administrationRequestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "bridge/listAdapters"
+            }
+          }
+        }
+      ]
+    },
+    "bridgeListAdaptersResponse": {
+      "title": "bridge/listAdapters response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "adapters": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/adapter-session.schema.json#/$defs/adapter"
+              }
+            }
+          },
+          "required": ["adapters"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "bridgeListSessionsRequest": {
+      "title": "bridge/listSessions request",
+      "allOf": [
+        {
+          "$ref": "#/$defs/administrationRequestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "bridge/listSessions"
+            }
+          }
+        }
+      ]
+    },
+    "bridgeListSessionsResponse": {
+      "title": "bridge/listSessions response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "sessions": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/adapter-session.schema.json#/$defs/session"
+              }
+            }
+          },
+          "required": ["sessions"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "administrationRequestBase": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["bridge/getStatus", "bridge/listAdapters", "bridge/listSessions"]
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    }
+  }
+}

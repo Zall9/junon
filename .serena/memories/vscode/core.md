@@ -1,0 +1,22 @@
+# VS Code adapter invariants
+
+- Desktop workspace extension, CommonJS autonomous bundle, only `vscode` external. Activation is deferred; one window maps to at most one IDEBP workspace, folders map to roots.
+- Uses shared reconnecting client and real `ide/register`; handlers attach before capability publication. Registration rebuilt from current state after every physical reconnect.
+- URI identity is exact `Uri.toString()`; never `fsPath`. Reads use `workspace.openTextDocument`, so dirty buffers and remote/custom providers remain authoritative.
+- Revisions hash captured `TextDocument.getText()` asynchronously as UTF-8 and include editor version + workspace epoch.
+- Current read surface: `document/read`, `document/getRevision`; core open/change/save/close and root transitions are serialized/coalesced after registration.
+- Document symbols:
+  - only fixed `vscode.executeDocumentSymbolProvider`;
+  - capability is provider-backed semantic;
+  - undefined/null => `CAPABILITY_UNAVAILABLE`, [] => success;
+  - maps exact 26 kinds, hierarchical `DocumentSymbol` and flat `SymbolInformation`;
+  - no invented `qualifiedName`, no textual fallback;
+  - compare full revision before/after provider; mismatch => `STALE_DOCUMENT`;
+  - bound 5,000 symbols, depth 64, text 1,024, registry 20,000;
+  - random handles use physical inbound context session and current epoch.
+- Invalidate document handles synchronously on change before 75 ms event debounce; invalidate all on reconnect, workspace identity/epoch transition, or disposal.
+- Local daemon auto-start uses exact bundled CLI child through `process.execPath`, no shell/PATH; only owned child is stopped. Manual endpoint auth still comes from private discovery.
+- Auto-start is unavailable on Windows and remote extension hosts until real support exists.
+- Trust is registered; safe reads remain available, writes must fail in untrusted workspaces.
+- Dynamic trust event, rename/delete event projection, remaining symbol navigation/search, diagnostics, edits, VSIX, and real extension-host validation must remain explicitly unavailable until implemented.
+- Durable decisions: ADR-0013 foundation, 0014 lifecycle, 0015 reads/events, 0016 symbols/handles.

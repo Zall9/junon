@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json",
+  "title": "IDEBP symbol method contracts",
+  "$defs": {
+    "symbolTargetParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "symbol": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolReference"
+        }
+      },
+      "required": ["workspaceId", "symbol"],
+      "additionalProperties": false
+    },
+    "workspaceSearchSymbolsRequest": {
+      "title": "workspace/searchSymbols request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/searchSymbols"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kinds": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolKind"
+              },
+              "maxItems": 27,
+              "uniqueItems": true
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "required": ["workspaceId", "query"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceSearchSymbolsResponse": {
+      "title": "workspace/searchSymbols response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "symbols": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbol"
+              }
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          },
+          "required": ["symbols", "truncated"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "symbolResolveAtRequest": {
+      "title": "symbol/resolveAt request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "symbol/resolveAt"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "uri": {
+              "type": "string",
+              "format": "uri"
+            },
+            "position": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/position"
+            },
+            "positionEncoding": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/positionEncoding"
+            }
+          },
+          "required": ["workspaceId", "uri", "position", "positionEncoding"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "symbolResolveAtResponse": {
+      "title": "symbol/resolveAt response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "document": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+            },
+            "symbol": {
+              "description": "Omitted when no symbol covers the requested position, which is an ordinary outcome for a blank line or a comment rather than an error.",
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbol"
+            }
+          },
+          "required": ["document"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "symbolGetDefinitionRequest": {
+      "title": "symbol/getDefinition request",
+      "allOf": [
+        {
+          "$ref": "#/$defs/symbolLookupRequestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "symbol/getDefinition"
+            }
+          }
+        }
+      ]
+    },
+    "symbolGetDefinitionResponse": {
+      "$ref": "#/$defs/symbolLocationsResponseBase",
+      "title": "symbol/getDefinition response"
+    },
+    "symbolGetReferencesRequest": {
+      "title": "symbol/getReferences request",
+      "allOf": [
+        {
+          "$ref": "#/$defs/symbolLookupRequestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "symbol/getReferences"
+            }
+          }
+        }
+      ]
+    },
+    "symbolGetReferencesResponse": {
+      "$ref": "#/$defs/symbolLocationsResponseBase",
+      "title": "symbol/getReferences response"
+    },
+    "symbolGetImplementationsRequest": {
+      "title": "symbol/getImplementations request",
+      "allOf": [
+        {
+          "$ref": "#/$defs/symbolLookupRequestBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "symbol/getImplementations"
+            }
+          }
+        }
+      ]
+    },
+    "symbolGetImplementationsResponse": {
+      "$ref": "#/$defs/symbolLocationsResponseBase",
+      "title": "symbol/getImplementations response"
+    },
+    "symbolLookupRequestBase": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["symbol/getDefinition", "symbol/getReferences", "symbol/getImplementations"]
+        },
+        "params": {
+          "$ref": "#/$defs/symbolTargetParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "symbolLocationsResponseBase": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "locations": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolLocation"
+              }
+            },
+            "truncated": {
+              "description": "True when the adapter had more in-scope locations than it returned. These requests carry no limit parameter, so the ceiling is fixed and this flag is the only way a consumer can tell a complete answer from a capped one.",
+              "type": "boolean"
+            }
+          },
+          "required": ["locations", "truncated"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "symbolHierarchyParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "symbol": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolReference"
+        },
+        "relation": {
+          "description": "Which neighbours to return. Named for the relation rather than a direction so that a consumer never has to know whether an IDE models 'up' as supertypes or callers.",
+          "type": "string",
+          "enum": ["callers", "callees", "supertypes", "subtypes"]
+        }
+      },
+      "required": ["workspaceId", "symbol", "relation"],
+      "additionalProperties": false
+    },
+    "symbolGetHierarchyRequest": {
+      "title": "symbol/getHierarchy request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "symbol/getHierarchy"
+        },
+        "params": {
+          "$ref": "#/$defs/symbolHierarchyParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "symbolGetHierarchyResponse": {
+      "$ref": "#/$defs/symbolLocationsResponseBase",
+      "title": "symbol/getHierarchy response"
+    }
+  }
+}

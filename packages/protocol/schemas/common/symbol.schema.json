@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json",
+  "title": "IDEBP symbols",
+  "$defs": {
+    "symbolKind": {
+      "type": "string",
+      "enum": [
+        "file",
+        "module",
+        "namespace",
+        "package",
+        "class",
+        "method",
+        "property",
+        "field",
+        "constructor",
+        "enum",
+        "interface",
+        "function",
+        "variable",
+        "constant",
+        "string",
+        "number",
+        "boolean",
+        "array",
+        "object",
+        "key",
+        "null",
+        "enumMember",
+        "struct",
+        "event",
+        "operator",
+        "typeParameter",
+        "unknown"
+      ]
+    },
+    "symbolHandle": {
+      "type": "object",
+      "properties": {
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        },
+        "sessionId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/sessionId"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/symbolHandleId"
+        },
+        "validUntilEpoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["adapterId", "sessionId", "id", "validUntilEpoch"],
+      "additionalProperties": false
+    },
+    "symbolLocator": {
+      "type": "object",
+      "properties": {
+        "documentUri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualifiedName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "#/$defs/symbolKind"
+        },
+        "declarationType": {
+          "description": "Opaque, adapter-defined token for the syntactic form of a declaration. Comparable only for equality, and only against locators minted by the same adapter. It exists so a stale symbol can be relocated without depending on 'kind', which not every IDE can supply.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "containerName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selectionRange": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/range"
+        },
+        "positionEncoding": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/positionEncoding"
+        },
+        "fingerprint": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/contentHash"
+        }
+      },
+      "required": [
+        "documentUri",
+        "name",
+        "kind",
+        "selectionRange",
+        "positionEncoding",
+        "fingerprint"
+      ],
+      "additionalProperties": false
+    },
+    "symbolReference": {
+      "type": "object",
+      "properties": {
+        "handle": {
+          "$ref": "#/$defs/symbolHandle"
+        },
+        "locator": {
+          "$ref": "#/$defs/symbolLocator"
+        }
+      },
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "handle": true
+          },
+          "required": ["handle"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "locator": true
+          },
+          "required": ["locator"]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "symbol": {
+      "type": "object",
+      "properties": {
+        "handle": {
+          "$ref": "#/$defs/symbolHandle"
+        },
+        "locator": {
+          "$ref": "#/$defs/symbolLocator"
+        },
+        "range": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/range"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        }
+      },
+      "required": ["handle", "locator", "range", "children"],
+      "additionalProperties": false
+    },
+    "symbolLocation": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/location"
+        },
+        "symbol": {
+          "$ref": "#/$defs/symbol"
+        }
+      },
+      "required": ["location"],
+      "additionalProperties": false
+    }
+  }
+}

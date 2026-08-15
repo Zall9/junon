@@ -1,0 +1,39 @@
+# Deepwork session state is local and must not be committed. `codemap.json` beside it is generated,
+# and carries this machine's absolute paths and the time it last ran.
+.slim/
+
+# macOS directory metadata.
+.DS_Store
+
+# Serena's own session logs. Its memories and project.yml are kept: they are written deliberately and
+# are part of what this repository knows about itself.
+.serena/logs/
+
+# IntelliJ platform classes extracted while checking the internal-API baseline. Inspection debris,
+# not source — the baseline itself is `jetbrains-plugin/internal-api-baseline.txt`.
+/com/
+
+# Generated/build artifacts
+node_modules/
+dist/
+dist-test/
+build/
+# TypeScript's incremental-build cache: machine-local, and stale the moment anyone else builds.
+*.tsbuildinfo
+.gradle/
+.idea/
+.intellijPlatform/
+.kotlin/
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Downloaded VS Code builds used by the extension-host integration run (~900 MB)
+.vscode-test/
+
+# Coverage
+coverage/
+
+# Upstream Serena, cloned for inspection and for running the seam tests against the real thing.
+# Not vendored: it is re-cloned at the pinned version rather than carried in this repository.
+serena-upstream/

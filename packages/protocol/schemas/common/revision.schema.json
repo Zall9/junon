@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json",
+  "title": "IDEBP document revisions",
+  "$defs": {
+    "contentHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-fA-F0-9]{64}$"
+    },
+    "revision": {
+      "description": "Identity of a document's content. contentHash is the authoritative check; editorVersion is a fast path that exists only while the document is open in an editor.",
+      "type": "object",
+      "properties": {
+        "editorVersion": {
+          "description": "Present only when the document is open in an editor buffer. Absent means the content is the file on disk, which has no editor version — comparisons then rest on contentHash alone.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "contentHash": {
+          "$ref": "#/$defs/contentHash"
+        },
+        "workspaceEpoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["contentHash", "workspaceEpoch"],
+      "additionalProperties": false
+    },
+    "documentRevisionPrecondition": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "documentRevision"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "editorVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contentHash": {
+          "$ref": "#/$defs/contentHash"
+        },
+        "workspaceEpoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["type", "uri", "contentHash", "workspaceEpoch"],
+      "additionalProperties": false
+    }
+  }
+}

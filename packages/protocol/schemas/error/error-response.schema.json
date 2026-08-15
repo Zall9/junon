@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+  "title": "IDEBP JSON-RPC error response",
+  "type": "object",
+  "properties": {
+    "jsonrpc": {
+      "const": "2.0"
+    },
+    "id": {
+      "oneOf": [
+        {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "enum": [-32600, -32000, -32001, -32002]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "data": {
+          "$ref": "#/$defs/errorData"
+        }
+      },
+      "required": ["code", "message", "data"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["jsonrpc", "id", "error"],
+  "additionalProperties": false,
+  "$defs": {
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "INVALID_REQUEST",
+        "UNSUPPORTED_PROTOCOL_VERSION",
+        "AUTHENTICATION_FAILED",
+        "WORKSPACE_NOT_FOUND",
+        "DOCUMENT_NOT_FOUND",
+        "ADAPTER_NOT_FOUND",
+        "ADAPTER_DISCONNECTED",
+        "CAPABILITY_UNAVAILABLE",
+        "INDEX_NOT_READY",
+        "STALE_DOCUMENT",
+        "STALE_SYMBOL",
+        "AMBIGUOUS_SYMBOL",
+        "INVALID_IDENTIFIER",
+        "PRECONDITION_FAILED",
+        "PLAN_NOT_FOUND",
+        "PLAN_EXPIRED",
+        "PROVIDER_FAILED",
+        "TIMEOUT",
+        "CANCELLED",
+        "PERMISSION_DENIED",
+        "PARTIAL_APPLY",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "genericErrorCode": {
+      "type": "string",
+      "enum": [
+        "INVALID_REQUEST",
+        "UNSUPPORTED_PROTOCOL_VERSION",
+        "AUTHENTICATION_FAILED",
+        "WORKSPACE_NOT_FOUND",
+        "DOCUMENT_NOT_FOUND",
+        "ADAPTER_NOT_FOUND",
+        "ADAPTER_DISCONNECTED",
+        "CAPABILITY_UNAVAILABLE",
+        "STALE_SYMBOL",
+        "INVALID_IDENTIFIER",
+        "PRECONDITION_FAILED",
+        "PLAN_NOT_FOUND",
+        "PLAN_EXPIRED",
+        "PROVIDER_FAILED",
+        "TIMEOUT",
+        "CANCELLED",
+        "PERMISSION_DENIED",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "errorDetails": {
+      "type": "object",
+      "properties": {
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        },
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "documentUri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "planId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/planId"
+        },
+        "capability": {
+          "type": "string",
+          "minLength": 1
+        },
+        "currentRevision": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/revision"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolLocator"
+          },
+          "minItems": 2
+        },
+        "modifiedDocuments": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/modifiedDocument"
+          },
+          "minItems": 1
+        },
+        "supportedProtocol": {
+          "type": "object",
+          "properties": {
+            "minimum": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+            },
+            "maximum": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+            }
+          },
+          "required": ["minimum", "maximum"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "errorData": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/genericErrorData"
+        },
+        {
+          "$ref": "#/$defs/indexNotReadyErrorData"
+        },
+        {
+          "$ref": "#/$defs/staleDocumentErrorData"
+        },
+        {
+          "$ref": "#/$defs/ambiguousSymbolErrorData"
+        },
+        {
+          "$ref": "#/$defs/partialApplyErrorData"
+        }
+      ]
+    },
+    "genericErrorData": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/genericErrorCode"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "$ref": "#/$defs/errorDetails"
+        }
+      },
+      "required": ["code", "retryable"],
+      "additionalProperties": false
+    },
+    "indexNotReadyErrorData": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "const": "INDEX_NOT_READY"
+        },
+        "retryable": {
+          "const": true
+        },
+        "details": {
+          "$ref": "#/$defs/errorDetails"
+        }
+      },
+      "required": ["code", "retryable"],
+      "additionalProperties": false
+    },
+    "staleDocumentErrorData": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "const": "STALE_DOCUMENT"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "documentUri": {
+              "type": "string",
+              "format": "uri"
+            },
+            "currentRevision": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/revision"
+            }
+          },
+          "required": ["currentRevision"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["code", "retryable", "details"],
+      "additionalProperties": false
+    },
+    "ambiguousSymbolErrorData": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "const": "AMBIGUOUS_SYMBOL"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "documentUri": {
+              "type": "string",
+              "format": "uri"
+            },
+            "candidates": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolLocator"
+              },
+              "minItems": 2
+            }
+          },
+          "required": ["candidates"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["code", "retryable", "details"],
+      "additionalProperties": false
+    },
+    "partialApplyErrorData": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "const": "PARTIAL_APPLY"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "planId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/planId"
+            },
+            "modifiedDocuments": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/modifiedDocument"
+              },
+              "minItems": 1
+            }
+          },
+          "required": ["modifiedDocuments"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["code", "retryable", "details"],
+      "additionalProperties": false
+    }
+  }
+}

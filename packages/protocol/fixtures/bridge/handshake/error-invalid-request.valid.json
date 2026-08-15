@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "error": {
+    "code": -32600,
+    "message": "The first message must be bridge/handshake",
+    "data": {
+      "code": "INVALID_REQUEST",
+      "retryable": false
+    }
+  }
+}

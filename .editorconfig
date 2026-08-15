@@ -1,0 +1,57 @@
+# EditorConfig — https://editorconfig.org
+# Root file; applies to all files in this repository.
+root = true
+
+# ── Default ─────────────────────────────────────
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# ── TypeScript / JavaScript ─────────────────────
+[*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}]
+indent_size = 2
+
+# ── JSON Schema fixtures ────────────────────────
+[*.{schema.json}]
+indent_size = 2
+
+# ── YAML (GitHub Actions, configs) ──────────────
+[*.{yml,yaml}]
+indent_size = 2
+
+# ── Markdown ────────────────────────────────────
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# ── Kotlin / Gradle ─────────────────────────────
+[*.{kt,kts}]
+indent_size = 4
+ij_kotlin_imports_layout = ascii
+ij_kotlin_line_break_after_multiline_when = true
+
+# ── Java ────────────────────────────────────────
+[*.java]
+indent_size = 4
+
+# ── Python ──────────────────────────────────────
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+# ── Shell scripts ───────────────────────────────
+[*.sh]
+indent_size = 4
+
+# ── TOML ────────────────────────────────────────
+[*.toml]
+indent_size = 2
+
+# ── XML ─────────────────────────────────────────
+[*.xml]
+indent_size = 4

@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": "handshake-1",
+  "error": {
+    "code": -32002,
+    "message": "No compatible protocol version",
+    "data": {
+      "code": "UNSUPPORTED_PROTOCOL_VERSION",
+      "retryable": false,
+      "supportedProtocol": {
+        "minimum": "0.1.0",
+        "maximum": "0.1.0"
+      }
+    }
+  }
+}

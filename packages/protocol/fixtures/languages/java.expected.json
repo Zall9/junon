@@ -1,0 +1,47 @@
+{
+  "language": "java",
+  "workspaceRootUri": "file:///workspace/examples/java-project",
+  "positionEncoding": "utf-16",
+  "features": [
+    "class",
+    "interface",
+    "abstract-class",
+    "implementation",
+    "override",
+    "multi-file-references"
+  ],
+  "symbols": [
+    {
+      "name": "Named",
+      "qualifiedName": "idebridge.examples.Named",
+      "kind": "interface",
+      "uri": "file:///workspace/examples/java-project/src/main/java/idebridge/examples/Named.java",
+      "selectionRange": {
+        "start": { "line": 10, "character": 17 },
+        "end": { "line": 10, "character": 22 }
+      }
+    },
+    {
+      "name": "User",
+      "qualifiedName": "idebridge.examples.User",
+      "kind": "class",
+      "uri": "file:///workspace/examples/java-project/src/main/java/idebridge/examples/User.java",
+      "selectionRange": {
+        "start": { "line": 13, "character": 13 },
+        "end": { "line": 13, "character": 17 }
+      }
+    }
+  ],
+  "rename": {
+    "targetQualifiedName": "idebridge.examples.User",
+    "newName": "ProjectUser",
+    "guarantee": "semantic",
+    "affectedUris": [
+      "file:///workspace/examples/java-project/src/main/java/idebridge/examples/User.java",
+      "file:///workspace/examples/java-project/src/main/java/idebridge/examples/AdminUser.java",
+      "file:///workspace/examples/java-project/src/main/java/idebridge/examples/Main.java",
+      "file:///workspace/examples/java-project/tests/idebridge/examples/NamedTest.java"
+    ],
+    "untouchedUris": []
+  }
+}

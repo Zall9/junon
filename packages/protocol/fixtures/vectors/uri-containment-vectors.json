@@ -1,0 +1,89 @@
+{
+  "description": "Shared workspace URI containment vectors. Every adapter implements this rule in its own language, and an adapter whose rule is looser than the daemon's is closed as a policy violation (ADR-0017). Both the TypeScript and Kotlin implementations are checked against this one list so they cannot diverge.",
+  "vectors": [
+    {
+      "documentUri": "file:///workspace/project/a.ts",
+      "rootUri": "file:///workspace/project/",
+      "contained": true,
+      "why": "a plain descendant"
+    },
+    {
+      "documentUri": "file:///workspace/project",
+      "rootUri": "file:///workspace/project",
+      "contained": true,
+      "why": "the root is contained in itself"
+    },
+    {
+      "documentUri": "file:///workspace/project/nested/deep/a.ts",
+      "rootUri": "file:///workspace/project",
+      "contained": true,
+      "why": "depth does not matter"
+    },
+    {
+      "documentUri": "file:///workspace/project/./a.ts",
+      "rootUri": "file:///workspace/project",
+      "contained": true,
+      "why": "a dot segment normalizes away"
+    },
+    {
+      "documentUri": "file:///workspace/project-two/a.ts",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a sibling whose name merely shares a prefix"
+    },
+    {
+      "documentUri": "file:///workspace/project/../secret.ts",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a dot-dot segment escapes the root"
+    },
+    {
+      "documentUri": "file:///workspace/project/%2e%2e/secret.ts",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a percent-encoded dot-dot escapes the root"
+    },
+    {
+      "documentUri": "file:///workspace/project/%2F..%2Fsecret.ts",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a percent-encoded separator must not hide traversal"
+    },
+    {
+      "documentUri": "file://other/workspace/project/a.ts",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a different authority is a different host"
+    },
+    {
+      "documentUri": "file:///workspace/project/a.ts?outside=1",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a query string is not part of a document identity here"
+    },
+    {
+      "documentUri": "file:///workspace/project/a.ts#fragment",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "a fragment is likewise refused rather than ignored"
+    },
+    {
+      "documentUri": "vscode-remote://ssh-remote+host/work/a.ts",
+      "rootUri": "file:///work/",
+      "contained": false,
+      "why": "a different scheme is a different namespace"
+    },
+    {
+      "documentUri": "file:///workspace/project/a.ts",
+      "rootUri": "not-a-uri",
+      "contained": false,
+      "why": "an unparseable root fails closed"
+    },
+    {
+      "documentUri": "",
+      "rootUri": "file:///workspace/project/",
+      "contained": false,
+      "why": "an empty URI fails closed"
+    }
+  ]
+}

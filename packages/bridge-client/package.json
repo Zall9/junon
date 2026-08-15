@@ -1,0 +1,32 @@
+{
+  "name": "@ide-bridge/bridge-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "IDE Bridge Client — shared TypeScript client for daemon discovery, auth, and typed JSON-RPC calls",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ide-bridge/protocol": "workspace:*",
+    "ws": "8.21.1"
+  },
+  "devDependencies": {
+    "@ide-bridge/bridge-daemon": "workspace:*",
+    "@types/node": "24.13.3",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

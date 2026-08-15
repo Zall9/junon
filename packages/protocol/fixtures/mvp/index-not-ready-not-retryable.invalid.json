@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "symbols-1",
+  "error": {
+    "code": -32000,
+    "message": "Index is not ready",
+    "data": {
+      "code": "INDEX_NOT_READY",
+      "retryable": false
+    }
+  }
+}

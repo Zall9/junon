@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json",
+  "title": "IDEBP two-phase edit plans",
+  "$defs": {
+    "editOperation": {
+      "description": "What an edit plan performs. Every entry is a refactoring the IDE itself provides, prepared and applied through the same two-phase machinery, so a consumer reviews and consents to any of them identically.",
+      "type": "string",
+      "enum": [
+        "rename",
+        "reformat",
+        "optimizeImports",
+        "extractMethod",
+        "inline",
+        "move",
+        "changeSignature",
+        "quickFix"
+      ]
+    },
+    "changeSummary": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "textEdit"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "editCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["kind", "uri", "editCount"],
+      "additionalProperties": false
+    },
+    "editPlan": {
+      "type": "object",
+      "properties": {
+        "planId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/planId"
+        },
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        },
+        "sessionId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/sessionId"
+        },
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "$ref": "#/$defs/editOperation"
+        },
+        "guarantee": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json#/$defs/guarantee"
+        },
+        "atomicity": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json#/$defs/atomicity"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/documentRevisionPrecondition"
+          },
+          "minItems": 1
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/changeSummary"
+          },
+          "minItems": 1
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "planId",
+        "adapterId",
+        "sessionId",
+        "workspaceId",
+        "expiresAt",
+        "operation",
+        "guarantee",
+        "atomicity",
+        "preconditions",
+        "changes",
+        "warnings"
+      ],
+      "additionalProperties": false
+    },
+    "modifiedDocument": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+        },
+        "beforeHash": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/contentHash"
+        },
+        "afterHash": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/contentHash"
+        }
+      },
+      "required": ["document", "beforeHash", "afterHash"],
+      "additionalProperties": false
+    },
+    "undoToken": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/undoTokenId"
+        },
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        },
+        "sessionId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/sessionId"
+        },
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "adapterId", "sessionId", "workspaceId"],
+      "additionalProperties": false
+    }
+  }
+}

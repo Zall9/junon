@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/document.schema.json",
+  "title": "IDEBP document method contracts",
+  "$defs": {
+    "documentTargetParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": ["workspaceId", "uri"],
+      "additionalProperties": false
+    },
+    "documentReadRequest": {
+      "title": "document/read request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "document/read"
+        },
+        "params": {
+          "$ref": "#/$defs/documentTargetParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "documentReadResponse": {
+      "title": "document/read response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentContent"
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "documentGetRevisionRequest": {
+      "title": "document/getRevision request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "document/getRevision"
+        },
+        "params": {
+          "$ref": "#/$defs/documentTargetParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "documentGetRevisionResponse": {
+      "title": "document/getRevision response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "document": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+            }
+          },
+          "required": ["document"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "documentGetSymbolsRequest": {
+      "title": "document/getSymbols request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "document/getSymbols"
+        },
+        "params": {
+          "$ref": "#/$defs/documentTargetParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "documentGetSymbolsResponse": {
+      "title": "document/getSymbols response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "document": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+            },
+            "symbols": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbol"
+              }
+            }
+          },
+          "required": ["document", "symbols"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    }
+  }
+}

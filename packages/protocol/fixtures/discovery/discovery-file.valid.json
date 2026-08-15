@@ -1,0 +1,7 @@
+{
+  "protocolVersion": "0.1.0",
+  "endpoint": "ws://127.0.0.1:41731/rpc",
+  "token": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+  "pid": 12345,
+  "startedAt": "2026-08-01T12:00:00Z"
+}

@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document-read-disk",
+  "result": {
+    "document": {
+      "workspaceId": "ws_fixture_1",
+      "rootId": "root_fixture_1",
+      "uri": "vscode-remote://ssh-remote+example/workspace/src/service.ts",
+      "logicalPath": "src/service.ts",
+      "revision": {
+        "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceEpoch": 4
+      },
+      "positionEncoding": "utf-16",
+      "isDirty": false
+    },
+    "text": "export const value = '\ud83d\ude00';\n"
+  }
+}

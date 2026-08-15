@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": "prepare-1",
+  "method": "refactor/prepare",
+  "params": {
+    "workspaceId": "ws_fixture_1",
+    "operation": "reformat",
+    "uri": "file:///workspace/src/service.ts"
+  }
+}

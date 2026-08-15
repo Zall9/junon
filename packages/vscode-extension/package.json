@@ -1,0 +1,100 @@
+{
+  "name": "vscode-extension",
+  "displayName": "IDE Bridge",
+  "publisher": "ide-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "IDE Bridge VS Code Extension — adapter for the IDE Bridge Protocol",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Safe read operations remain available; all IDE Bridge write operations are disabled."
+    }
+  },
+  "contributes": {
+    "configuration": {
+      "title": "IDE Bridge",
+      "properties": {
+        "ideBridge.autoStartDaemon": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Start the IDE Bridge daemon when no authenticated daemon is discoverable."
+        },
+        "ideBridge.manualEndpoint": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional loopback WebSocket endpoint override. Authentication still comes from the private discovery file and daemon auto-start is disabled."
+        },
+        "ideBridge.discoveryFile": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Private daemon discovery file. Empty uses IDE_BRIDGE_DISCOVERY_FILE or ~/.ide-bridge/discovery.json."
+        },
+        "ideBridge.logLevel": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "info",
+          "scope": "window",
+          "description": "IDE Bridge extension log level. Secrets and source contents are never logged."
+        },
+        "ideBridge.providerTimeoutMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 300000,
+          "default": 30000,
+          "scope": "window",
+          "description": "Maximum duration in milliseconds for one VS Code provider operation."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node ./scripts/build-extension.cjs && node ./scripts/check-extension-build.cjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "vscode:prepublish": "pnpm build",
+    "package": "pnpm build && vsce package --no-dependencies --allow-missing-repository --out dist/ide-bridge.vsix && node ./scripts/check-vsix.cjs",
+    "test:integration": "pnpm build && node ./scripts/build-integration.cjs && node ./dist-test/run-integration.js"
+  },
+  "dependencies": {
+    "@ide-bridge/bridge-client": "workspace:*",
+    "@ide-bridge/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@ide-bridge/bridge-daemon": "workspace:*",
+    "@ide-bridge/cli": "workspace:*",
+    "@types/mocha": "10.0.10",
+    "@types/node": "24.13.3",
+    "@types/vscode": "1.125.0",
+    "@vscode/test-electron": "2.5.2",
+    "@vscode/vsce": "3.6.2",
+    "esbuild": "0.28.1",
+    "mocha": "11.7.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "@ide-bridge/conformance": "workspace:*"
+  }
+}

@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JUNON</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <!--
+      Every panel below is fed by an endpoint this server actually serves. Panels in the visual
+      mockup with no data behind them — recent semantic searches, a ping figure, an index-health
+      percentage — are absent rather than filled with plausible numbers: a dashboard that shows a
+      number nobody measured teaches its reader to distrust the ones that were.
+    -->
+    <style>
+      :root {
+        --bg: #0a0c0c;
+        --panel: #0f1312;
+        --panel-2: #131817;
+        --line: #1d2523;
+        --text: #e4ebe8;
+        --muted: #869691;
+        --accent: #2fe0a6;
+        --accent-dim: #1d8a67;
+        --amber: #f0b23c;
+        --red: #ef6b6b;
+        --radius: 10px;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      /* `hidden` is a UA-stylesheet `display:none`, and any author `display` beats it. The overview
+         carries `display:grid`, so switching tabs left it on screen with the logs stacked
+         underneath — the tab looked broken while both panes were in fact rendering. */
+      [hidden] { display: none !important; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--accent); text-decoration: none; }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 24px 0;
+      }
+      .brand { display: flex; align-items: center; gap: 12px; }
+      .brand img { width: 46px; height: 46px; }
+      .brand h1 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: 0.02em;
+        font-weight: 700;
+      }
+      .brand small {
+        display: block;
+        color: var(--accent);
+        font-size: 11px;
+        letter-spacing: 0.09em;
+        font-weight: 500;
+      }
+      .spacer { flex: 1; }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-size: 12px;
+        color: var(--muted);
+        background: var(--panel);
+      }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+      .dot.idle { background: #4a5754; }
+      .dot.warn { background: var(--amber); }
+      .dot.bad { background: var(--red); }
+
+      nav {
+        display: flex;
+        gap: 26px;
+        padding: 14px 24px 0;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 18px;
+      }
+      nav button {
+        background: none;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        color: var(--muted);
+        font-size: 14px;
+        padding: 8px 2px 12px;
+        cursor: pointer;
+      }
+      nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+
+      main { padding: 0 24px 32px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+        gap: 16px;
+        align-items: start;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px 18px 18px;
+      }
+      section h2 {
+        margin: 0 0 14px;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      section h2 .count { color: var(--muted); font-weight: 400; }
+
+      .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+      .field {
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .field span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+      .field strong { color: var(--accent); font-weight: 500; font-size: 13px; word-break: break-word; }
+
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 6px 10px;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .chip.ours { border-color: var(--accent-dim); }
+      .chip.ours em {
+        font-style: normal;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        border: 1px solid var(--accent-dim);
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+
+      /* Fixed layout with breakable cells: real project paths are long enough to push a table wider
+         than its panel, and a dashboard that scrolls sideways hides the columns after the first. */
+      table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+      td, th { word-break: break-all; padding-right: 12px; }
+      th {
+        text-align: left;
+        color: var(--muted);
+        font-weight: 400;
+        font-size: 11px;
+        padding-bottom: 8px;
+      }
+      td { padding: 9px 0; border-top: 1px solid var(--line); vertical-align: top; }
+      td .sub { color: var(--muted); font-size: 11px; font-family: var(--mono); }
+
+      .bar-row { display: grid; grid-template-columns: 130px 1fr 46px; gap: 10px; align-items: center; margin-bottom: 7px; }
+      .bar-row span:first-child { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+      .track { height: 7px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+      .fill { height: 100%; background: var(--amber); border-radius: 4px; }
+      .bar-row .n { text-align: right; color: var(--muted); font-size: 12px; }
+
+      .stat { display: flex; gap: 26px; flex-wrap: wrap; }
+      .stat div span { display: block; color: var(--muted); font-size: 11px; }
+      .stat div strong { font-size: 26px; font-weight: 600; }
+
+      /* Measured before this existed: the projects panel rendered 1273px tall against a 987px
+         viewport, four times the next largest card. Because a grid row is as tall as its tallest
+         cell, it left ~890px of dead space beside `Active Tools` and pushed every remaining panel
+         past two screens of scrolling. A dashboard is a glance, so the long lists scroll inside
+         their own card and the row heights stay comparable. The header carries the full count, so
+         capping the height never hides how many there are. */
+      .scroller { max-height: 268px; overflow-y: auto; padding-right: 4px; }
+      .scroller::-webkit-scrollbar { width: 8px; }
+      .scroller::-webkit-scrollbar-thumb { background: #263230; border-radius: 4px; }
+      .scroller::-webkit-scrollbar-track { background: transparent; }
+      .scroller table thead th { position: sticky; top: 0; background: var(--panel); }
+
+      .headline {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .headline strong { font-size: 15px; font-weight: 600; }
+      .headline .muted { font-size: 12px; font-family: var(--mono); }
+
+      .workspace {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+      /* The separator belongs *between* blocks; on the first one it reads as a stray rule under the
+         heading. */
+      #projects .workspace:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+      .workspace-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+      /* The root is its own block: beside a neighbouring column a wrapped path merged with the
+         next cell's text and read as a different word entirely. */
+      .workspace code {
+        display: block;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text);
+        word-break: break-all;
+        line-height: 1.45;
+      }
+      .workspace .sub { margin-top: 4px; }
+      .tag {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: 4px;
+        padding: 2px 6px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .tag.ok { color: var(--accent); border-color: var(--accent-dim); }
+      .tag.warn { color: var(--amber); border-color: #6b4d18; }
+
+      .muted { color: var(--muted); }
+      .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+      .reason { color: var(--muted); font-size: 12px; margin-top: 6px; }
+      pre.logs {
+        margin: 0;
+        max-height: 460px;
+        overflow: auto;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: #b9c6c1;
+        white-space: pre-wrap;
+      }
+      .note {
+        border-left: 2px solid var(--line);
+        padding-left: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <img src="junon-emblem.svg" alt="" />
+        <div>
+          <h1>JUNON</h1>
+          <small>SEMANTIC SEARCH IDE</small>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="badge" id="version" hidden></div>
+      <div class="badge"><i class="dot" id="live-dot"></i><span id="live-label">connecting…</span></div>
+    </header>
+
+    <nav>
+      <button id="tab-overview" aria-selected="true">Overview</button>
+      <button id="tab-logs" aria-selected="false">Logs</button>
+    </nav>
+
+    <main>
+      <div class="grid" id="overview">
+        <section>
+          <h2>Current Configuration</h2>
+          <div class="fields" id="config"></div>
+        </section>
+
+        <section>
+          <h2>IDE Bridge</h2>
+          <div id="bridge"></div>
+        </section>
+
+        <section>
+          <h2>Active Tools <span class="count" id="tool-count"></span></h2>
+          <div class="chips scroller" id="tools"></div>
+        </section>
+
+        <section>
+          <h2>Registered Projects <span class="count" id="project-count"></span></h2>
+          <div class="scroller" id="projects"></div>
+        </section>
+
+        <section>
+          <h2>Tool Usage</h2>
+          <div id="usage"></div>
+        </section>
+
+        <section>
+          <h2>Memories</h2>
+          <div id="memories"></div>
+        </section>
+
+        <section>
+          <h2>Executions <span class="count" id="queue-count"></span></h2>
+          <div id="queue"></div>
+        </section>
+
+        <section>
+          <h2>Last Execution</h2>
+          <div id="last"></div>
+        </section>
+      </div>
+
+      <div id="logs-pane" hidden>
+        <section>
+          <h2>Logs</h2>
+          <pre class="logs" id="logs">loading…</pre>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const text = (value) => (value === null || value === undefined || value === "" ? "—" : String(value));
+
+      async function getJson(path, options) {
+        const response = await fetch(path, options);
+        if (!response.ok) throw new Error(path + " -> " + response.status);
+        return response.json();
+      }
+
+      function field(label, value) {
+        return `<div class="field"><span>${label}</span><strong>${text(value)}</strong></div>`;
+      }
+
+      function renderConfig(overview) {
+        const project = overview.active_project || {};
+        const context = overview.context || {};
+        const modes = (overview.modes || []).map((mode) => mode.name).filter(Boolean);
+        const languages = overview.languages || [];
+        $("config").innerHTML =
+          field("Project", project.name) +
+          field("Context", context.name) +
+          field("Languages", languages.length ? languages.join(", ") : null) +
+          field("Active modes", modes.length ? modes.join(", ") : null) +
+          field("Encoding", overview.encoding) +
+          field("Project path", project.path);
+        if (overview.serena_version) {
+          $("version").textContent = "Serena " + overview.serena_version;
+          $("version").hidden = false;
+        }
+      }
+
+      function renderTools(overview) {
+        const tools = overview.active_tools || [];
+        const ours = tools.filter((name) => name.startsWith("ide_"));
+
+        // Every tool in this list is active — that is what the endpoint returns. An earlier version
+        // put a status dot on each chip and lit only ours, which read as "3 of 32 are working"
+        // because a dot means status everywhere else on this page. Provenance is not status, so it
+        // is said in words instead, and the header carries both counts rather than one.
+        $("tool-count").textContent = tools.length
+          ? `(${tools.length}, ${ours.length} from JUNON)`
+          : "";
+        $("tools").innerHTML = tools.length
+          ? tools
+              .map((name) =>
+                name.startsWith("ide_")
+                  ? `<span class="chip ours">${name}<em>JUNON</em></span>`
+                  : `<span class="chip">${name}</span>`,
+              )
+              .join("")
+          : `<p class="empty">No tools are active.</p>`;
+      }
+
+      function renderProjects(overview) {
+        const projects = overview.registered_projects || [];
+        $("project-count").textContent = projects.length ? `(${projects.length})` : "";
+        if (!projects.length) {
+          $("projects").innerHTML = `<p class="empty">No projects are registered.</p>`;
+          return;
+        }
+        // The field is `is_active`, not `active`. Reading the wrong name cost nothing visible —
+        // `undefined` is falsy, so every project rendered as idle and the sort below silently did
+        // nothing — until the dashboard was watched while a project was genuinely active. A field
+        // name is not something to infer from a variable's meaning.
+        const isActive = (project) => Boolean(project.is_active);
+        // Active first: with dozens registered, the one in use is the only row that is certainly
+        // worth seeing without scrolling.
+        const ordered = [...projects].sort((a, b) => Number(isActive(b)) - Number(isActive(a)));
+        // One block per project rather than columns, for the reason the IDE Bridge card was
+        // rewritten: a path long enough to wrap sat beside the state column and the two read as one
+        // string — `…/.local/share/` and `idle` looked like a single value. Real project paths are
+        // long, so the layout has to survive them rather than hope they are short.
+        $("projects").innerHTML = ordered
+          .map(
+            (project) =>
+              `<div class="workspace">
+                 <div class="workspace-head">
+                   <strong>${text(project.name)}</strong>
+                   <span class="tag ${isActive(project) ? "ok" : ""}">${
+                     isActive(project) ? "active" : "idle"
+                   }</span>
+                 </div>
+                 <code>${text(project.path)}</code>
+               </div>`,
+          )
+          .join("");
+      }
+
+      function renderUsage(stats) {
+        const entries = Object.entries(stats || {})
+          .map(([name, values]) => [name, Number(values.count ?? Object.values(values)[0] ?? 0)])
+          .filter(([, count]) => count > 0)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8);
+        if (!entries.length) {
+          $("usage").innerHTML = `<p class="empty">No tool has been called yet in this session.</p>`;
+          return;
+        }
+        const max = Math.max(...entries.map(([, count]) => count));
+        $("usage").innerHTML = entries
+          .map(
+            ([name, count]) =>
+              `<div class="bar-row"><span>${name}</span>
+               <div class="track"><div class="fill" style="width:${(count / max) * 100}%"></div></div>
+               <span class="n">${count}</span></div>`,
+          )
+          .join("");
+      }
+
+      function renderMemories(overview) {
+        const memories = overview.available_memories;
+        if (memories === null || memories === undefined) {
+          $("memories").innerHTML = `<p class="empty">This project reports no memory store.</p>`;
+          return;
+        }
+        $("memories").innerHTML =
+          `<div class="stat"><div><strong>${memories.length}</strong><span>stored</span></div></div>` +
+          (memories.length
+            ? `<div class="chips" style="margin-top:12px">${memories
+                .slice(0, 12)
+                .map((name) => `<span class="chip">${name}</span>`)
+                .join("")}</div>`
+            : "");
+      }
+
+      const IDE_KINDS = { jetbrains: "JetBrains IDE", vscode: "VS Code" };
+
+      function renderBridge(status) {
+        const state = status.status;
+        const label =
+          state === "connected"
+            ? "Connected"
+            : state === "no-daemon"
+              ? "No daemon running"
+              : state === "no-adapter"
+                ? "Daemon running, no IDE attached"
+                : "Unreadable";
+        const tone = state === "connected" ? "" : state === "no-daemon" ? "idle" : "warn";
+        const adapter = status.adapter || {};
+
+        // The identity first, because "which IDE is on the other end" is the question this card
+        // exists to answer. The adapter id alone — all this used to show — is a value a reader can
+        // do nothing with.
+        let html = `<div class="headline"><i class="dot ${tone}"></i><strong>${label}</strong>`;
+        if (adapter.ideKind) {
+          html += `<span class="muted">${IDE_KINDS[adapter.ideKind] || adapter.ideKind}`;
+          if (adapter.ideVersion) html += ` · build ${adapter.ideVersion}`;
+          html += `</span>`;
+        }
+        html += `</div>`;
+
+        html += `<div class="fields">
+            ${field("Endpoint", status.endpoint)}
+            ${field("Protocol", status.protocolVersion)}
+            ${adapter.pluginVersion ? field("Plugin", adapter.pluginVersion) : ""}
+            ${adapter.capabilityCount ? field("Methods declared", adapter.capabilityCount) : ""}
+          </div>`;
+
+        if (status.reason) html += `<p class="reason">${status.reason}</p>`;
+
+        // One block per workspace rather than a three-column table. With `table-layout: fixed` and
+        // break-all, a long root path wrapped mid-word beside the trust column and the two read as
+        // one string — a screenshot showed `…/pauldelifer/de` + `trusted` as "detrusted", which is
+        // not a word, not a path, and not true.
+        for (const workspace of status.workspaces || []) {
+          html += `<div class="workspace">
+              <div class="workspace-head">
+                <strong>${text(workspace.name)}</strong>
+                <span class="tag ${workspace.trust === "trusted" ? "ok" : "warn"}">${text(
+                  workspace.trust,
+                )}</span>
+              </div>
+              ${(workspace.roots || []).map((root) => `<code>${root}</code>`).join("")}
+              <div class="sub">${text(workspace.workspaceId)}</div>
+            </div>`;
+        }
+        $("bridge").innerHTML = html;
+      }
+
+      function renderQueue(payload) {
+        const queued = payload.queued_executions || [];
+        $("queue-count").textContent = queued.length ? `(${queued.length})` : "";
+        $("queue").innerHTML = queued.length
+          ? queued
+              .map(
+                (task) =>
+                  `<div class="bar-row" style="grid-template-columns:1fr auto">
+                     <span>${text(task.name)}</span>
+                     <span class="n" style="color:${task.is_running ? "var(--accent)" : "var(--amber)"}">
+                       ${task.is_running ? "running" : "queued"}</span>
+                   </div>`,
+              )
+              .join("")
+          : `<p class="empty">Nothing is queued.</p>`;
+      }
+
+      function renderLast(payload) {
+        const last = payload.last_execution;
+        $("last").innerHTML = last
+          ? `<div class="fields">${field("Task", last.name)}${field(
+              "Outcome",
+              last.finished_successfully ? "completed" : "failed",
+            )}</div>`
+          : `<p class="empty">Nothing has run yet.</p>`;
+      }
+
+      async function refresh() {
+        try {
+          const overview = await getJson("/get_config_overview");
+          renderConfig(overview);
+          renderTools(overview);
+          renderProjects(overview);
+          renderMemories(overview);
+          renderUsage(overview.tool_stats_summary);
+          $("live-dot").className = "dot";
+          $("live-label").textContent = "Serena connected";
+        } catch (error) {
+          $("live-dot").className = "dot bad";
+          $("live-label").textContent = "Serena unreachable";
+          // Said in each panel, not only in the header badge. Five silently blank cards look like a
+          // project with nothing in it, which is a different and much more misleading claim than
+          // "this page could not reach the agent".
+          for (const id of ["config", "tools", "projects", "memories", "usage"]) {
+            $(id).innerHTML = `<p class="empty">Not loaded: the agent did not answer
+              <code>/get_config_overview</code>.</p>`;
+          }
+        }
+
+        // Each panel is refreshed on its own so one failing endpoint blanks one card rather than
+        // the page.
+        getJson("/junon/ide-bridge/status").then(renderBridge).catch(() => {
+          $("bridge").innerHTML = `<p class="empty">The IDE Bridge status endpoint did not answer.</p>`;
+        });
+        // An empty `catch` here left these two cards blank, which reads as "nothing is running"
+        // rather than "nobody answered". They are different facts and the page must not confuse
+        // them.
+        getJson("/queued_task_executions")
+          .then(renderQueue)
+          .catch(() => {
+            $("queue").innerHTML = `<p class="empty">Not loaded: the agent did not answer
+              <code>/queued_task_executions</code>.</p>`;
+          });
+        getJson("/last_execution")
+          .then(renderLast)
+          .catch(() => {
+            $("last").innerHTML = `<p class="empty">Not loaded: the agent did not answer
+              <code>/last_execution</code>.</p>`;
+          });
+      }
+
+      async function refreshLogs() {
+        try {
+          const payload = await getJson("/get_log_messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ start_idx: 0 }),
+          });
+          const messages = payload.messages || [];
+          $("logs").textContent = messages.length ? messages.join("\n") : "No log messages yet.";
+        } catch (error) {
+          $("logs").textContent = "The log endpoint did not answer.";
+        }
+      }
+
+      function selectTab(name) {
+        const overview = name === "overview";
+        $("tab-overview").setAttribute("aria-selected", String(overview));
+        $("tab-logs").setAttribute("aria-selected", String(!overview));
+        $("overview").hidden = !overview;
+        $("logs-pane").hidden = overview;
+        if (!overview) refreshLogs();
+      }
+
+      $("tab-overview").addEventListener("click", () => selectTab("overview"));
+      $("tab-logs").addEventListener("click", () => selectTab("logs"));
+
+      // Only the visible tab polls. Refreshing eight hidden panels every five seconds costs the
+      // agent real work — `/get_config_overview` is not free — for a screen nobody is looking at.
+      refresh();
+      setInterval(() => {
+        if ($("logs-pane").hidden) refresh();
+        else refreshLogs();
+      }, 5000);
+    </script>
+  </body>
+</html>

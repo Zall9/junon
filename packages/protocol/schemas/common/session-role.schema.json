@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/session-role.schema.json",
+  "title": "IDEBP session role",
+  "description": "An adapter exposes IDE operations. A consumer invokes daemon or adapter operations.",
+  "type": "string",
+  "enum": ["adapter", "consumer"]
+}

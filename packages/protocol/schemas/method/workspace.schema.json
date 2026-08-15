@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/workspace.schema.json",
+  "title": "IDEBP workspace method contracts",
+  "$defs": {
+    "workspaceListRequest": {
+      "title": "workspace/list request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/list"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "adapterId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceListResponse": {
+      "title": "workspace/list response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "workspaces": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspace"
+              }
+            }
+          },
+          "required": ["workspaces"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "workspaceGetRequest": {
+      "title": "workspace/get request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/get"
+        },
+        "params": {
+          "$ref": "#/$defs/workspaceIdParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceGetResponse": {
+      "title": "workspace/get response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "workspace": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspace"
+            }
+          },
+          "required": ["workspace"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "workspaceGetStatusRequest": {
+      "title": "workspace/getStatus request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/getStatus"
+        },
+        "params": {
+          "$ref": "#/$defs/workspaceIdParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceGetStatusResponse": {
+      "title": "workspace/getStatus response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/readiness.schema.json#/$defs/workspaceStatus"
+            }
+          },
+          "required": ["status"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "workspaceIdParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        }
+      },
+      "required": ["workspaceId"],
+      "additionalProperties": false
+    },
+    "todoItem": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/location"
+        },
+        "text": {
+          "description": "The marker's own text, as the author wrote it. Bounded because a malformed comment can run to the length of a file.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "pattern": {
+          "description": "Which of the IDE's configured patterns matched — TODO, FIXME, or whatever the user added. Opaque: the adapter never interprets it.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": ["location", "text"],
+      "additionalProperties": false
+    },
+    "workspaceSearchTodosRequest": {
+      "title": "workspace/searchTodos request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/searchTodos"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "uri": {
+              "description": "Restrict to one document. Omitted, the search spans every registered root — which is what an agent surveying a codebase wants.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "required": ["workspaceId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceSearchTodosResponse": {
+      "title": "workspace/searchTodos response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "$ref": "#/$defs/todoItem"
+              }
+            },
+            "truncated": {
+              "description": "True when the IDE had more markers than were returned. An empty list with this false means the IDE looked and found none.",
+              "type": "boolean"
+            }
+          },
+          "required": ["items", "truncated"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "bookmark": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/location"
+        },
+        "description": {
+          "description": "The note the user attached, when they attached one. Absent, not empty, when they did not.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "group": {
+          "description": "The user's own grouping, as the IDE names it. Opaque: never interpreted here.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["location"],
+      "additionalProperties": false
+    },
+    "workspaceListBookmarksRequest": {
+      "title": "workspace/listBookmarks request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/listBookmarks"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "required": ["workspaceId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceListBookmarksResponse": {
+      "title": "workspace/listBookmarks response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "bookmarks": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "$ref": "#/$defs/bookmark"
+              }
+            },
+            "truncated": {
+              "description": "True when the IDE held more bookmarks than were returned. An empty list with this false means the user has none.",
+              "type": "boolean"
+            }
+          },
+          "required": ["bookmarks", "truncated"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "method": "diagnostics/changed",
+  "params": {
+    "workspaceId": "ws_fixture_1",
+    "documentUri": "file:///workspace/src/service.ts",
+    "revision": {
+      "editorVersion": 28,
+      "contentHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "workspaceEpoch": 4
+    }
+  }
+}

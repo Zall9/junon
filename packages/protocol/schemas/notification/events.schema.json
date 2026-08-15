@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json",
+  "title": "IDEBP event notification contracts",
+  "$defs": {
+    "adapterCapabilitiesChanged": {
+      "title": "adapter/capabilitiesChanged notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "adapter/capabilitiesChanged"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "adapterId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+                },
+                "capabilities": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json#/$defs/capabilities"
+                }
+              },
+              "required": ["adapterId", "capabilities"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "adapterDisconnected": {
+      "title": "adapter/disconnected notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "adapter/disconnected"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "adapterId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": ["shutdown", "transport-lost", "session-expired", "error"]
+                }
+              },
+              "required": ["adapterId", "reason"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "workspaceOpened": {
+      "title": "workspace/opened notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "workspace/opened"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspace": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspace"
+                }
+              },
+              "required": ["workspace"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "workspaceClosed": {
+      "title": "workspace/closed notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "workspace/closed"
+            },
+            "params": {
+              "$ref": "#/$defs/workspaceIdentityParams"
+            }
+          }
+        }
+      ]
+    },
+    "workspaceRootsChanged": {
+      "title": "workspace/rootsChanged notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "workspace/rootsChanged"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+                },
+                "adapterId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+                },
+                "roots": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspaceRoot"
+                  },
+                  "minItems": 1
+                },
+                "workspaceEpoch": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": ["workspaceId", "adapterId", "roots", "workspaceEpoch"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "workspaceReadinessChanged": {
+      "title": "workspace/readinessChanged notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "workspace/readinessChanged"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/readiness.schema.json#/$defs/workspaceStatus"
+                }
+              },
+              "required": ["status"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "documentOpened": {
+      "title": "document/opened notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/documentEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "document/opened"
+            }
+          }
+        }
+      ]
+    },
+    "documentChanged": {
+      "title": "document/changed notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/documentEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "document/changed"
+            }
+          }
+        }
+      ]
+    },
+    "documentSaved": {
+      "title": "document/saved notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/documentEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "document/saved"
+            }
+          }
+        }
+      ]
+    },
+    "documentClosed": {
+      "title": "document/closed notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/documentEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "document/closed"
+            }
+          }
+        }
+      ]
+    },
+    "documentDeleted": {
+      "title": "document/deleted notification",
+      "description": "A deleted document has an identity but no content: it carries no revision, unlike every other document event.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "document/deleted"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+                },
+                "uri": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": ["workspaceId", "uri"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "documentRenamed": {
+      "title": "document/renamed notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "document/renamed"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+                },
+                "previousUri": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "document": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+                }
+              },
+              "required": ["workspaceId", "previousUri", "document"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "diagnosticsChanged": {
+      "title": "diagnostics/changed notification",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "diagnostics/changed"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+                },
+                "documentUri": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "revision": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/revision"
+                }
+              },
+              "required": ["workspaceId", "documentUri", "revision"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "notificationBase": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {}
+      },
+      "required": ["jsonrpc", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceIdentityParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        }
+      },
+      "required": ["workspaceId", "adapterId"],
+      "additionalProperties": false
+    },
+    "documentEventBase": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "params": {
+              "type": "object",
+              "properties": {
+                "document": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+                }
+              },
+              "required": ["document"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "workspaceTrustChanged": {
+      "title": "workspace/trustChanged notification",
+      "description": "Announces that a workspace trust level changed. Nothing else about the workspace is invalidated.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/notificationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "const": "workspace/trustChanged"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+                },
+                "adapterId": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+                },
+                "trust": {
+                  "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspaceTrust"
+                }
+              },
+              "required": ["workspaceId", "adapterId", "trust"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

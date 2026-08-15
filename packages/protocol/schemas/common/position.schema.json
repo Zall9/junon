@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json",
+  "title": "IDEBP positions and locations",
+  "$defs": {
+    "positionEncoding": {
+      "type": "string",
+      "enum": ["utf-16", "utf-8", "utf-32"]
+    },
+    "position": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["line", "character"],
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/position"
+        },
+        "end": {
+          "$ref": "#/$defs/position"
+        }
+      },
+      "required": ["start", "end"],
+      "additionalProperties": false
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "range": {
+          "$ref": "#/$defs/range"
+        },
+        "positionEncoding": {
+          "$ref": "#/$defs/positionEncoding"
+        }
+      },
+      "required": ["uri", "range", "positionEncoding"],
+      "additionalProperties": false
+    }
+  }
+}

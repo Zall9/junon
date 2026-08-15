@@ -1,0 +1,32 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "bridge/handshake",
+  "params": {
+    "authentication": {
+      "method": "token",
+      "token": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+    },
+    "role": "consumer",
+    "protocol": {
+      "minimum": "0.1.0",
+      "maximum": "0.1.0"
+    },
+    "topology": {
+      "hostKind": "gateway",
+      "environmentKind": "ssh",
+      "uriSchemes": ["file", "vscode-remote"],
+      "uriMappings": [
+        {
+          "sourceUriPrefix": "vscode-remote://ssh-remote+example/workspace/",
+          "targetUriPrefix": "file:///workspace/",
+          "direction": "client-to-daemon"
+        }
+      ]
+    },
+    "clientInfo": {
+      "name": "serena-ide-bridge",
+      "version": "0.1.0"
+    }
+  }
+}

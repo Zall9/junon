@@ -1,0 +1,81 @@
+# IDE Bridge — JetBrains Plugin CI
+#
+# Phase 0 foundation checks for the JetBrains plugin skeleton.
+# Non-destructive: no publish, release, commit, push, or remote modification.
+#
+# Runs Gradle test and buildPlugin with a JBR-compatible Java toolchain.
+# The IntelliJ Platform Gradle Plugin 2.x downloads its own JDK (JBR) as
+# needed, but we provide a baseline JDK for Gradle itself.
+#
+# See docs/IMPLEMENTATION_PLAN.md §4 Phase 0, acceptance criteria 6–7.
+
+name: JetBrains
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'jetbrains-plugin/**'
+      - 'examples/java-project/**'
+      - '.github/workflows/jetbrains.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'jetbrains-plugin/**'
+      - 'examples/java-project/**'
+      - '.github/workflows/jetbrains.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jetbrains-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gradle:
+    name: Gradle (test + buildPlugin)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 (JBR-compatible baseline)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('jetbrains-plugin/**/*.gradle*', 'jetbrains-plugin/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Gradle wrapper version
+        working-directory: jetbrains-plugin
+        run: ./gradlew --version
+
+      - name: Gradle test
+        working-directory: jetbrains-plugin
+        run: ./gradlew test
+
+      - name: Gradle buildPlugin
+        working-directory: jetbrains-plugin
+        run: ./gradlew buildPlugin
+
+      - name: Compile deterministic Java project
+        run: javac -d "${{ runner.temp }}/java-fixture" examples/java-project/src/main/java/idebridge/examples/*.java
+
+      - name: Upload plugin artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jetbrains-plugin-build
+          path: jetbrains-plugin/build/distributions/*.zip
+          if-no-files-found: warn
+          retention-days: 7

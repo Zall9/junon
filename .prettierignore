@@ -1,0 +1,25 @@
+node_modules/
+dist/
+build/
+.gradle/
+.idea/
+.venv/
+__pycache__/
+.pytest_cache/
+coverage/
+
+# Unowned paths — do not format (outside packages/* and root build/config)
+pnpm-lock.yaml
+README.md
+TASK.md
+docs/
+.github/
+.serena/
+.slim/
+jetbrains-plugin/
+integrations/
+
+# Pristine upstream checkout. Formatting it would be the one thing this integration's whole
+# architecture exists to avoid: any edit here becomes a conflict on the next `git pull`.
+serena-upstream/
+examples/

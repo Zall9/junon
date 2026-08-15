@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "search-symbols-1",
+  "method": "workspace/searchSymbols",
+  "params": {
+    "workspaceId": "ws_fixture_1",
+    "query": "StreamService",
+    "kinds": ["class", "interface", "method"],
+    "limit": 50
+  }
+}

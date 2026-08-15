@@ -1,0 +1,45 @@
+{
+  "jsonrpc": "2.0",
+  "id": "register-1",
+  "method": "ide/register",
+  "params": {
+    "adapterId": "adapter_vscode_1",
+    "name": "ide-bridge-vscode",
+    "version": "0.1.0",
+    "ideKind": "vscode",
+    "ideVersion": "1.125.0",
+    "positionEncodings": ["utf-16"],
+    "capabilities": {
+      "document/getSymbols": {
+        "support": "provider",
+        "guarantee": "semantic"
+      },
+      "refactor/prepareRename": {
+        "support": "provider",
+        "guarantee": "semantic",
+        "preview": true,
+        "atomicity": "text-only"
+      },
+      "workspace/applyPlan": {
+        "support": "native",
+        "atomicity": "text-only"
+      }
+    },
+    "workspaces": [
+      {
+        "workspaceId": "ws_fixture_1",
+        "adapterId": "adapter_vscode_1",
+        "name": "fixture",
+        "roots": [
+          {
+            "rootId": "root_fixture_1",
+            "name": "fixture",
+            "uri": "file:///workspace/fixture/"
+          }
+        ],
+        "workspaceEpoch": 1,
+        "trust": "trusted"
+      }
+    ]
+  }
+}

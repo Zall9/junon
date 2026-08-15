@@ -1,0 +1,21 @@
+# The extension ships as two self-contained esbuild bundles. Everything used to produce them —
+# sources, tests, build scripts, TypeScript configuration — is development material and must not
+# reach a user's machine. `scripts/check-vsix.cjs` enforces this list rather than trusting it.
+
+src/**
+test/**
+scripts/**
+tsconfig*.json
+*.tsbuildinfo
+vitest.config.mts
+codemap.md
+.vscodeignore
+
+# The packaged artifact itself must not be packaged into the next one.
+dist/*.vsix
+dist-test/**
+.vscode-test/**
+
+# Source maps embed the complete original sources via `sourcesContent`, which would roughly double
+# the package for material a user cannot act on.
+dist/**/*.map

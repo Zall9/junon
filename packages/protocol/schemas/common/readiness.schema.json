@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/readiness.schema.json",
+  "title": "IDEBP workspace readiness",
+  "$defs": {
+    "readinessState": {
+      "type": "string",
+      "enum": ["initializing", "indexing", "ready", "degraded", "disconnected"]
+    },
+    "progress": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "known": {
+              "const": false
+            }
+          },
+          "required": ["known"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "known": {
+              "const": true
+            },
+            "percentage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": ["known", "percentage"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "workspaceStatus": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "state": {
+          "$ref": "#/$defs/readinessState"
+        },
+        "capabilitiesUnavailable": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "progress": {
+          "$ref": "#/$defs/progress"
+        }
+      },
+      "required": ["workspaceId", "state", "capabilitiesUnavailable", "progress"],
+      "additionalProperties": false
+    }
+  }
+}

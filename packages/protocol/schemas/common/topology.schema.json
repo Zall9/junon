@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/topology.schema.json",
+  "title": "IDEBP endpoint topology",
+  "description": "Describes where an endpoint runs and which source URI schemes it can see. URI mappings are explicit and are never inferred.",
+  "type": "object",
+  "properties": {
+    "hostKind": {
+      "type": "string",
+      "enum": ["local", "remote-workspace", "web", "gateway"]
+    },
+    "environmentKind": {
+      "type": "string",
+      "enum": ["local", "ssh", "wsl", "dev-container", "codespace", "jetbrains-remote", "unknown"]
+    },
+    "uriSchemes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9+.-]*$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "uriMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sourceUriPrefix": {
+            "type": "string",
+            "format": "uri"
+          },
+          "targetUriPrefix": {
+            "type": "string",
+            "format": "uri"
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["client-to-daemon", "daemon-to-client", "bidirectional"]
+          }
+        },
+        "required": ["sourceUriPrefix", "targetUriPrefix", "direction"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": ["hostKind", "environmentKind", "uriSchemes"],
+  "additionalProperties": false
+}

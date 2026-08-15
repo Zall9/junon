@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": "apply-2",
+  "error": {
+    "code": -32000,
+    "message": "Document is stale",
+    "data": {
+      "code": "STALE_DOCUMENT",
+      "retryable": false,
+      "details": {
+        "documentUri": "file:///workspace/src/service.ts"
+      }
+    }
+  }
+}

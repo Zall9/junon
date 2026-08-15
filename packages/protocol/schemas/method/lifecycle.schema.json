@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/lifecycle.schema.json",
+  "title": "IDEBP lifecycle method contracts",
+  "$defs": {
+    "ideRegisterRequest": {
+      "title": "ide/register request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "ide/register"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "adapterId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "ideKind": {
+              "type": "string",
+              "enum": ["vscode", "jetbrains"]
+            },
+            "ideVersion": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "positionEncodings": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/positionEncoding"
+              },
+              "contains": {
+                "const": "utf-16"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "capabilities": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json#/$defs/capabilities"
+            },
+            "workspaces": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspace"
+              }
+            }
+          },
+          "required": [
+            "adapterId",
+            "name",
+            "version",
+            "ideKind",
+            "ideVersion",
+            "positionEncodings",
+            "capabilities",
+            "workspaces"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "ideRegisterResponse": {
+      "title": "ide/register response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "adapter": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/adapter-session.schema.json#/$defs/adapter"
+            },
+            "workspaces": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json#/$defs/workspace"
+              }
+            }
+          },
+          "required": ["adapter", "workspaces"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "ideUnregisterRequest": {
+      "title": "ide/unregister request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "ide/unregister"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "adapterId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+            }
+          },
+          "required": ["adapterId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "ideUnregisterResponse": {
+      "title": "ide/unregister response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "adapterId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+            },
+            "unregistered": {
+              "const": true
+            }
+          },
+          "required": ["adapterId", "unregistered"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "idePingRequest": {
+      "title": "ide/ping request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "ide/ping"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sentAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["sentAt"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "idePingResponse": {
+      "title": "ide/ping response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "sentAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "receivedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["sentAt", "receivedAt"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "ideGetCapabilitiesRequest": {
+      "title": "ide/getCapabilities request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "ide/getCapabilities"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "adapterId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+            },
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            }
+          },
+          "required": ["adapterId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "ideGetCapabilitiesResponse": {
+      "title": "ide/getCapabilities response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "adapterId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+            },
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "capabilities": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json#/$defs/capabilities"
+            }
+          },
+          "required": ["adapterId", "capabilities"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    }
+  }
+}

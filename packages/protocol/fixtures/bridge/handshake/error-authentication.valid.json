@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "handshake-1",
+  "error": {
+    "code": -32001,
+    "message": "Authentication failed",
+    "data": {
+      "code": "AUTHENTICATION_FAILED",
+      "retryable": false
+    }
+  }
+}

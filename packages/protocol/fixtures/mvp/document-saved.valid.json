@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "method": "document/saved",
+  "params": {
+    "document": {
+      "workspaceId": "ws_fixture_1",
+      "rootId": "root_fixture_1",
+      "uri": "file:///workspace/src/service.ts",
+      "revision": {
+        "editorVersion": 28,
+        "contentHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "workspaceEpoch": 4
+      },
+      "positionEncoding": "utf-16",
+      "languageId": "typescript",
+      "isDirty": false
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": "request-1",
+  "error": {
+    "code": -32000,
+    "message": "Internal failure",
+    "data": {
+      "code": "INTERNAL_ERROR",
+      "retryable": true,
+      "stack": "sensitive stack trace"
+    }
+  }
+}

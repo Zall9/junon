@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/adapter-session.schema.json",
+  "title": "IDEBP adapters and sessions",
+  "$defs": {
+    "adapter": {
+      "type": "object",
+      "properties": {
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        },
+        "sessionId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/sessionId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "ideKind": {
+          "type": "string",
+          "enum": ["vscode", "jetbrains"]
+        },
+        "ideVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "positionEncodings": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/positionEncoding"
+          },
+          "contains": {
+            "const": "utf-16"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "capabilities": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json#/$defs/capabilities"
+        },
+        "connectedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "adapterId",
+        "sessionId",
+        "name",
+        "version",
+        "ideKind",
+        "ideVersion",
+        "positionEncodings",
+        "capabilities",
+        "connectedAt"
+      ],
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/sessionId"
+        },
+        "role": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/session-role.schema.json"
+        },
+        "protocolVersion": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+        },
+        "clientName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "connectedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastActivityAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "sessionId",
+        "role",
+        "protocolVersion",
+        "clientName",
+        "connectedAt",
+        "lastActivityAt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

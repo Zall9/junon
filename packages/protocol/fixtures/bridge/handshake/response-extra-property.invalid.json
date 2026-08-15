@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "handshake-1",
+  "result": {
+    "sessionId": "session_fixture_1",
+    "role": "adapter",
+    "protocolVersion": "0.1.0",
+    "daemonInfo": {
+      "name": "ide-bridge-daemon",
+      "version": "0.1.0"
+    },
+    "topology": {
+      "hostKind": "local",
+      "environmentKind": "local",
+      "uriSchemes": ["file"]
+    },
+    "authenticated": true
+  }
+}

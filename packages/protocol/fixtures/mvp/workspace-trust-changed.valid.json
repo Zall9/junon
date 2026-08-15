@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "method": "workspace/trustChanged",
+  "params": {
+    "workspaceId": "ws_fixture_1",
+    "adapterId": "adapter_vscode_1",
+    "trust": "trusted"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json",
+  "title": "IDEBP identifiers",
+  "$defs": {
+    "adapterId": {
+      "type": "string",
+      "pattern": "^adapter_[A-Za-z0-9_-]+$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^session_[A-Za-z0-9_-]+$"
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^ws_[A-Za-z0-9_-]+$"
+    },
+    "rootId": {
+      "type": "string",
+      "pattern": "^root_[A-Za-z0-9_-]+$"
+    },
+    "planId": {
+      "type": "string",
+      "pattern": "^plan_[A-Za-z0-9_-]+$"
+    },
+    "undoTokenId": {
+      "type": "string",
+      "pattern": "^undo_[A-Za-z0-9_-]+$"
+    },
+    "symbolHandleId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  }
+}

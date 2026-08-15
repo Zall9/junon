@@ -1,0 +1,92 @@
+# IDE Bridge — Continuous Integration
+#
+# Foundation and Phase 1 protocol checks. Non-destructive: no publish,
+# release, commit, push, or remote modification. Validates that the current
+# tree formats, lints, type-checks, tests, and keeps protocol artifacts current.
+#
+# Structure is intentionally split into jobs so that future phases can add
+# schema, conformance, and adapter checks as additional jobs or matrix
+# entries without rewriting this file.
+#
+# See docs/IMPLEMENTATION_PLAN.md §4 for phase acceptance criteria.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+# Cancel in-progress runs for the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # TypeScript monorepo: install → format → lint → typecheck → test
+  # ──────────────────────────────────────────────
+  typescript:
+    name: TypeScript (Node 24, pnpm)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm 10.32.1
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build all TypeScript packages
+        run: pnpm -r build
+
+      - name: Verify CLI binary wiring
+        run: pnpm cli:smoke
+
+      - name: Type check (strict)
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Validate protocol schemas and fixtures
+        run: pnpm protocol:fixtures
+
+      - name: Check generated protocol types
+        run: pnpm protocol:generate:check
+
+      - name: Type-check deterministic TypeScript project
+        run: pnpm exec tsc --noEmit --project examples/typescript-project/tsconfig.json
+
+      - name: Lint deterministic PHP project
+        run: |
+          php -l examples/php-project/src/Domain/User.php
+          php -l examples/php-project/src/Domain/UserRepository.php
+          php -l examples/php-project/src/Support/User.php
+          php -l examples/php-project/tests/UserTest.php
+
+  # ──────────────────────────────────────────────
+  # Protocol fixtures run in the TypeScript job above so they share the same
+  # frozen installation and Node 24 runtime.
+  # ──────────────────────────────────────────────
+  #

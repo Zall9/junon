@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/diagnostics.schema.json",
+  "title": "IDEBP diagnostics method contracts",
+  "$defs": {
+    "diagnosticsGetSnapshotRequest": {
+      "title": "diagnostics/getSnapshot request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "diagnostics/getSnapshot"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "documentUris": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": ["workspaceId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "diagnosticsGetSnapshotResponse": {
+      "title": "diagnostics/getSnapshot response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "documents": {
+              "type": "array",
+              "items": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/diagnostic.schema.json#/$defs/documentDiagnostics"
+              }
+            },
+            "capturedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "truncated": {
+              "description": "True when the adapter holds diagnostics this snapshot does not carry: documents beyond a ceiling, or documents whose revision it cannot establish truthfully. False means the snapshot is complete for its requested scope.",
+              "type": "boolean"
+            }
+          },
+          "required": ["documents", "capturedAt", "truncated"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/diagnostic.schema.json",
+  "title": "IDEBP diagnostics",
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "properties": {
+        "range": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/range"
+        },
+        "positionEncoding": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/positionEncoding"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "information", "hint"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "relatedInformation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/location"
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["location", "message"],
+            "additionalProperties": false
+          }
+        },
+        "availableFixes": {
+          "description": "Fixes the IDE offers for this diagnostic. Absent when none were offered; an empty array would claim the adapter looked and found nothing, which is a different statement.",
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/availableFix"
+          }
+        }
+      },
+      "required": ["range", "positionEncoding", "severity", "message"],
+      "additionalProperties": false
+    },
+    "documentDiagnostics": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json#/$defs/documentReference"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      },
+      "required": ["document", "diagnostics"],
+      "additionalProperties": false
+    },
+    "availableFix": {
+      "type": "object",
+      "properties": {
+        "fixId": {
+          "description": "Opaque handle for this offer, valid for the snapshot that produced it. A consumer passes it back to prepare the fix; it is never a command the adapter interprets.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "description": "The IDE's own wording for the fix, as a user would see it in the editor. Not interpreted, and never a language this adapter knows about.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": ["fixId", "title"],
+      "additionalProperties": false
+    }
+  }
+}

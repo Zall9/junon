@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ide_bridge"
+version = "0.0.0"
+description = "JUNON — IDE Bridge integration for Serena, applied without editing Serena"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "IDE Bridge Contributors" },
+]
+keywords = ["serena", "ide-bridge", "idebp", "mcp"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries",
+]
+# `aenum` is the one hard dependency of the composition layer: Python enums cannot be extended
+# any other way, and extending Serena's closed `LanguageBackend` is what makes
+# `language_backend: ide_bridge` reachable without editing Serena.
+# `websockets` for its **synchronous** client. A Serena tool call is a blocking operation, and an
+# async-only client would drag an event loop into a code path that has no use for one. Serena ships
+# no websocket library of its own, and the daemon's only RPC door is a WebSocket — see ADR-0036.
+dependencies = ["aenum>=3.1", "websockets>=13"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+# Composition has to be *run*, and until this existed nothing ran it outside the test suite. A
+# separate command rather than a hook into `serena`: what you type says which one you get.
+[project.scripts]
+junon = "junon.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/example/ide-bridge"
+
+# --- setuptools config (src-less flat layout) ---
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ide_bridge*", "junon*"]
+exclude = ["tests*"]
+
+# --- pytest config ---
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+markers = [
+    "integration: requires a live IDE Bridge daemon (deselected by default)",
+]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+
+# --- Ruff config (optional; used when ruff is available) ---
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

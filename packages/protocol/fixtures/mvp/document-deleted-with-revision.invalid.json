@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "method": "document/deleted",
+  "params": {
+    "workspaceId": "ws_fixture_1",
+    "uri": "file:///workspace/src/removed.ts",
+    "revision": {
+      "editorVersion": 3,
+      "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workspaceEpoch": 1
+    }
+  }
+}

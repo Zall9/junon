@@ -1,0 +1,59 @@
+{
+  "language": "typescript",
+  "workspaceRootUri": "file:///workspace/examples/typescript-project",
+  "positionEncoding": "utf-16",
+  "features": [
+    "class",
+    "interface",
+    "implementation",
+    "overload",
+    "unicode-symbol",
+    "multi-file-references"
+  ],
+  "symbols": [
+    {
+      "name": "Circle",
+      "qualifiedName": "Circle",
+      "kind": "class",
+      "uri": "file:///workspace/examples/typescript-project/src/circle.ts",
+      "selectionRange": {
+        "start": {
+          "line": 16,
+          "character": 13
+        },
+        "end": {
+          "line": 16,
+          "character": 19
+        }
+      }
+    },
+    {
+      "name": "π",
+      "qualifiedName": "π",
+      "kind": "variable",
+      "uri": "file:///workspace/examples/typescript-project/src/types.ts",
+      "selectionRange": {
+        "start": {
+          "line": 52,
+          "character": 13
+        },
+        "end": {
+          "line": 52,
+          "character": 14
+        }
+      },
+      "note": "VS Code reports `export const` as SymbolKind.Variable; the adapter maps the enum exactly rather than inferring `constant` from source text. Verified against a real extension host on 2026-08-02."
+    }
+  ],
+  "rename": {
+    "targetQualifiedName": "Circle",
+    "newName": "RoundShape",
+    "guarantee": "semantic",
+    "affectedUris": [
+      "file:///workspace/examples/typescript-project/src/circle.ts",
+      "file:///workspace/examples/typescript-project/src/index.ts",
+      "file:///workspace/examples/typescript-project/tests/circle.test.ts"
+    ],
+    "untouchedUris": []
+  }
+}

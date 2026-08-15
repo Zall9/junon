@@ -1,0 +1,47 @@
+{
+  "language": "php",
+  "workspaceRootUri": "file:///workspace/examples/php-project",
+  "positionEncoding": "utf-16",
+  "features": [
+    "class",
+    "interface",
+    "implementation",
+    "trait",
+    "attribute",
+    "homonymous-symbols",
+    "multi-file-references"
+  ],
+  "symbols": [
+    {
+      "name": "User",
+      "qualifiedName": "IDEBridge\\Domain\\User",
+      "kind": "class",
+      "uri": "file:///workspace/examples/php-project/src/Domain/User.php",
+      "selectionRange": {
+        "start": { "line": 77, "character": 6 },
+        "end": { "line": 77, "character": 10 }
+      }
+    },
+    {
+      "name": "User",
+      "qualifiedName": "IDEBridge\\Support\\User",
+      "kind": "class",
+      "uri": "file:///workspace/examples/php-project/src/Support/User.php",
+      "selectionRange": {
+        "start": { "line": 23, "character": 6 },
+        "end": { "line": 23, "character": 10 }
+      }
+    }
+  ],
+  "rename": {
+    "targetQualifiedName": "IDEBridge\\Domain\\User",
+    "newName": "DomainUser",
+    "guarantee": "semantic",
+    "affectedUris": [
+      "file:///workspace/examples/php-project/src/Domain/User.php",
+      "file:///workspace/examples/php-project/src/Domain/UserRepository.php",
+      "file:///workspace/examples/php-project/tests/UserTest.php"
+    ],
+    "untouchedUris": ["file:///workspace/examples/php-project/src/Support/User.php"]
+  }
+}

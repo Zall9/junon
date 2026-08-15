@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/method/edit.schema.json",
+  "title": "IDEBP two-phase edit method contracts",
+  "$defs": {
+    "refactorPrepareRequest": {
+      "title": "refactor/prepare request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": { "const": "refactor/prepare" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "operation": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/editOperation"
+            },
+            "uri": {
+              "description": "Document the operation applies to. Required for document-scoped operations such as reformat.",
+              "type": "string",
+              "minLength": 1
+            },
+            "symbol": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolReference"
+            },
+            "arguments": {
+              "description": "Operation-specific values, such as a new name or an extracted method's name. Deliberately open: what an operation needs is the IDE's business, and constraining it here would prevent adapters exposing refactorings this schema never anticipated.",
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          },
+          "required": ["workspaceId", "operation"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "refactorPrepareResponse": {
+      "title": "refactor/prepare response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/editPlan"
+            }
+          },
+          "required": ["plan"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "refactorPrepareRenameRequest": {
+      "title": "refactor/prepareRename request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "refactor/prepareRename"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "symbol": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolReference"
+            },
+            "newName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "options": {
+              "type": "object",
+              "properties": {
+                "includeComments": {
+                  "type": "boolean"
+                },
+                "includeStrings": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["includeComments", "includeStrings"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["workspaceId", "symbol", "newName", "options"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "refactorPrepareRenameResponse": {
+      "title": "refactor/prepareRename response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/editPlan"
+            }
+          },
+          "required": ["plan"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "workspaceApplyPlanRequest": {
+      "title": "workspace/applyPlan request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/applyPlan"
+        },
+        "params": {
+          "$ref": "#/$defs/applyPlanParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceApplyPlanResponse": {
+      "title": "workspace/applyPlan response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "$ref": "#/$defs/modificationResult"
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "workspaceDiscardPlanRequest": {
+      "title": "workspace/discardPlan request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/discardPlan"
+        },
+        "params": {
+          "$ref": "#/$defs/planIdParams"
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceDiscardPlanResponse": {
+      "title": "workspace/discardPlan response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "planId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/planId"
+            },
+            "discarded": {
+              "const": true
+            }
+          },
+          "required": ["planId", "discarded"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "workspaceUndoRequest": {
+      "title": "workspace/undo request",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "method": {
+          "const": "workspace/undo"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "workspaceId": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+            },
+            "undoToken": {
+              "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/undoToken"
+            }
+          },
+          "required": ["workspaceId", "undoToken"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "method", "params"],
+      "additionalProperties": false
+    },
+    "workspaceUndoResponse": {
+      "title": "workspace/undo response",
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        "result": {
+          "$ref": "#/$defs/modificationResult"
+        }
+      },
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "planIdParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "planId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/planId"
+        }
+      },
+      "required": ["workspaceId", "planId"],
+      "additionalProperties": false
+    },
+    "applyPlanParams": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "planId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/planId"
+        },
+        "includePostApplyDiagnostics": {
+          "type": "boolean"
+        }
+      },
+      "required": ["workspaceId", "planId"],
+      "additionalProperties": false
+    },
+    "modificationResult": {
+      "type": "object",
+      "properties": {
+        "modifiedDocuments": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/modifiedDocument"
+          },
+          "minItems": 1
+        },
+        "undoToken": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/edit-plan.schema.json#/$defs/undoToken"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/diagnostic.schema.json#/$defs/documentDiagnostics"
+          }
+        }
+      },
+      "required": ["modifiedDocuments"],
+      "additionalProperties": false
+    }
+  }
+}

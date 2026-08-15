@@ -1,0 +1,9 @@
+<!-- Tool window icon, 13x13. The favicon's identity — gold ring, J orb — reduced to what still reads
+     at this size: at 13px the emblem's circuit nodes, the figure and the lettering inside its orb all
+     collapse into noise, so the ring and the J carry it alone. Same palette (#eaa45d) as
+     icons/junon-favicon.svg, which stays the full-size source. -->
+<svg width="13" height="13" viewBox="0 0 13 13" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="6.5" cy="6.5" r="5.4" fill="none" stroke="#eaa45d" stroke-width="1.2"/>
+  <path d="M7.9 3.5v4.1a1.9 1.9 0 0 1-3.4 1.2" fill="none" stroke="#eaa45d" stroke-width="1.3"
+        stroke-linecap="round"/>
+</svg>

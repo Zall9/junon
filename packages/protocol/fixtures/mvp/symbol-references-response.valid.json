@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "symbol-references-1",
+  "result": {
+    "locations": [
+      {
+        "location": {
+          "uri": "file:///workspace/src/consumer.ts",
+          "range": {
+            "start": { "line": 12, "character": 8 },
+            "end": { "line": 12, "character": 14 }
+          },
+          "positionEncoding": "utf-16"
+        }
+      }
+    ],
+    "truncated": false
+  }
+}

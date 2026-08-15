@@ -1,0 +1,284 @@
+{
+  "fixtures": [
+    {
+      "path": "bridge/handshake/request-adapter.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": true
+    },
+    {
+      "path": "bridge/handshake/request-consumer.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": true
+    },
+    {
+      "path": "bridge/handshake/response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-response.schema.json",
+      "valid": true
+    },
+    {
+      "path": "bridge/handshake/error-authentication.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-error-response.schema.json",
+      "valid": true
+    },
+    {
+      "path": "bridge/handshake/error-unsupported-version.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-error-response.schema.json",
+      "valid": true
+    },
+    {
+      "path": "bridge/handshake/error-invalid-request.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-error-response.schema.json",
+      "valid": true
+    },
+    {
+      "path": "bridge/handshake/request-missing-token.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/request-invalid-role.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/request-wrong-first-method.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/request-unsafe-id.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/request-long-id.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/request-long-version.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-request.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/response-extra-property.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "bridge/handshake/error-leaks-token.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-error-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "mvp/ide-register-request.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/lifecycle.schema.json#/$defs/ideRegisterRequest",
+      "valid": true
+    },
+    {
+      "path": "mvp/workspace-list-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/workspace.schema.json#/$defs/workspaceListResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-read-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/document.schema.json#/$defs/documentReadResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-read-disk-revision.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/document.schema.json#/$defs/documentReadResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/symbol-resolve-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/symbolResolveAtResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/symbol-resolve-no-symbol.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/symbolResolveAtResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/symbol-references-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/symbolGetReferencesResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/search-symbols-request.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/workspaceSearchSymbolsRequest",
+      "valid": true
+    },
+    {
+      "path": "mvp/search-symbols-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/workspaceSearchSymbolsResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/prepare-rename-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/edit.schema.json#/$defs/refactorPrepareRenameResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/cancel-request.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/cancel-request.schema.json",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-changed.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentChanged",
+      "valid": true
+    },
+    {
+      "path": "mvp/stale-document-error.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+      "valid": true
+    },
+    {
+      "path": "mvp/diagnostics-snapshot-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/diagnostics.schema.json#/$defs/diagnosticsGetSnapshotResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/workspace-trust-changed.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/workspaceTrustChanged",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-deleted.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentDeleted",
+      "valid": true
+    },
+    {
+      "path": "mvp/prepare-rename-missing-epoch.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/edit.schema.json#/$defs/refactorPrepareRenameResponse",
+      "valid": false
+    },
+    {
+      "path": "mvp/document-changed-with-content.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentChanged",
+      "valid": false
+    },
+    {
+      "path": "mvp/error-with-stack.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "languages/typescript.expected.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/testing/language-expected-contract.schema.json#/$defs/languageExpectedContract",
+      "valid": true
+    },
+    {
+      "path": "languages/java.expected.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/testing/language-expected-contract.schema.json#/$defs/languageExpectedContract",
+      "valid": true
+    },
+    {
+      "path": "languages/php.expected.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/testing/language-expected-contract.schema.json#/$defs/languageExpectedContract",
+      "valid": true
+    },
+    {
+      "path": "mvp/index-not-ready-not-retryable.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "mvp/stale-document-missing-current-revision.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "mvp/ambiguous-symbol-missing-candidates.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "mvp/partial-apply-missing-documents.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/error/error-response.schema.json",
+      "valid": false
+    },
+    {
+      "path": "mvp/search-symbols-query-too-long.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/workspaceSearchSymbolsRequest",
+      "valid": false
+    },
+    {
+      "path": "mvp/symbol-references-missing-truncated.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/symbol.schema.json#/$defs/symbolGetReferencesResponse",
+      "valid": false
+    },
+    {
+      "path": "mvp/diagnostics-snapshot-missing-truncated.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/diagnostics.schema.json#/$defs/diagnosticsGetSnapshotResponse",
+      "valid": false
+    },
+    {
+      "path": "mvp/document-deleted-with-revision.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentDeleted",
+      "valid": false
+    },
+    {
+      "path": "discovery/discovery-file.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/discovery/discovery-file.schema.json",
+      "valid": true
+    },
+    {
+      "path": "discovery/public-endpoint.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/discovery/discovery-file.schema.json",
+      "valid": false
+    },
+    {
+      "path": "discovery/out-of-range-port.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/discovery/discovery-file.schema.json",
+      "valid": false
+    },
+    {
+      "path": "mvp/prepare-reformat-request.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/edit.schema.json#/$defs/refactorPrepareRequest",
+      "valid": true
+    },
+    {
+      "path": "mvp/prepare-reformat-response.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/method/edit.schema.json#/$defs/refactorPrepareResponse",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-opened.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentOpened",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-saved.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentSaved",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-closed.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentClosed",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-renamed.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentRenamed",
+      "valid": true
+    },
+    {
+      "path": "mvp/diagnostics-changed.valid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/diagnosticsChanged",
+      "valid": true
+    },
+    {
+      "path": "mvp/document-renamed-missing-previous.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/documentRenamed",
+      "valid": false
+    },
+    {
+      "path": "mvp/diagnostics-changed-missing-revision.invalid.json",
+      "schema": "https://ide-bridge.dev/schemas/0.1.0/notification/events.schema.json#/$defs/diagnosticsChanged",
+      "valid": false
+    }
+  ]
+}

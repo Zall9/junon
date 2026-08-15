@@ -1,0 +1,63 @@
+{
+  "jsonrpc": "2.0",
+  "id": "diagnostics-1",
+  "result": {
+    "documents": [
+      {
+        "document": {
+          "workspaceId": "ws_fixture_1",
+          "rootId": "root_fixture_1",
+          "uri": "file:///workspace/src/service.ts",
+          "revision": {
+            "editorVersion": 27,
+            "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "workspaceEpoch": 4
+          },
+          "positionEncoding": "utf-16",
+          "languageId": "typescript",
+          "isDirty": true
+        },
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 10,
+                "character": 2
+              },
+              "end": {
+                "line": 10,
+                "character": 8
+              }
+            },
+            "positionEncoding": "utf-16",
+            "severity": "error",
+            "message": "Property 'update' does not exist on type 'StreamService'.",
+            "source": "ts",
+            "code": 2339,
+            "relatedInformation": [
+              {
+                "location": {
+                  "uri": "file:///workspace/src/other.ts",
+                  "range": {
+                    "start": {
+                      "line": 3,
+                      "character": 0
+                    },
+                    "end": {
+                      "line": 3,
+                      "character": 5
+                    }
+                  },
+                  "positionEncoding": "utf-16"
+                },
+                "message": "'StreamService' is declared here."
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "capturedAt": "2026-08-02T09:15:00.000Z",
+    "truncated": false
+  }
+}

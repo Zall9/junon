@@ -1,0 +1,89 @@
+# IDE Bridge — Serena Integration
+
+> Phase 0 skeleton. No network, daemon, or JSON-RPC client behavior is implemented yet.
+
+## Purpose
+
+This package provides the `ide_bridge` Python backend that lets Serena
+communicate with VS Code and JetBrains IDEs through the IDE Bridge Protocol
+(IDEBP) daemon.
+
+The backend is an isolated Python package under `integrations/serena/`.
+It has **zero coupling** to the IDEBP protocol package, the TypeScript
+daemon, or the IDE adapter plugins.  Its only dependency is the IDEBP
+daemon's WebSocket endpoint (Phase 2+) and the JSON-RPC protocol defined
+by JSON Schema 2020-12 (Phase 1).
+
+## Serena Backend Boundary
+
+```
+  Serena  ←→  ide_bridge (this package)  ←→  IDE Bridge daemon  ←→  IDE adapters
+                                                    (Phase 2)         (Phase 3/4)
+```
+
+### What this package does (Phase 6 — not yet implemented)
+
+- Connect to the IDE Bridge daemon (loopback WebSocket, token auth).
+- List and select workspaces matching the Serena project root.
+- Retrieve adapter capabilities.
+- Map Serena tool calls to IDEBP protocol methods.
+- Convert IDEBP responses back to Serena-expected formats.
+- Refuse unsupported capabilities cleanly — no silent text fallback.
+- Preserve remote URIs without conversion to local paths.
+
+### What this package does NOT do
+
+- Does not import or depend on Serena internals.
+- Does not import TypeScript packages, VS Code, or JetBrains SDKs.
+- Does not execute arbitrary shell commands.
+- Does not fall back to text modification when a semantic operation is refused.
+- Does not expose capabilities that the adapter has not declared.
+
+## Package Layout
+
+```
+integrations/serena/
+├── pyproject.toml         # Package metadata, Python >=3.12, zero runtime deps
+├── README.md              # This file
+├── ide_bridge/
+│   ├── __init__.py        # Public API re-exports
+│   ├── config.py          # Typed configuration model (TASK.md §21)
+│   └── models.py          # Typed IDEBP protocol entity models
+└── tests/
+    ├── __init__.py
+    ├── test_config.py     # Configuration model smoke tests
+    └── test_models.py     # Data model smoke tests
+```
+
+## Configuration
+
+Per TASK.md §21, the backend reads this configuration shape:
+
+```yaml
+ide_bridge:
+  discovery_file: auto
+  workspace: auto
+  request_timeout_seconds: 30
+  prefer_adapter:
+    - jetbrains
+    - vscode
+```
+
+In Phase 0, `IdeBridgeConfig` is a pure dataclass — no file I/O or
+environment parsing.  Phase 6 will add loading from Serena's config system.
+
+## Dependencies
+
+Phase 0 has **zero runtime dependencies**.  `pytest` is the only dev
+dependency (for running tests).
+
+Protocol/network dependencies (`websockets`, `aiohttp`, etc.) will be
+added in Phase 6 when the daemon client is implemented.
+
+## Validation
+
+```bash
+cd integrations/serena
+python3 -m pytest                          # Unit tests (Phase 0)
+python3 -m pytest --integration            # Integration with live daemon (Phase 6+)
+```

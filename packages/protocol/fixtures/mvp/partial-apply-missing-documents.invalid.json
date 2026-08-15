@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "apply-3",
+  "error": {
+    "code": -32000,
+    "message": "Only part of the plan was applied",
+    "data": {
+      "code": "PARTIAL_APPLY",
+      "retryable": false
+    }
+  }
+}

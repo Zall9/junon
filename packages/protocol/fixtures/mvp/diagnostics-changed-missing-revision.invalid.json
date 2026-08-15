@@ -1,0 +1,8 @@
+{
+  "jsonrpc": "2.0",
+  "method": "diagnostics/changed",
+  "params": {
+    "workspaceId": "ws_fixture_1",
+    "documentUri": "file:///workspace/src/service.ts"
+  }
+}

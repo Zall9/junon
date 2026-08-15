@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/workspace.schema.json",
+  "title": "IDEBP workspaces",
+  "$defs": {
+    "workspaceRoot": {
+      "type": "object",
+      "properties": {
+        "rootId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/rootId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": ["rootId", "name", "uri"],
+      "additionalProperties": false
+    },
+    "workspaceTrust": {
+      "type": "string",
+      "enum": ["trusted", "untrusted", "unknown"]
+    },
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "adapterId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/adapterId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "roots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workspaceRoot"
+          },
+          "minItems": 1
+        },
+        "workspaceEpoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trust": {
+          "$ref": "#/$defs/workspaceTrust"
+        }
+      },
+      "required": ["workspaceId", "adapterId", "name", "roots", "workspaceEpoch", "trust"],
+      "additionalProperties": false
+    }
+  }
+}

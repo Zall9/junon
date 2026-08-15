@@ -1,0 +1,32 @@
+{
+  "jsonrpc": "2.0",
+  "id": "prepare-rename-1",
+  "result": {
+    "plan": {
+      "planId": "plan_fixture_1",
+      "adapterId": "adapter_vscode_1",
+      "sessionId": "session_consumer_1",
+      "workspaceId": "ws_fixture_1",
+      "expiresAt": "2026-08-01T15:30:00Z",
+      "operation": "rename",
+      "guarantee": "semantic",
+      "atomicity": "text-only",
+      "preconditions": [
+        {
+          "type": "documentRevision",
+          "uri": "file:///workspace/src/service.ts",
+          "editorVersion": 27,
+          "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "changes": [
+        {
+          "kind": "textEdit",
+          "uri": "file:///workspace/src/service.ts",
+          "editCount": 2
+        }
+      ],
+      "warnings": []
+    }
+  }
+}

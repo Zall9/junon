@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "symbol-resolve-2",
+  "result": {
+    "document": {
+      "workspaceId": "ws_fixture_1",
+      "rootId": "root_fixture_1",
+      "uri": "file:///workspace/src/service.ts",
+      "revision": {
+        "editorVersion": 27,
+        "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceEpoch": 4
+      },
+      "positionEncoding": "utf-16",
+      "languageId": "typescript",
+      "isDirty": false
+    }
+  }
+}

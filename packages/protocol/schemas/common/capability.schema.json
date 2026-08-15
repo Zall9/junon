@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/capability.schema.json",
+  "title": "IDEBP capability model",
+  "$defs": {
+    "support": {
+      "type": "string",
+      "enum": ["native", "provider", "adapter", "unavailable"]
+    },
+    "guarantee": {
+      "type": "string",
+      "enum": ["semantic", "syntactic", "anchored-text", "raw-text"]
+    },
+    "atomicity": {
+      "type": "string",
+      "enum": ["none", "text-only", "semantic"]
+    },
+    "availableCapability": {
+      "description": "Capability dimensions are operation-dependent: guarantee describes semantic/syntactic quality, atomicity describes application behavior, and preview describes preparability. An omitted dimension is not applicable and must not be inferred.",
+      "type": "object",
+      "properties": {
+        "support": {
+          "type": "string",
+          "enum": ["native", "provider", "adapter"]
+        },
+        "guarantee": {
+          "$ref": "#/$defs/guarantee"
+        },
+        "preview": {
+          "type": "boolean"
+        },
+        "atomicity": {
+          "$ref": "#/$defs/atomicity"
+        }
+      },
+      "required": ["support"],
+      "additionalProperties": false
+    },
+    "unavailableCapability": {
+      "type": "object",
+      "properties": {
+        "support": {
+          "const": "unavailable"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": ["support"],
+      "additionalProperties": false
+    },
+    "capability": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/availableCapability"
+        },
+        {
+          "$ref": "#/$defs/unavailableCapability"
+        }
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][A-Za-z0-9]*(?:[./][a-z][A-Za-z0-9]*)+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/capability"
+      }
+    }
+  }
+}

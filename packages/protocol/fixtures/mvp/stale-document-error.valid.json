@@ -1,0 +1,21 @@
+{
+  "jsonrpc": "2.0",
+  "id": "apply-plan-1",
+  "error": {
+    "code": -32000,
+    "message": "Document revision is stale",
+    "data": {
+      "code": "STALE_DOCUMENT",
+      "retryable": false,
+      "details": {
+        "workspaceId": "ws_fixture_1",
+        "documentUri": "file:///workspace/src/service.ts",
+        "currentRevision": {
+          "editorVersion": 28,
+          "contentHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "workspaceEpoch": 4
+        }
+      }
+    }
+  }
+}

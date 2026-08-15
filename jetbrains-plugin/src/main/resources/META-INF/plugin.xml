@@ -1,0 +1,96 @@
+<idea-plugin>
+    <id>com.idebridge.jetbrains</id>
+    <name>Junon - IDE Bridge</name>
+    <vendor>IDE Bridge</vendor>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <description><![CDATA[
+        IDE Bridge JetBrains adapter.
+        Connects the IntelliJ Platform to the IDE Bridge Protocol daemon,
+        enabling AI agents to interact with the IDE through a unified protocol.
+    ]]></description>
+    <idea-version since-build="252"/>
+
+    <!--
+        The platform module, and nothing else. No language module is depended on, optionally or
+        otherwise: symbols come from each IDE's own structure model, so the languages served are
+        whatever the host IDE can parse.
+    -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensionPoints>
+        <!--
+            Classification, for anyone able to supply it. No mapper for a *language* ships here:
+            bundling one puts that language's PSI in the jar, which the Plugin Verifier reports as
+            unresolvable in every IDE without it — measured against PhpStorm and GoLand, not
+            assumed.
+
+            That argument bars language PSI, not classification itself, and for a long time it was
+            read as barring both: nothing outside this repository knows this extension point
+            exists, so nothing ever contributed, and every kind was unknown in every IDE.
+            PlatformSymbolKindMapper closes that without reopening the verifier problem — it reads
+            the answer each language already gives the platform for Find Usages, touching only
+            com.intellij.psi and com.intellij.usageView, which every IDE has.
+        -->
+        <extensionPoint
+            name="symbolKindMapper"
+            interface="com.idebridge.jetbrains.symbol.SymbolKindMapper"
+            dynamic="true"/>
+    </extensionPoints>
+
+    <!--
+        `order="last"` is load-bearing, not tidiness. `classify` returns the first non-null answer,
+        and this mapper answers for nearly every declaration, so at any earlier position it would
+        shut out a more precise mapper contributed later — the extension point would still exist and
+        still be useless. Position in this file decides nothing across plugins; the attribute does.
+    -->
+    <extensions defaultExtensionNs="com.idebridge.jetbrains">
+        <symbolKindMapper
+            implementation="com.idebridge.jetbrains.symbol.PlatformSymbolKindMapper"
+            order="last"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Supported post-open hook. Replaces AppLifecycleListener.appStarted (internal API) and
+             ProjectManagerListener.projectOpened (deprecated for removal). -->
+        <postStartupActivity implementation="com.idebridge.jetbrains.lifecycle.BridgeStartupActivity"/>
+
+        <!-- Which projects this IDE bridges is the user's decision, so it needs somewhere to be seen
+             and changed. Before this, the first project opened took the only connection and the rest
+             were ignored without a word (ADR-0033). -->
+        <toolWindow
+            id="IDE Bridge"
+            anchor="right"
+            icon="/icons/junonToolWindow.svg"
+            factoryClass="com.idebridge.jetbrains.ui.BridgeToolWindowFactory"/>
+
+        <!-- Registering the group is also what puts it in Settings → Appearance & Behavior →
+             Notifications, where the user decides whether a balloon is also an OS notification. A
+             plugin forcing that would be deciding it for them (ADR-0034). -->
+        <notificationGroup id="Junon - IDE Bridge" displayType="BALLOON"/>
+    </extensions>
+
+    <applicationListeners>
+        <!-- Shutdown only; startup is a postStartupActivity. -->
+        <listener
+            class="com.idebridge.jetbrains.lifecycle.ApplicationLifecycleListener"
+            topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+
+    <!--
+        Services are registered via @Service annotations on the classes
+        themselves. IntelliJ Platform 2025.2 auto-discovers these; explicit
+        XML registration is omitted to avoid duplicate registration warnings.
+
+        - BridgeDaemonConnectionService: @Service(Service.Level.APP)
+        - ReadinessManager:              @Service(Service.Level.APP)
+        - BridgeProjectService:          @Service(Service.Level.PROJECT)
+    -->
+
+    <projectListeners>
+        <!-- Close only; open is a postStartupActivity. -->
+        <listener
+            class="com.idebridge.jetbrains.lifecycle.ProjectLifecycleListener"
+            topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </projectListeners>
+</idea-plugin>

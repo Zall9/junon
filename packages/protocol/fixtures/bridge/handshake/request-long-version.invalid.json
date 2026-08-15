@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "id": "handshake-1",
+  "method": "bridge/handshake",
+  "params": {
+    "authentication": {
+      "method": "token",
+      "token": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+    },
+    "role": "consumer",
+    "protocol": {
+      "minimum": "11111111111111111111111111111111111111111111111111111111111111111.0.0",
+      "maximum": "2.0.0"
+    },
+    "topology": {
+      "hostKind": "local",
+      "environmentKind": "local",
+      "uriSchemes": ["file"]
+    },
+    "clientInfo": {
+      "name": "fixture-client",
+      "version": "0.1.0"
+    }
+  }
+}

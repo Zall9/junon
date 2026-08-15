@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/authentication.schema.json",
+  "title": "IDEBP handshake authentication",
+  "description": "Authentication using the base64url token read from the private discovery file. A 32-byte token encodes to 43 base64url characters without padding.",
+  "type": "object",
+  "properties": {
+    "method": {
+      "const": "token"
+    },
+    "token": {
+      "$ref": "#/$defs/token"
+    }
+  },
+  "required": ["method", "token"],
+  "additionalProperties": false,
+  "$defs": {
+    "token": {
+      "title": "authentication token",
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    }
+  }
+}

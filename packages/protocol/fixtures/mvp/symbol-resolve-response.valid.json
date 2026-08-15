@@ -1,0 +1,57 @@
+{
+  "jsonrpc": "2.0",
+  "id": "symbol-resolve-1",
+  "result": {
+    "document": {
+      "workspaceId": "ws_fixture_1",
+      "rootId": "root_fixture_1",
+      "uri": "file:///workspace/src/service.ts",
+      "revision": {
+        "editorVersion": 27,
+        "contentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceEpoch": 4
+      },
+      "positionEncoding": "utf-16",
+      "languageId": "typescript",
+      "isDirty": false
+    },
+    "symbol": {
+      "handle": {
+        "adapterId": "adapter_vscode_1",
+        "sessionId": "session_adapter_1",
+        "id": "sym_123",
+        "validUntilEpoch": 4
+      },
+      "locator": {
+        "documentUri": "file:///workspace/src/service.ts",
+        "name": "update",
+        "qualifiedName": "StreamService.update",
+        "kind": "method",
+        "containerName": "StreamService",
+        "selectionRange": {
+          "start": {
+            "line": 10,
+            "character": 2
+          },
+          "end": {
+            "line": 10,
+            "character": 8
+          }
+        },
+        "positionEncoding": "utf-16",
+        "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 2
+        },
+        "end": {
+          "line": 12,
+          "character": 3
+        }
+      },
+      "children": []
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/testing/language-expected-contract.schema.json",
+  "title": "Deterministic language fixture expectations",
+  "$defs": {
+    "languageExpectedContract": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": ["typescript", "java", "php"]
+        },
+        "workspaceRootUri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "positionEncoding": {
+          "const": "utf-16"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "class",
+              "interface",
+              "abstract-class",
+              "implementation",
+              "override",
+              "overload",
+              "unicode-symbol",
+              "trait",
+              "attribute",
+              "homonymous-symbols",
+              "multi-file-references"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expectedSymbol"
+          },
+          "minItems": 1
+        },
+        "rename": {
+          "$ref": "#/$defs/expectedRename"
+        }
+      },
+      "required": [
+        "language",
+        "workspaceRootUri",
+        "positionEncoding",
+        "features",
+        "symbols",
+        "rename"
+      ],
+      "additionalProperties": false
+    },
+    "expectedSymbol": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualifiedName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/symbol.schema.json#/$defs/symbolKind"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "selectionRange": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/range"
+        },
+        "note": {
+          "description": "Why this expectation is what it is \u2014 used where the real IDE provider contradicts an intuitive reading.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["name", "qualifiedName", "kind", "uri", "selectionRange"],
+      "additionalProperties": false
+    },
+    "expectedRename": {
+      "type": "object",
+      "properties": {
+        "targetQualifiedName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "newName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guarantee": {
+          "const": "semantic"
+        },
+        "affectedUris": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "untouchedUris": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": ["targetQualifiedName", "newName", "guarantee", "affectedUris", "untouchedUris"],
+      "additionalProperties": false
+    }
+  }
+}

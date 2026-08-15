@@ -1,0 +1,65 @@
+# IDE Bridge — Python Integration CI
+#
+# Phase 0 foundation checks for the Serena integration skeleton.
+# Non-destructive: no publish, release, commit, push, or remote modification.
+#
+# Runs pytest with Python >= 3.12. The integration tests (--integration flag)
+# require a live daemon and are deferred to Phase 6. This workflow only runs
+# the unit test suite.
+#
+# See docs/IMPLEMENTATION_PLAN.md §4 Phase 0 and §4 Phase 6.
+
+name: Python
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'integrations/serena/**'
+      - '.github/workflows/python.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'integrations/serena/**'
+      - '.github/workflows/python.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13', '3.14']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: integrations/serena
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e ".[dev]"; fi
+          pip install pytest
+
+      - name: Run pytest (unit tests only)
+        working-directory: integrations/serena
+        run: python -m pytest
+
+      # Integration tests require a live daemon — enabled in Phase 6.
+      # - name: Run pytest (integration tests)
+      #   working-directory: integrations/serena
+      #   run: python -m pytest --integration

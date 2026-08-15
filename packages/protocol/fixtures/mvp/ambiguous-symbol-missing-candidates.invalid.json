@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "resolve-2",
+  "error": {
+    "code": -32000,
+    "message": "Symbol is ambiguous",
+    "data": {
+      "code": "AMBIGUOUS_SYMBOL",
+      "retryable": false
+    }
+  }
+}

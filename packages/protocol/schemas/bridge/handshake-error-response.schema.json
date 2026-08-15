@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/bridge/handshake-error-response.schema.json",
+  "title": "bridge/handshake error response",
+  "description": "Handshake failures. The daemon sends at most one error response and then closes the connection.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/invalidRequest"
+    },
+    {
+      "$ref": "#/$defs/authenticationFailed"
+    },
+    {
+      "$ref": "#/$defs/unsupportedProtocolVersion"
+    }
+  ],
+  "$defs": {
+    "responseId": {
+      "oneOf": [
+        {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/json-rpc-id.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "invalidRequest": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/responseId"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "const": -32600
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "const": "INVALID_REQUEST"
+                },
+                "retryable": {
+                  "const": false
+                }
+              },
+              "required": ["code", "retryable"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["code", "message", "data"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "error"],
+      "additionalProperties": false
+    },
+    "authenticationFailed": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/responseId"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "const": -32001
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "const": "AUTHENTICATION_FAILED"
+                },
+                "retryable": {
+                  "const": false
+                }
+              },
+              "required": ["code", "retryable"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["code", "message", "data"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "error"],
+      "additionalProperties": false
+    },
+    "unsupportedProtocolVersion": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/$defs/responseId"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "const": -32002
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "const": "UNSUPPORTED_PROTOCOL_VERSION"
+                },
+                "retryable": {
+                  "const": false
+                },
+                "supportedProtocol": {
+                  "type": "object",
+                  "properties": {
+                    "minimum": {
+                      "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+                    },
+                    "maximum": {
+                      "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/protocol-version.schema.json"
+                    }
+                  },
+                  "required": ["minimum", "maximum"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["code", "retryable", "supportedProtocol"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["code", "message", "data"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jsonrpc", "id", "error"],
+      "additionalProperties": false
+    }
+  }
+}

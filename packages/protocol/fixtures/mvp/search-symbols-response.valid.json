@@ -1,0 +1,33 @@
+{
+  "jsonrpc": "2.0",
+  "id": "search-symbols-1",
+  "result": {
+    "symbols": [
+      {
+        "handle": {
+          "adapterId": "adapter_vscode_1",
+          "sessionId": "session_adapter_1",
+          "id": "sym_search_1",
+          "validUntilEpoch": 4
+        },
+        "locator": {
+          "documentUri": "file:///workspace/src/service.ts",
+          "name": "StreamService",
+          "kind": "class",
+          "selectionRange": {
+            "start": { "line": 4, "character": 13 },
+            "end": { "line": 4, "character": 26 }
+          },
+          "positionEncoding": "utf-16",
+          "fingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "range": {
+          "start": { "line": 4, "character": 13 },
+          "end": { "line": 4, "character": 26 }
+        },
+        "children": []
+      }
+    ],
+    "truncated": true
+  }
+}

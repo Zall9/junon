@@ -1,0 +1,139 @@
+{
+  "description": "Shared controlled-relocation vectors (ADR-0018, amending ADR-0003). Relocation matches a stale locator on its semantic fields — name, kind, and container name when both sides declare one — inside its own document, using the selection range only to break a tie. Every adapter implements this in its own language; divergence would mean the same protocol answering differently depending on the IDE, so both implementations are checked against this one list (ADR-0025).",
+  "documentUri": "file:///workspace/project/src/service.ts",
+  "vectors": [
+    {
+      "why": "a symbol that moved down relocates, which fingerprint matching could not do",
+      "target": { "name": "StreamService", "kind": "class", "selectionRange": [4, 6, 4, 19] },
+      "current": [{ "name": "StreamService", "kind": "class", "selectionRange": [9, 6, 9, 19] }],
+      "expect": "resolved",
+      "resolvedSelectionStartLine": 9
+    },
+    {
+      "why": "a nested symbol is found and its container is honoured when both sides declare one",
+      "target": {
+        "name": "update",
+        "kind": "method",
+        "containerName": "StreamService",
+        "selectionRange": [5, 2, 5, 8]
+      },
+      "current": [
+        {
+          "name": "StreamService",
+          "kind": "class",
+          "selectionRange": [9, 6, 9, 19],
+          "range": [9, 0, 20, 1],
+          "children": [
+            {
+              "name": "update",
+              "kind": "method",
+              "containerName": "StreamService",
+              "selectionRange": [11, 2, 11, 8]
+            }
+          ]
+        }
+      ],
+      "expect": "resolved",
+      "resolvedSelectionStartLine": 11
+    },
+    {
+      "why": "a different container name is a different symbol",
+      "target": {
+        "name": "update",
+        "kind": "method",
+        "containerName": "OtherService",
+        "selectionRange": [5, 2, 5, 8]
+      },
+      "current": [
+        {
+          "name": "StreamService",
+          "kind": "class",
+          "selectionRange": [9, 6, 9, 19],
+          "range": [9, 0, 20, 1],
+          "children": [
+            {
+              "name": "update",
+              "kind": "method",
+              "containerName": "StreamService",
+              "selectionRange": [11, 2, 11, 8]
+            }
+          ]
+        }
+      ],
+      "expect": "not-found"
+    },
+    {
+      "why": "a locator minted from a flat search result carries no container, which must not block it",
+      "target": { "name": "update", "kind": "method", "selectionRange": [5, 2, 5, 8] },
+      "current": [
+        {
+          "name": "StreamService",
+          "kind": "class",
+          "selectionRange": [9, 6, 9, 19],
+          "range": [9, 0, 20, 1],
+          "children": [
+            {
+              "name": "update",
+              "kind": "method",
+              "containerName": "StreamService",
+              "selectionRange": [11, 2, 11, 8]
+            }
+          ]
+        }
+      ],
+      "expect": "resolved",
+      "resolvedSelectionStartLine": 11
+    },
+    {
+      "why": "a symbol that no longer exists fails closed",
+      "target": { "name": "Removed", "kind": "class", "selectionRange": [4, 6, 4, 13] },
+      "current": [{ "name": "Kept", "kind": "class", "selectionRange": [4, 6, 4, 10] }],
+      "expect": "not-found"
+    },
+    {
+      "why": "an empty document fails closed",
+      "target": { "name": "Anything", "kind": "class", "selectionRange": [1, 0, 1, 8] },
+      "current": [],
+      "expect": "not-found"
+    },
+    {
+      "why": "a different kind is a different symbol",
+      "target": { "name": "Service", "kind": "interface", "selectionRange": [4, 6, 4, 13] },
+      "current": [{ "name": "Service", "kind": "class", "selectionRange": [4, 6, 4, 13] }],
+      "expect": "not-found"
+    },
+    {
+      "why": "the original selection range breaks a tie between overloads",
+      "target": { "name": "run", "kind": "method", "selectionRange": [7, 2, 7, 5] },
+      "current": [
+        { "name": "run", "kind": "method", "selectionRange": [3, 2, 3, 5] },
+        { "name": "run", "kind": "method", "selectionRange": [7, 2, 7, 5] }
+      ],
+      "expect": "resolved",
+      "resolvedSelectionStartLine": 7
+    },
+    {
+      "why": "indistinguishable overloads report every candidate instead of guessing",
+      "target": { "name": "run", "kind": "method", "selectionRange": [99, 0, 99, 3] },
+      "current": [
+        { "name": "run", "kind": "method", "selectionRange": [3, 2, 3, 5] },
+        { "name": "run", "kind": "method", "selectionRange": [7, 2, 7, 5] }
+      ],
+      "expect": "ambiguous",
+      "candidateCount": 2
+    },
+    {
+      "why": "relocation never crosses documents",
+      "target": { "name": "Service", "kind": "class", "selectionRange": [4, 6, 4, 13] },
+      "current": [
+        {
+          "name": "Service",
+          "kind": "class",
+          "selectionRange": [4, 6, 4, 13],
+          "documentUri": "file:///workspace/project/src/other.ts"
+        }
+      ],
+      "expect": "not-found"
+    }
+  ]
+}

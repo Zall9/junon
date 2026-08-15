@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ide-bridge.dev/schemas/0.1.0/common/document.schema.json",
+  "title": "IDEBP documents",
+  "$defs": {
+    "documentReference": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/workspaceId"
+        },
+        "rootId": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/identifiers.schema.json#/$defs/rootId"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "logicalPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/revision.schema.json#/$defs/revision"
+        },
+        "positionEncoding": {
+          "$ref": "https://ide-bridge.dev/schemas/0.1.0/common/position.schema.json#/$defs/positionEncoding"
+        },
+        "languageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isDirty": {
+          "type": "boolean"
+        }
+      },
+      "required": ["workspaceId", "rootId", "uri", "revision", "positionEncoding", "isDirty"],
+      "additionalProperties": false
+    },
+    "documentContent": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/documentReference"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["document", "text"],
+      "additionalProperties": false
+    }
+  }
+}

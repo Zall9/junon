@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "id": "register-1",
+  "method": "ide/register",
+  "params": {
+    "authentication": {
+      "method": "token",
+      "token": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+    },
+    "role": "adapter",
+    "protocol": {
+      "minimum": "0.1.0",
+      "maximum": "0.1.0"
+    },
+    "topology": {
+      "hostKind": "local",
+      "environmentKind": "local",
+      "uriSchemes": ["file"]
+    },
+    "clientInfo": {
+      "name": "fixture-adapter",
+      "version": "0.1.0"
+    }
+  }
+}
