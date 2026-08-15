@@ -201,7 +201,12 @@ val checkInternalApiSurface by tasks.registering {
                 },
             )
         }
-        logger.lifecycle("Internal API surface matches the baseline (${reported.size} entries).")
+        // Both numbers, because one alone misleads: "16 entries" reads as a baseline of sixteen,
+        // when it is sixteen reported usages — the same two entries seen across four verified IDEs.
+        logger.lifecycle(
+            "Internal API: ${reported.size} usage(s) reported, all accounted for by " +
+                "${baseline.size} baseline entr${if (baseline.size == 1) "y" else "ies"}.",
+        )
     }
 }
 

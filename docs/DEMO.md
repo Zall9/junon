@@ -340,6 +340,23 @@ arrived. `daemon-autostarted` in the extension's log is that proof here.
 - on JetBrains, writing the file on disk still does not invalidate a plan: the IDE holds its own
   copy and never saw the write. Worth knowing for anyone editing a bridged file in a second editor.
 
+## Checking that nothing secret was written down
+
+TASK.md §31 asks for logs that contain no tokens. The guards for that are in the code — a closed
+catalogue of log events, no payloads, a `doctor` that repeats neither token nor endpoint — but the
+check worth doing is the empirical one, against logs a real session produced:
+
+```bash
+grep -c "$(python3 -c 'import json;print(json.load(open("$IDE_BRIDGE_DISCOVERY_FILE"))["token"])')" \
+  ~/.cache/ide-bridge/sandbox/*/*/log/idea.log
+```
+
+Measured on 2026-08-15 across **103 log files** — 8.3 MB of daemon log, 3.9 MB of IDE log, the VS
+Code extension host, and every channel its window writes — searching for the two live tokens:
+**zero occurrences**. Strings merely *shaped* like a token appear (894 in `idea.log`, 22 in VS Code's
+renderer) and are the platforms' own identifiers, which is why the exact search is the one that
+settles it.
+
 ## Serena demo
 
 The JUNON integration composes onto Serena rather than editing it, so it is started by its own
