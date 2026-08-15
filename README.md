@@ -4,8 +4,10 @@ A protocol and daemon that lets AI agents communicate with VS Code and JetBrains
 
 ## Status
 
-[docs/STATUS.md](docs/STATUS.md) records what is verified, what is not, and what is deliberately
-deferred — read it before relying on anything below. In short: both adapters run in real IDEs. The
+[docs/FINAL_REPORT.md](docs/FINAL_REPORT.md) is the summary of where this stands: architecture,
+what works, what is only wired, every validation command with its real result, and the remaining
+risks stated at full strength. [docs/STATUS.md](docs/STATUS.md) records what is verified, what is
+not, and what is deliberately deferred — read it before relying on anything below. In short: both adapters run in real IDEs. The
 JetBrains one has been **run** in IntelliJ, PhpStorm, GoLand and PyCharm — not merely measured
 compatible — and serves all 16 routed methods. The VS Code one serves 13; the three it does not are
 refusals with reasons, not gaps.
