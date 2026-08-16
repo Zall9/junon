@@ -251,6 +251,97 @@ class ProjectLinkTest : BasePlatformTestCase() {
         }
     }
 
+    /**
+     * A session the daemon ends must be reconnected, not merely mourned.
+     *
+     * The plugin learned on 2026-08-14 to notice a dead session and release its link; it then sat
+     * there. A user whose daemon had restarted, or whose adapter the daemon had disconnected over
+     * one refused response, had a dead bridge until they re-linked by hand. This drives the whole
+     * sequence: link against a real daemon, kill it, start another on the same discovery file, and
+     * require the plugin to find its way back on its own.
+     */
+    fun `test a link the daemon ended is reconnected without being asked`() {
+        val node = File(System.getProperty("user.dir")).parentFile
+            .let { root -> File(root, "packages/cli/dist/bin.js") }
+            .takeIf { it.isFile }
+            ?.let { cli -> nodeExecutable()?.let { node -> node to cli } }
+        if (node == null) {
+            println("SKIPPED: node or packages/cli/dist/bin.js is missing; run `pnpm -r build`")
+            return
+        }
+        val (nodePath, cli) = node
+        val directory = createTempDirectory("ide-bridge-relink")
+        val discoveryFile = directory.resolve("discovery.json")
+
+        fun startDaemon(): Process = ProcessBuilder(
+            nodePath, cli.absolutePath,
+            "daemon", "--discovery-file", discoveryFile.toString(), "--log-level", "silent",
+        )
+            .directory(File(System.getProperty("user.dir")).parentFile)
+            .redirectErrorStream(true)
+            .start()
+
+        fun awaitDiscovery() {
+            val deadline = System.currentTimeMillis() + 30_000
+            while (!Files.exists(discoveryFile) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100)
+            }
+        }
+
+        var daemon = startDaemon()
+        val service = BridgeDaemonConnectionService(discoveryPathProvider = { discoveryFile })
+        try {
+            awaitDiscovery()
+            assertTrue(
+                "the fixture must link against a real daemon",
+                service.link(project) is BridgeDaemonConnectionService.Outcome.Linked,
+            )
+
+            daemon.destroy()
+            daemon.waitFor(10, TimeUnit.SECONDS)
+            Files.deleteIfExists(discoveryFile)
+
+            val released = System.currentTimeMillis() + 20_000
+            while (service.isLinked(project) && System.currentTimeMillis() < released) {
+                Thread.sleep(100)
+            }
+            assertFalse("the dead session must release its link first", service.isLinked(project))
+
+            // A daemon comes back on the same discovery file, as one restarted by hand would.
+            daemon = startDaemon()
+            awaitDiscovery()
+
+            val reconnected = System.currentTimeMillis() + 60_000
+            while (!service.isLinked(project) && System.currentTimeMillis() < reconnected) {
+                Thread.sleep(200)
+            }
+            assertTrue(
+                "the plugin must find its way back without the user re-linking by hand",
+                service.isLinked(project),
+            )
+        } finally {
+            service.unlink(project)
+            daemon.destroyForcibly()
+        }
+    }
+
+    /**
+     * Reconnection widens, caps, and stops.
+     *
+     * The daemon closes a session when it *refuses* something. Retrying that instantly and for ever
+     * would turn one bad response into a flood, so this pins the shape rather than the fact: the
+     * delays double, they stop growing at the cap, and past the last attempt there is no next one.
+     */
+    fun `test reconnection backs off, caps, and gives up`() {
+        val delays = (1..6).map { BridgeDaemonConnectionService.relinkDelayMs(it) }
+
+        assertEquals(listOf(2_000L, 4_000L, 8_000L, 16_000L, 30_000L, 30_000L), delays)
+        assertNull("a seventh attempt must not be scheduled", BridgeDaemonConnectionService.relinkDelayMs(7))
+        assertNull(BridgeDaemonConnectionService.relinkDelayMs(50))
+        // Long enough to outlast a daemon being restarted by hand, short enough to stay bounded.
+        assertTrue("the whole sequence must stay near two minutes", delays.filterNotNull().sum() < 120_000L)
+    }
+
     fun `test unlinking a project that was never linked is safe`() {
         val service = service()
 

@@ -56,6 +56,26 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      # Four tests here spawn the real daemon to prove the plugin talks to it — the handshake, the
+      # registration, the link a closed session releases, the tracker it disposes. They report
+      # themselves SKIPPED when `packages/cli/dist/bin.js` is absent, which on this runner it was:
+      # the job had Java and nothing else, so the tests that matter most passed by not running.
+      - name: Install pnpm 10.32.1
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Build the daemon the real-daemon tests spawn
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -r build
+
       - name: Gradle wrapper version
         working-directory: jetbrains-plugin
         run: ./gradlew --version
@@ -63,6 +83,24 @@ jobs:
       - name: Gradle test
         working-directory: jetbrains-plugin
         run: ./gradlew test
+
+      # A skip is a legitimate outcome only when Node is genuinely missing. On this runner it is
+      # not, so a skipped real-daemon test means the build step above produced no binary — which is
+      # otherwise invisible in a green job.
+      #
+      # Three forms have to be caught, because the tests do not agree on one: JUnit's own `skipped`
+      # attribute, and two hand-rolled markers — `SKIPPED:` printed to stdout, `[skipped]` printed
+      # to stderr — which report the *test* as passed. Gradle records both streams in the XML, so
+      # this reads all of it rather than trusting the attribute.
+      - name: Refuse a run where an integration test skipped
+        working-directory: jetbrains-plugin
+        run: |
+          results=build/test-results/test
+          if grep -rlE 'skipped="[1-9]|SKIPPED:|\[skipped\]' "$results" 2>/dev/null; then
+            echo "An integration test skipped; the daemon binary was probably not built." >&2
+            exit 1
+          fi
+          echo "No integration test skipped."
 
       - name: Gradle buildPlugin
         working-directory: jetbrains-plugin

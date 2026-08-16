@@ -310,6 +310,18 @@ early when its part is absent, and a lost capture would otherwise take five chec
 
 - A conformance **capture** attests to the last end-to-end run, not to the current code. A stale
   capture would pass.
+- **Only two of the six document notifications remain unobserved.** `document/opened`, `changed`,
+  `saved`, `deleted` and `diagnostics/changed` have all been seen leaving the JetBrains adapter.
+  `document/renamed` fires only for a rename made inside the IDE — a disk rename is reported as a
+  deletion, correctly — and `document/closed` needs a person closing a tab, since the adapter opens
+  editors and never closes them. Both shapes are schema-verified on both stacks.
+- **A JetBrains link the daemon ends now reconnects itself**, with a widening delay capped at 30 s
+  and abandoned after six attempts — a refused response must not become a retry flood. Proved against
+  a real daemon: killed, restarted on the same discovery file, and the plugin found its way back.
+- **The adapter has now answered from a language engine it was not written against.** PyCharm reports
+  Python symbols with real kinds and no `unknown`, and refuses diagnostics by name on a project with
+  no interpreter. Both IDEs were connected to one daemon at the time, which is also the first
+  exercise of multi-adapter routing. A genuinely third-party (marketplace) plugin remains untested.
 - **The two adapters report readiness differently, and neither pretends otherwise.** JetBrains
   probes every 5 s and can say `degraded`; VS Code announces `ready` once and never says `indexing`
   or `degraded` — it exposes no index-readiness signal (ADR-0019), and its extension host has one
@@ -326,12 +338,12 @@ early when its part is absent, and a lost capture would otherwise take five chec
   `degraded` any adapter in this project emits. Proved live for the quiet case — roughly two hundred
   ticks, one announcement — and by unit test and mutation for the blocked case, which no longer
   reproduces on demand now that applying saves its documents.
-- **An edit made on disk, outside the IDE, reaches it on no schedule you can rely on** — one run
-  still reported the old content after ninety seconds, another noticed at forty-five. Applying a plan
-  now refreshes the files it names first, so an edit made underneath is refused rather than written
-  over (measured with the apply issued before any refresh could have happened). Reads are not
-  protected the same way: symbols and diagnostics describe the IDE's view, which can lag the disk by
-  a minute or more.
+- **An edit made on disk, outside the IDE, used to reach it on no schedule you could rely on** — one
+  run still reported the old content after ninety seconds, another noticed at forty-five. IntelliJ
+  refreshes its virtual file system on frame focus, and an IDE driven by an agent may never be
+  focused. The adapter now requests that refresh itself every 15 seconds, and a file written on disk
+  is visible in about five. Applying a plan additionally refreshes the files it names before checking
+  them, so an edit made underneath is refused rather than written over.
 - **A Kotlin suite could report success without reading the fixtures it judges by.** The shared
   protocol fixtures are read at run time, which Gradle cannot see from the classpath, so changing one
   left `:test` up to date. Measured on 2026-08-15: five notification fixtures were added for which

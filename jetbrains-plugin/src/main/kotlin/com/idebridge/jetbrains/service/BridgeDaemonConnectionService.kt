@@ -36,6 +36,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManagerListener
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
@@ -134,6 +135,10 @@ class BridgeDaemonConnectionService(
         /** The periodic probe; cancelled when the link ends. */
         @Volatile
         var heartbeat: ScheduledFuture<*>? = null
+
+        /** The periodic file-system refresh; cancelled with the link. */
+        @Volatile
+        var refresh: ScheduledFuture<*>? = null
     }
 
     /**
@@ -354,6 +359,12 @@ class BridgeDaemonConnectionService(
             PROBE_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
         )
+        link.refresh = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
+            { runCatching { refreshWorkspaceFromDisk(project) } },
+            REFRESH_INTERVAL_MS,
+            REFRESH_INTERVAL_MS,
+            TimeUnit.MILLISECONDS,
+        )
         logger.info(
             "[IDE Bridge] linked ${project.name}; serving workspace ${workspace.workspaceId}",
         )
@@ -380,6 +391,7 @@ class BridgeDaemonConnectionService(
     private fun releaseDeadLink(project: Project, dead: Link) {
         if (!links.remove(project, dead)) return
         dead.heartbeat?.cancel(false)
+        dead.refresh?.cancel(false)
         dead.announcer.cancel()
         dead.diagnosticsAnnouncer.cancel()
         Disposer.dispose(dead.documentListeners)
@@ -388,15 +400,56 @@ class BridgeDaemonConnectionService(
         runCatching { dead.transport.close() }
         logger.warn(
             "[IDE Bridge] the daemon ended the session for ${project.name}; " +
-                "workspace ${dead.workspaceId} is no longer served. Link the project again.",
+                "workspace ${dead.workspaceId} is no longer served. Reconnecting.",
         )
         refreshReadiness()
+        scheduleRelink(project, attempt = 1)
+    }
+
+    /**
+     * Tries to link again after a session ended, with a widening delay.
+     *
+     * Until now the plugin noticed a dead session and stopped there, so a user whose daemon had been
+     * restarted — or whose adapter the daemon had disconnected over one refused response — had a
+     * dead bridge until they re-linked by hand, and nothing on screen said so unless they looked.
+     *
+     * Widening, capped, and bounded on purpose. The daemon closes a session when it *refuses*
+     * something; retrying that instantly, for ever, would turn one bad response into a flood. After
+     * the last attempt the plugin stays quiet and the tool window reports `DISCONNECTED`, which is
+     * the honest end state: something is wrong that reconnecting will not fix.
+     */
+    private fun scheduleRelink(project: Project, attempt: Int) {
+        val delay = relinkDelayMs(attempt)
+        if (delay == null) {
+            logger.warn(
+                "[IDE Bridge] gave up reconnecting ${project.name} after $MAX_RELINK_ATTEMPTS " +
+                    "attempts; link it again from the IDE Bridge tool window.",
+            )
+            return
+        }
+        AppExecutorUtil.getAppScheduledExecutorService().schedule(
+            {
+                // A project that closed, or that someone linked in the meantime, is not ours to
+                // reconnect: `link` answers `AlreadyLinked` for the second and would fail for the
+                // first, and either way retrying is wrong.
+                if (project.isDisposed || links.containsKey(project)) return@schedule
+                val outcome = runCatching { link(project) }.getOrNull()
+                if (outcome is Outcome.Linked) {
+                    logger.info("[IDE Bridge] reconnected ${project.name} on attempt $attempt")
+                } else {
+                    scheduleRelink(project, attempt + 1)
+                }
+            },
+            delay,
+            TimeUnit.MILLISECONDS,
+        )
     }
 
     fun unlink(project: Project) {
         val link = links.remove(project) ?: return
         // Before the transport, so no readiness announcement races a closing socket.
         link.heartbeat?.cancel(false)
+        link.refresh?.cancel(false)
         link.announcer.cancel()
         link.diagnosticsAnnouncer.cancel()
         Disposer.dispose(link.documentListeners)
@@ -587,6 +640,31 @@ class BridgeDaemonConnectionService(
         AppExecutorUtil.getAppExecutorService().execute { runCatching { work() } }
     }
 
+    /**
+     * Asks the IDE to look at the file system, because nothing else will.
+     *
+     * IntelliJ refreshes its virtual file system when its frame regains focus. An IDE driven by an
+     * agent may never be focused at all, and then an edit made on disk reaches it on no schedule
+     * worth relying on: measured on 2026-08-14, `document/getRevision` still reported the old
+     * content ninety seconds after a write, and forty-five in another run. Every route reads that
+     * same stale view.
+     *
+     * Asynchronous and scoped to the workspace's own roots — this runs on a timer, and a synchronous
+     * recursive refresh of a large project on a timer would be its own defect. The refresh itself is
+     * incremental: the platform compares timestamps and only reports what moved.
+     */
+    private fun refreshWorkspaceFromDisk(project: Project) {
+        val link = links[project] ?: return
+        val roots = ReadAction.compute<List<VirtualFile>, RuntimeException> {
+            IntelliJProjectSnapshot.capture(project).rootUris.mapNotNull {
+                VirtualFileManager.getInstance().findFileByUrl(it)
+            }
+        }
+        if (roots.isEmpty()) return
+        runCatching { VfsUtil.markDirtyAndRefresh(true, true, false, *roots.toTypedArray()) }
+            .onFailure { logger.info("[IDE Bridge] could not refresh ${link.workspaceId}: $it") }
+    }
+
     /** One `document/opened`, `document/saved` or `document/closed`. */
     private fun announceDocumentEvent(project: Project, method: String, uri: String) {
         val link = links[project] ?: return
@@ -724,6 +802,40 @@ class BridgeDaemonConnectionService(
          * plan is invalidated before anyone applies it — not that every keystroke is relayed.
          */
         private const val CHANGE_DEBOUNCE_MS = 400L
+
+        /**
+         * How often to ask the IDE to look at the file system.
+         *
+         * Slower than the readiness probe on purpose: this walks the workspace's roots, where the
+         * probe only asks whether a read action can run. Fifteen seconds is well inside the patience
+         * of an agent that has just written a file and is about to ask about it, and far cheaper
+         * than the minute-plus an unfocused IDE would otherwise take to notice.
+         */
+        private const val REFRESH_INTERVAL_MS = 15_000L
+
+        /** First reconnection delay; each attempt doubles it, up to the cap below. */
+        private const val RELINK_BASE_DELAY_MS = 2_000L
+
+        /** Long enough that a daemon being restarted by hand is still caught. */
+        private const val RELINK_MAX_DELAY_MS = 30_000L
+
+        /** ~2 minutes of trying in total, then silence and an honest DISCONNECTED. */
+        private const val MAX_RELINK_ATTEMPTS = 6
+
+        /**
+         * How long to wait before reconnection attempt [attempt], or `null` to stop trying.
+         *
+         * Separated from the scheduling so the bounds can be proved without waiting out two minutes
+         * of real delays — the schedule around it is what a live test exercises, and this is what
+         * says when to give up.
+         */
+        @JvmStatic
+        public fun relinkDelayMs(attempt: Int): Long? =
+            if (attempt > MAX_RELINK_ATTEMPTS) {
+                null
+            } else {
+                (RELINK_BASE_DELAY_MS shl (attempt - 1)).coerceAtMost(RELINK_MAX_DELAY_MS)
+            }
 
         /**
          * The daemon's own default location, overridable by `IDE_BRIDGE_DISCOVERY_FILE`.

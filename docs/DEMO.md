@@ -189,12 +189,21 @@ document/saved        x12
 diagnostics/changed    x2
 ```
 
-`document/deleted` has been sent and accepted too — the daemon's own metrics record two, from a probe
-that removed a file — though which moment produced them was not pinned down. `opened`, `closed` and
-`renamed` are wired to the editor's own events and **not** driven end to end: their triggers are
-things a person does in the IDE, and doing them through the file system instead does not reach it —
-a file created on disk was still `DOCUMENT_NOT_FOUND` to the adapter seconds later, for the same
-virtual-file-system reason recorded above. Said plainly rather than counted as proven.
+`document/opened` and `document/deleted` are proved too, by a probe that writes a file, asks for its
+diagnostics — which makes the adapter open an editor for it — then deletes it:
+
+```
+   5.3s  the IDE sees the new file
+   8.8s  document/opened      FivePointsProbe.kt
+  21.7s  document/deleted     FivePointsProbe.kt
+```
+
+**`document/renamed` fires only for a rename made inside the IDE.** Renaming on disk produces
+`document/deleted` instead, and correctly so: a file-system refresh discovers an absence and a new
+file, it does not reconstruct a move. **`document/closed` needs a person closing a tab** — the
+adapter opens editors and never closes them, and a file deleted while open is reported as deleted,
+not closed, since a document that is gone has no revision to name. Both shapes are verified against
+the schema on both stacks; neither has been observed leaving the adapter.
 
 `node packages/cli/dist/bin.js status` is the cheapest way to see all of this: the daemon counts every
 method it routed, and the counts are what tell an adapter's author whether a notification is arriving
@@ -206,11 +215,12 @@ time a user opened a file. Fixtures now exist for all five, and adding them imme
 the Kotlin side had no serializer registered for any of them — they had never been confronted with
 the schema at all.
 
-**An edit made on disk, outside the IDE**, is a different matter, and the timing is not something to
-rely on: writing a bridged file behind the IDE's back and polling `document/getRevision`, one run
-still reported the old content after ninety seconds, and another noticed at forty-five. Until the
-IDE's virtual file system refreshes, no document changes, nothing is announced, and every check in
-this adapter reads the same stale view.
+**An edit made on disk, outside the IDE** used to reach it on no schedule worth relying on: one run
+still reported the old content after ninety seconds, another noticed at forty-five. The cause is that
+IntelliJ refreshes its virtual file system when its frame regains focus, and an IDE driven by an
+agent may never be focused at all. The adapter now asks for that refresh itself every 15 seconds,
+scoped to the workspace's roots and asynchronous. Measured after the change: **a file written on disk
+is visible to `document/getRevision` in about five seconds.**
 
 So `workspace/applyPlan` refreshes the files its plan names before checking them — only those the
 editor holds unmodified, because refreshing a modified document raises the IDE's "reload from disk?"
@@ -356,6 +366,32 @@ Code extension host, and every channel its window writes — searching for the t
 **zero occurrences**. Strings merely *shaped* like a token appear (894 in `idea.log`, 22 in VS Code's
 renderer) and are the platforms' own identifiers, which is why the exact search is the one that
 settles it.
+
+## A second IDE, and a language engine this project had not tested
+
+Everything above runs against IntelliJ, whose Java and Kotlin support is what the adapter was written
+against. PyCharm is a different set of language engines behind the same platform APIs, which is the
+only way to tell a plugin that uses the host IDE's engines from one that merely compiles against
+them.
+
+```bash
+cd jetbrains-plugin
+IDE_BRIDGE_SAMPLE_PROJECT=$PWD/../integrations/serena ./gradlew runPyCharm
+```
+
+Measured with **both IDEs connected to one daemon at once** — the first time multi-adapter routing has
+been exercised:
+
+```
+adapters: ['IC-252.23892.409', 'PY-262.8665.369']
+  ws_Uwvu…  jetbrains-plugin   file:///…/jetbrains-plugin
+  ws_JuW_…  serena             file:///…/integrations/serena
+```
+
+Asking PyCharm's workspace for a Python file's symbols returns kinds from Python's own model —
+`class`, `function`, `method`, `variable`, and **no `unknown`**. `diagnostics/getSnapshot` on the same
+project refuses `CAPABILITY_UNAVAILABLE`, because that project was opened without an interpreter, so
+its analyser cannot run — the refusal working on a third language engine rather than an empty answer.
 
 ## Serena demo
 
