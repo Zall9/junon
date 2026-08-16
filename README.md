@@ -82,6 +82,18 @@ Then bring up an adapter — `cd jetbrains-plugin && ./gradlew runIde` (`runPyCh
 downloads VS Code, installs the extension and drives the whole walkthrough itself.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
+### Setting it up with a coding agent
+
+If an agent is doing the setup — Claude Code, Cursor, or anything else that can run commands — point
+it at **[docs/AGENT_SETUP.md](docs/AGENT_SETUP.md)** and let it work through that instead of this
+section.
+
+It is written for that reader: three processes that have to find each other, in order, each step
+ending in a check to observe before moving on. It also names the failures that are silent by nature —
+a daemon left over from an earlier session that passes every check, an IDE reading a different
+discovery file, a host configured for `serena` rather than `junon` — with the command that tells them
+apart, and the rules the agent is not free to relax.
+
 ### Connecting Serena
 
 JUNON installs **into** Serena's own environment, because it imports it:
@@ -148,6 +160,7 @@ one asserted nothing.
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | The wire contract, method by method |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, trust boundaries, what is deliberately impossible |
 | [docs/STATUS.md](docs/STATUS.md) | What is verified, what is not, and how it was measured |
+| [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) | Ordered setup for a coding agent: what to run, what to check, what fails silently |
 | [docs/DEMO.md](docs/DEMO.md) | Reproducible walkthrough per adapter, with real output |
 | [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md) | The summary: architecture, results, remaining risks at full strength |
 | [docs/REMOTE_DEVELOPMENT.md](docs/REMOTE_DEVELOPMENT.md) | Remote and containerised setups |
