@@ -146,6 +146,19 @@ Then configure your MCP host to run **`junon`**, never `serena`:
 }
 ```
 
+**Check the Serena you are composing onto, not just the one this repository pins.** JUNON is
+developed against the `serena-upstream` checkout here, and a machine's own Serena is usually older.
+Two things follow, both measured on this machine rather than imagined:
+
+- Serena 1.7 renamed the project-config key `languages` to `language_servers`. A project opened once
+  by a 1.7 checkout has a `.serena/project.yml` that **1.5.3 cannot read**, and the server dies on
+  start-up with `KeyError: 'languages'` — for `serena` and `junon` alike. Developing this project
+  therefore breaks an older everyday Serena, quietly, in every repository it touches. The fix is to
+  bring the installed Serena up to the schema its configs are already written in
+  (`pipx upgrade serena-agent`), not to rewrite the configs back.
+- The dashboard start-up call also changed shape between those versions. JUNON accepts both, and
+  `tests/test_dashboard_start_shapes.py` is what keeps it that way.
+
 This is the one step with no error message when you get it wrong. `serena` still starts plain Serena
 — deliberately, so that installing JUNON cannot change a machine's behaviour silently — which means a
 host pointed at `serena` gets the same tool names, no `ide_*` tools, no dashboard, and no complaint.
@@ -166,6 +179,7 @@ the one to run before concluding that anything else is broken.
 | `adapterCount: 0` with an IDE running | The IDE and your shell are using different discovery files |
 | Everything passes but answers look stale or wrong | A daemon from an earlier session. `doctor`, and read `pid` and `uptimeSeconds` |
 | Agent has no `ide_*` tools | The host is running `serena`, not `junon` |
+| Serena dies at start-up, `KeyError: 'languages'` | The project config was written by Serena 1.7, the installed Serena is older. `pipx upgrade serena-agent`. Not a JUNON failure — plain `serena` fails identically, which is the control worth running before blaming the composition |
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
