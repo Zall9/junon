@@ -409,6 +409,22 @@ gets plain Serena. Verify the tools arrived:
 junon tools list | grep '^ \* `ide_'
 ```
 
+That separation has a cost worth stating, because it was paid: an agent host configured to run
+`serena` gets plain Serena and **no JUNON**, silently — same tool names, no dashboard published, and
+the IDE panel with nothing to link to. Measured on this machine: the MCP server registered as
+`serena` resolved to an unrelated pipx install of upstream Serena 1.5.3, in which `junon` is not even
+importable, while fourteen registry entries from three days earlier all named dead processes. So the
+panel now says *why* it has no link rather than hiding the section, and the host is configured with
+the launcher's full path:
+
+```bash
+"$PWD/integrations/serena/.venv/bin/junon" start-mcp-server --project-from-cwd --transport stdio
+```
+
+Started this way, the launcher publishes `{"url": …, "pid": …, "project": "moneta"}` within seconds,
+its dashboard answers `200` and is JUNON's page rather than Serena's, and a clean exit removes the
+entry again.
+
 Measured:
 
 ```

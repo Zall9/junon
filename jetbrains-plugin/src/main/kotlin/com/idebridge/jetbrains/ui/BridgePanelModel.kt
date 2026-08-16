@@ -54,6 +54,22 @@ object BridgePanelModel {
         "Daemon: none found — start one with `ide-bridge daemon`"
     }
 
+    /**
+     * The heading over the dashboard links.
+     *
+     * This panel used to hide the section entirely when nothing was running, on the grounds that a
+     * heading over empty space suggests something failed. It cost more than it saved: a missing
+     * section and a broken plugin look exactly alike, and the first person to notice the link gone
+     * had no way to tell which they were looking at. The answer is not to hide the question but to
+     * state it — and to name the cause, because there is only one. `serena` starts plain Serena,
+     * which publishes nothing; `junon` composes JUNON onto it first.
+     */
+    fun dashboardLine(running: Int): String = if (running > 0) {
+        "JUNON dashboard"
+    } else {
+        "JUNON dashboard: none running — Serena was started as `serena`, not `junon`"
+    }
+
     fun row(facts: Facts, daemonAvailable: Boolean): Row {
         val linked = facts.workspaceId != null
         return Row(

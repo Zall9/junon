@@ -118,4 +118,17 @@ class BridgePanelModelTest {
         assertEquals("Daemon: reachable", BridgePanelModel.daemonLine(true))
         assertTrue(BridgePanelModel.daemonLine(false).contains("ide-bridge daemon"))
     }
+
+    @Test
+    fun `no dashboard running is stated, and names the one thing that causes it`() {
+        // The section used to vanish, and the first person to notice asked whether the plugin had
+        // broken — which is the question a vanished section cannot answer. It has one cause worth
+        // naming: `serena` is plain Serena and publishes nothing, `junon` composes JUNON first.
+        val none = BridgePanelModel.dashboardLine(0)
+
+        assertTrue(none.contains("none running"), none)
+        assertTrue(none.contains("junon"), none)
+        assertEquals("JUNON dashboard", BridgePanelModel.dashboardLine(1))
+        assertEquals("JUNON dashboard", BridgePanelModel.dashboardLine(4))
+    }
 }

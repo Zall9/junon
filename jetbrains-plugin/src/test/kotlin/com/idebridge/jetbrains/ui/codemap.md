@@ -64,6 +64,10 @@ The rule these tests exist to protect is ADR-0033's: a click that changes nothin
   (BridgePanelModelTest.kt:115-120) — asserts `daemonLine(true)` is `"Daemon: reachable"` and
   `daemonLine(false)` contains `"ide-bridge daemon"`. Two different facts stated in two different
   places.
+- `` `no dashboard running is stated, and names the one thing that causes it` ``
+  (BridgePanelModelTest.kt:122-133) — asserts `dashboardLine(0)` says `"none running"` and names
+  `junon`, and that `dashboardLine(1)`/`dashboardLine(4)` are the plain heading. The section used to
+  vanish when empty, which reads as a broken plugin.
 
 ## Integration Points
 

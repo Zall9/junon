@@ -54,7 +54,7 @@ class BridgeToolWindowFactory : ToolWindowFactory {
         /** One line per open project, rebuilt on every refresh rather than patched in place. */
         private val rows = JBPanel<JBPanel<*>>(GridBagLayout())
 
-        /** Links to running JUNON dashboards; hidden entirely when there are none. */
+        /** Links to running JUNON dashboards, or a line saying none are. */
         private val dashboards = JBPanel<JBPanel<*>>(BorderLayout()).apply {
             border = JBUI.Borders.emptyBottom(10)
         }
@@ -223,21 +223,25 @@ class BridgeToolWindowFactory : ToolWindowFactory {
          *
          * Rebuilt on every refresh rather than filled once: a dashboard is started and stopped
          * independently of the IDE, so a link fixed at panel-creation time would be right only by
-         * luck. Nothing is shown when none are running, because a heading over an empty space
-         * suggests something failed.
+         * luck. When none are running the section stays and says so, because a section that
+         * disappears and a plugin that broke are indistinguishable from the outside.
          */
         private fun refreshDashboards() {
             dashboards.removeAll()
             val running = JunonDashboards.running()
-            if (running.isEmpty()) {
-                dashboards.isVisible = false
-                return
-            }
             dashboards.isVisible = true
             dashboards.add(
-                JBLabel("JUNON dashboard").apply { border = JBUI.Borders.emptyBottom(4) },
+                JBLabel(BridgePanelModel.dashboardLine(running.size)).apply {
+                    border = JBUI.Borders.emptyBottom(4)
+                    if (running.isEmpty()) foreground = com.intellij.ui.JBColor.GRAY
+                },
                 BorderLayout.NORTH,
             )
+            if (running.isEmpty()) {
+                dashboards.revalidate()
+                dashboards.repaint()
+                return
+            }
             val links = JBPanel<JBPanel<*>>(GridBagLayout())
             for ((index, dashboard) in running.withIndex()) {
                 val label = dashboard.project?.let { "$it — ${dashboard.url}" } ?: dashboard.url

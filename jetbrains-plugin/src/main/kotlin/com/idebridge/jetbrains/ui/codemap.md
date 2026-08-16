@@ -56,7 +56,7 @@ projects describable but not reachable.
   - `rows: JBPanel<JBPanel<*>>(GridBagLayout())` (`:55`) — one line per open project, rebuilt on
     every `refresh()` rather than patched in place.
   - `dashboards: JBPanel<JBPanel<*>>(BorderLayout())` (`:58-60`) — links to running JUNON
-    dashboards; hidden entirely when there are none.
+    dashboards, or a grey line saying none are running.
   - `pending: MutableMap<Project, BridgePanelModel.Pending>` (`:64`) — what is in flight, per
     project. EDT only. Kept here rather than on the buttons because a refresh replaces them.
   - `refusals: MutableMap<Project, Outcome.Refusal>` (`:67`) — the last refusal per project, so a
@@ -116,8 +116,10 @@ projects describable but not reachable.
   (`:207`); notification settings sit in `BorderLayout.CENTER` (`:208-217`).
 - `BridgePanel.refreshDashboards()` (private, `BridgeToolWindowFactory.kt:229-254`) — rebuilt on
   every refresh rather than filled once: a dashboard is started and stopped independently of the
-  IDE. Calls `JunonDashboards.running()`, hides the panel when none are running, and creates an
-  `ActionLink` per dashboard that opens `BrowserUtil.browse(url)`.
+  IDE. Calls `JunonDashboards.running()`, heads the section with
+  `BridgePanelModel.dashboardLine(running.size)`, and creates an `ActionLink` per dashboard that
+  opens `BrowserUtil.browse(url)`. The section stays visible when none are running — it once hid
+  itself, and a hidden section is indistinguishable from a plugin that broke.
 - `BridgePanel.facts(target: Project)` (private, `BridgeToolWindowFactory.kt:206-212`) — builds a
   `BridgePanelModel.Facts` from the service's state and the pending/refusal maps.
 - `BridgePanel.addRow(row, target, index)` (private, `BridgeToolWindowFactory.kt:264-274`) — adds
@@ -131,6 +133,9 @@ projects describable but not reachable.
   disposed.
 - `BridgePanelModel.daemonLine(available: Boolean): String` (`BridgePanelModel.kt:51-55`) —
   `"Daemon: reachable"` or `"Daemon: none found — start one with \`ide-bridge daemon\`"`.
+- `BridgePanelModel.dashboardLine(running: Int): String` (`BridgePanelModel.kt:67-71`) —
+  `"JUNON dashboard"`, or a line naming the only cause of an empty list: Serena was started as
+  `serena` (plain Serena, which publishes nothing) rather than `junon`.
 - `BridgePanelModel.row(facts: Facts, daemonAvailable: Boolean): Row` (`BridgePanelModel.kt:57-72`)
   — decides title (`isPanelProject` → `"name (this project)"`), state (via private `state()`),
   action text (pending → `"Linking…"`/`"Unlinking…"`, else `"Link"`/`"Unlink"`), and
