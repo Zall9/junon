@@ -115,6 +115,45 @@ class TestDashboardSeam:
         # Our subclass forwards these unchanged; a rename breaks construction immediately.
         assert {"memory_log_handler", "tool_names", "agent"} <= set(parameters)
 
+    def test_our_start_override_accepts_the_call_this_serena_makes(self) -> None:
+        """The seam that broke, and the only one that was fatal.
+
+        ``run_in_thread`` is declared ``(self, host)`` in Serena 1.5.3 and ``(self)`` in 1.7. We
+        override it to publish the port, and an override fixed to one shape raises ``TypeError``
+        under the other — inside the agent's constructor, so the server never starts. This asserts
+        our override still accepts whatever this Serena declares, whichever that is.
+        """
+        from serena.dashboard import SerenaDashboardAPI
+
+        from junon.dashboard import JunonDashboardAPI
+
+        upstream = inspect.signature(SerenaDashboardAPI.run_in_thread)
+        required = {
+            name: "127.0.0.1"
+            for name, parameter in upstream.parameters.items()
+            if name != "self"
+            and parameter.default is inspect.Parameter.empty
+            and parameter.kind
+            in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        }
+
+        ours = inspect.signature(JunonDashboardAPI.run_in_thread)
+
+        # Raises TypeError if our override could not take that call — which is the failure, moved
+        # from a dead server to a named test.
+        ours.bind(object(), **required)
+
+        # On a Serena that declares no arguments the line above binds nothing and proves nothing,
+        # which is precisely the environment this repository pins. So the property that actually
+        # protects the other versions is asserted directly: the override takes what it is given.
+        assert {
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        } <= {parameter.kind for parameter in ours.parameters.values()}, (
+            "run_in_thread was narrowed to one Serena's signature; it will raise TypeError inside "
+            "the agent constructor of every other one"
+        )
+
 
 class TestToolRegistrySeam:
     """Our tools are discovered, not registered.

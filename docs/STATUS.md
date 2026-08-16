@@ -300,9 +300,9 @@ early when its part is absent, and a lost capture would otherwise take five chec
 
 | Stack | Tests | Notes |
 | --- | --- | --- |
-| TypeScript | 454 across 52 files | Plus 171 schema entries and 49 protocol fixtures |
-| Kotlin | 277 across 54 classes | Includes platform-fixture and real-daemon suites |
-| Python | 137 | The JUNON tools and their Serena composition |
+| TypeScript | 469 across 53 files | Plus 171 schema entries and 49 protocol fixtures |
+| Kotlin | 281 across 54 classes | Includes platform-fixture and real-daemon suites |
+| Python | 148 | The JUNON tools and their Serena composition |
 | Conformance | 50 | Judges two captured adapters |
 | VS Code host | 9 scenarios | Runs a real extension host it starts itself, and records a capture |
 
@@ -310,6 +310,16 @@ early when its part is absent, and a lost capture would otherwise take five chec
 
 - A conformance **capture** attests to the last end-to-end run, not to the current code. A stale
   capture would pass.
+- **The Python suite runs against one Serena, and that hid a fatal defect.** Everything here is
+  pinned to the development checkout (1.7.1.dev0), so a composition that only works on *that*
+  version passed every test and `compose()` reported itself complete. Composed onto an ordinary
+  `pipx install serena-agent` (1.5.3) it killed the server on start-up: `run_in_thread` is declared
+  `(self, host)` there and `(self)` in 1.7, and our override — fixed to the newer shape — raised
+  `TypeError` inside the agent's constructor. Fixed by passing the arguments through, and now
+  covered by tests that call both shapes with upstream faked out, plus a seam test that fails if the
+  override is ever narrowed again. Measured after the fix: the injected `junon` starts on 1.5.3,
+  publishes its dashboard on 24282 and serves JUNON's page. **The suite still exercises one version**
+  — the second is reached by fakes, not by installation.
 - **Only two of the six document notifications remain unobserved.** `document/opened`, `changed`,
   `saved`, `deleted` and `diagnostics/changed` have all been seen leaving the JetBrains adapter.
   `document/renamed` fires only for a rename made inside the IDE — a disk rename is reported as a

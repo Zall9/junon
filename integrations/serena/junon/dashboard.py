@@ -45,24 +45,45 @@ _REPLACED_ENDPOINTS = {
 class JunonDashboardAPI(SerenaDashboardAPI):
     """Serena's dashboard with the JUNON front end and IDE Bridge routes."""
 
-    def run_in_thread(self) -> tuple[Any, int]:
+    def run_in_thread(self, *args: Any, **kwargs: Any) -> tuple[Any, int]:
         """Starts the dashboard, then records where it can be reached.
 
         The port is only known here: upstream scans upward from its base port for a free one, and on
         a machine already running Serena that is not the base port. The IDE plugin cannot guess it,
         so it is written down — after the server is up, so a recorded URL is one that answers.
+
+        **The arguments are passed straight through, and this is not laziness.** Upstream has held
+        two shapes: Serena 1.5.3 declares ``run_in_thread(self, host)`` and the agent calls it with
+        ``host=…``; 1.7 declares ``run_in_thread(self)`` and keeps the address on ``self._host``. An
+        override fixed to either one raises ``TypeError`` on the other — inside the agent's
+        constructor, which does not survive it. Composing onto a Serena someone already had would
+        then not merely lose the JUNON dashboard, it would stop their server from starting, and
+        ``compose()`` would still report success because the rebinding did happen. Accepting both is
+        what makes this override safe to apply to a Serena we did not pick.
         """
-        thread, port = super().run_in_thread()
+        thread, port = super().run_in_thread(*args, **kwargs)
         try:
             dashboard_registry.publish(
-                url=f"http://{self._host}:{port}/dashboard/",
+                url=f"http://{self._listen_address(args, kwargs)}:{port}/dashboard/",
                 project=getattr(getattr(self._agent, "_active_project", None), "project_name", None),
             )
-        except OSError as error:
+        except Exception as error:  # noqa: BLE001 - see below
             # A dashboard nobody can find still works; refusing to start over a bookkeeping file
-            # would trade a small loss for a large one.
+            # would trade a small loss for a large one. Deliberately every exception and not just
+            # OSError: this runs inside the agent's constructor, where anything raised takes the
+            # whole server down, and nothing below this line is worth that.
             log.warning("JUNON could not publish its dashboard address: %s", error)
         return thread, port
+
+    def _listen_address(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
+        """Where the dashboard is listening, wherever this version of Serena keeps it.
+
+        Passed per call in 1.5.3, held on the instance in 1.7. The loopback fallback is a last
+        resort for a third shape we have not seen: a link to the wrong host is recoverable by
+        reading it, an exception here is not.
+        """
+        host = kwargs.get("host") or (args[0] if args else None) or getattr(self, "_host", None)
+        return str(host) if host else "127.0.0.1"
 
     def _setup_routes(self) -> None:
         # Upstream first: every API route it owns is registered exactly as it would be without us.
