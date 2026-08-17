@@ -157,6 +157,39 @@ Call `ide_status` through your agent. It reports whether an IDE is connected and
 That is the only check that exercises the whole chain — consumer, daemon, adapter, IDE — and it is
 the one to run before concluding that anything else is broken.
 
+## 7. Redeploy after you change the source
+
+Editing a file changes nothing that is running, and neither half of this tells you so. Do the half
+you touched — or both, if you changed something they share, such as the format of a file one writes
+and the other reads.
+
+**The plugin is a built jar.** `runIde` in step 4 compiles from source every time, so a change is
+live on the next `runIde`. An IDE you already had is not: it holds the jar you installed.
+
+```bash
+cd jetbrains-plugin && ./gradlew buildPlugin
+```
+
+Then *Settings → Plugins → ⚙ → Install Plugin from Disk* with
+`build/distributions/ide-bridge-jetbrains-*.zip`, **once per IDE** — installing in GoLand does
+nothing for PhpStorm — and restart the IDE.
+
+**The Python side is usually an editable install**, so the injected package points at a checkout
+instead of copying it. Confirm which checkout, using **Serena's** interpreter rather than whatever
+`python` resolves to:
+
+```bash
+~/.local/pipx/venvs/serena-agent/bin/python -c "import junon.dashboard_registry as m; print(m.__file__)"
+```
+
+If that path is not the tree you edited — a git worktree on a branch is a different tree from the
+checkout it came from — your change is not in the running system no matter how green the tests are.
+Where it is the right tree, the change lands on the next **JUNON restart**; a running agent keeps the
+module it imported at start-up.
+
+**Check:** re-run the step-6 verification, not the unit tests. Tests prove the source; only
+`ide_status` proves what is loaded.
+
 ---
 
 ## When something does not work
@@ -169,6 +202,8 @@ the one to run before concluding that anything else is broken.
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
+| A source change has no effect anywhere | Nothing was redeployed. Step 7 — the plugin is a built jar, and the editable install may point at a different checkout |
+| A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |
 | A file changed on disk is not visible to reads | Up to ~15 s: an unfocused IDE only refreshes when asked, and the adapter asks on a timer |
 
 ## Rules that are not yours to relax

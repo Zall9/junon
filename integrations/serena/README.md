@@ -12,8 +12,10 @@ never promised to keep, which is why those seams are pinned by a test (see *Comp
 ## Installing it when you already have Serena
 
 JUNON has to live **in the same environment as Serena**, because it imports it. The package declares
-only `aenum` and `websockets` as dependencies — Serena is expected to be there already, not installed
-alongside as a second copy.
+`aenum`, `websockets` and `psutil` as dependencies — Serena is expected to be there already, not
+installed alongside as a second copy. `psutil` is named even though Serena's own tree already brings
+it, because a guarantee resting on someone else's transitive dependency is one upstream can drop
+without ever knowing it was load-bearing.
 
 If Serena came from `pipx`:
 
@@ -72,6 +74,47 @@ the JetBrains tool window offers a link to a port it cannot otherwise guess. A c
 entry; a crash leaves it, and readers drop what they find dead. The entry records when the process
 started as well as its pid, because pids are reused and these files outlive their processes — a
 reader that trusted the pid alone would eventually offer a link to whatever inherited the number.
+
+## Getting a change into the thing that is running
+
+Editing a source file here changes nothing that is running. Two halves of this integration are
+deployed in two different ways, and only one of them updates by itself:
+
+- **The Python side** is usually an *editable* install (`pipx inject … -e`, the `-e` in the command
+  above), so the injected package is a pointer to a checkout rather than a copy of it. Check where
+  that pointer goes before assuming it is the tree you are editing — a worktree on a branch is not
+  the checkout it was made from:
+
+  ```bash
+  python -c "import junon.dashboard_registry as m; print(m.__file__)"
+  ```
+
+  Run it with the interpreter Serena uses (`~/.local/pipx/venvs/serena-agent/bin/python` for a pipx
+  install), not the one on your `PATH`. A change lands on the next **JUNON restart**; a running agent
+  keeps the module it imported at start-up.
+
+- **The JetBrains plugin** is a built jar, so a source change reaches an IDE only by rebuilding and
+  reinstalling it:
+
+  ```bash
+  cd jetbrains-plugin && ./gradlew buildPlugin
+  ```
+
+  Then *Settings → Plugins → ⚙ → Install Plugin from Disk* with
+  `build/distributions/ide-bridge-jetbrains-*.zip`, **in each IDE separately** — an install in GoLand
+  is invisible to PhpStorm — and restart the IDE.
+
+The halves read and write the same registry file, so an update that lands on one side and not the
+other is the failure this arrangement invites. When a field changes shape, deploy both.
+
+**A registry entry written by an older JUNON is trusted on its pid alone**, by design: dropping
+entries that predate a field would blank the tool window for every JUNON running at the moment of an
+upgrade. Those entries therefore keep the weakness the field exists to remove, and no reader can
+retire them for you. Clear them once, while nothing is running:
+
+```bash
+rm -f ~/.ide-bridge/dashboards/*.json
+```
 
 ## Compatibility
 
