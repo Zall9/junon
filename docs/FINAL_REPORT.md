@@ -183,10 +183,12 @@ the difference is deliberate**: on 2026-08-15 the user lifted the prohibition ex
 init puis commite mais ne co authore pas"* — so what follows is the state as it is.
 
 - `git init` was run; the repository is on branch `master`.
-- **Two commits exist**: `c7d8063` (initial, 585 files) and `86d052a`.
-- **Nothing has been pushed. No remote is configured**, and the prohibition on remote operations was
-  not lifted.
-- **No co-author or generated-by trailer** appears in either commit, as asked.
+- **Sixteen commits exist**; the first carried 585 files. This line read "two commits" until
+  2026-08-17, having stopped being true within a day of being written.
+- **No commit hash is quoted here.** Two were, and they are exactly what an ordinary operation on
+  this history — rewriting it to drop signatures, say — invalidates. A reference that cannot survive
+  the thing it describes is worse than no reference, because it keeps reading as correct.
+- **No co-author or generated-by trailer** appears in any commit, as asked.
 - The working tree is clean: everything is in the commits, nothing is stranded.
 - `.gitignore` was extended before the first commit so that `git init` did not capture build
   detritus — stray IntelliJ `.class` files, `*.tsbuildinfo` caches, a generated codemap carrying
