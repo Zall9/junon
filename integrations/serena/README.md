@@ -69,7 +69,9 @@ keeps `SerenaDashboardAPI` — the separation is real, not a claim.
 
 A started JUNON also announces its dashboard in `~/.ide-bridge/dashboards/<pid>.json`, which is how
 the JetBrains tool window offers a link to a port it cannot otherwise guess. A clean exit removes the
-entry; a crash leaves it, and readers check that the process still exists.
+entry; a crash leaves it, and readers drop what they find dead. The entry records when the process
+started as well as its pid, because pids are reused and these files outlive their processes — a
+reader that trusted the pid alone would eventually offer a link to whatever inherited the number.
 
 ## Compatibility
 

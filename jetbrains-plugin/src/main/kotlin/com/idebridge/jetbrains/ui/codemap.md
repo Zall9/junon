@@ -78,21 +78,34 @@ projects describable but not reachable.
     `action`, `actionEnabled`.
   - `ORDER: Comparator<Facts>` (`:48-49`) — panel's own project first, rest by name. Decided rather
     than inherited from `ProjectManager.openProjects` order, which reshuffles as windows come and go.
-- `JunonDashboards` (`JunonDashboards.kt:23`, internal `object`) — discovers running JUNON
+- `JunonDashboards` (`JunonDashboards.kt:30`, internal `object`) — discovers running JUNON
   (Serena) dashboards from per-process JSON files in `~/.ide-bridge/dashboards/` (or
-  `IDE_BRIDGE_DASHBOARD_DIR` env var). Each Serena process writes a JSON entry naming its own URL
-  and pid; this reads them and filters by whether the pid is still alive, since a dashboard that
-  stopped leaves its file behind. No JSON library is used — the file has four fields, and the plugin
-  does not carry a parser for this one use (`:20-21`).
-  - `Dashboard` (internal data class, `:29`) — `url: String`, `pid: Long`, `project: String?`.
-  - `directory(): Path` (`:31`) — `IDE_BRIDGE_DASHBOARD_DIR` env var or `~/.ide-bridge/dashboards/`.
-  - `running(from: Path): List<Dashboard>` (`:38`) — lists `*.json`, parses, filters by `alive(pid)`.
-    Never throws; an unreadable entry is skipped (`:37`).
-  - `parse(path: Path): Dashboard?` (`:51`) — manual field extraction, returns `null` on any failure.
-  - `field(text, name): String?` (`:65`) — one field out of a flat JSON object. Handles quoted and
-    unquoted forms (`pid` is a number, `project` may be `null`); returns `null` when the field's value
-    is the string `"null"` (`:74`), so a `null` project is read as absent, not as the string `"null"`.
-  - `alive(pid): Boolean` (`:78`) — `ProcessHandle.of(pid).isAlive`, never throws.
+  `IDE_BRIDGE_DASHBOARD_DIR` env var). Each Serena process writes a JSON entry naming its own URL,
+  pid and start time; this reads them and keeps only the entries still published by the process that
+  published them, since a dashboard that stopped leaves its file behind. No JSON library is used —
+  the file has five fields, and the plugin does not carry a parser for this one use (`:26-27`).
+  - `Dashboard` (internal data class, `:50-56`) — `url: String`, `pid: Long`, `project: String?`,
+    `startedAt: Double?` (epoch seconds; `null` for an entry written before the field existed).
+  - `START_TIME_TOLERANCE_SECONDS` (private const, `:48`) — `2.0`. Mirrors
+    `_START_TIME_TOLERANCE_SECONDS` in `junon/dashboard_registry.py`; both sides read this file, so
+    both must agree. Not zero because the writer and this reader source the same fact differently:
+    psutil reports epoch seconds with microseconds, `ProcessHandle.Info.startInstant()` reports whole
+    milliseconds (measured on macOS: `1786899750.370856` against `1786899750370`), and Linux rebuilds
+    both from clock ticks plus a boot time known only to the second.
+  - `directory(): Path` (`:58`) — `IDE_BRIDGE_DASHBOARD_DIR` env var or `~/.ide-bridge/dashboards/`.
+  - `running(from: Path): List<Dashboard>` (`:68`) — lists `*.json`, parses, filters by
+    `isThePublisher(it)`. Never throws; an unreadable entry is skipped.
+  - `parse(path: Path): Dashboard?` (`:81`) — manual field extraction, returns `null` on any failure.
+  - `field(text, name): String?` (`:100`) — one field out of a flat JSON object. Handles quoted and
+    unquoted forms (`pid` and `started_at` are numbers, `project` may be `null`); returns `null` when
+    the field's value is the string `"null"` (`:109`), so a `null` project is read as absent, not as
+    the string `"null"`.
+  - `isThePublisher(dashboard): Boolean` (`:120`) — the pid must be alive **and** its
+    `startInstant()` must match the recorded `startedAt` within the tolerance. Replaced the former
+    `alive(pid)`, which asked only whether some process held the number. A missing `startedAt`, or a
+    start time the JVM will not give up, is accepted on the pid alone — that is an entry from before
+    the field existed, and refusing those would empty the list for every JUNON already running when
+    the user updates. Never throws.
 
 ## Key Functions
 
@@ -210,10 +223,22 @@ projects describable but not reachable.
 - **References ADR-0034.** The `warnUnindexed` checkbox and `IndexHealthNotifier` integration exist
   because a project whose files sit in no source root is indexed for nothing, and the person who
   can fix it is the one reading the empty search result.
-- **`JunonDashboards` carries no JSON library.** The dashboard registry file has four fields (`url`,
-  `pid`, `project`, and a wrapper), and manual extraction via `field()` (`:65`) avoids pulling a
-  parser dependency for this single use (`:20-21`). Anything more elaborate belongs in a parser, and
-  anything that needs a parser does not belong in this file.
+- **`JunonDashboards` carries no JSON library.** The dashboard registry file has five fields (`url`,
+  `pid`, `project`, `started_at`, and a wrapper), and manual extraction via `field()` (`:100`) avoids
+  pulling a parser dependency for this single use (`:26-27`). Anything more elaborate belongs in a
+  parser, and anything that needs a parser does not belong in this file.
 - **Dead dashboards leave their files behind.** A JUNON process that stopped does not remove its
-  registry entry, so `alive(pid)` (`:78`) is checked before an address is offered: sending someone to
-  a dead port is worse than showing no link at all.
+  registry entry, so the entry is checked before an address is offered: sending someone to a dead
+  port is worse than showing no link at all.
+- **A pid is not a process.** Pids are reused, and these files outlive their processes — fourteen
+  were found in one directory, three days old, all dead. Checking only `ProcessHandle.of(pid).isAlive`
+  calls such an entry live as soon as the kernel hands its number to something unrelated, and the
+  tool window then offers a link to a port that is not a dashboard: precisely the outcome the
+  liveness check exists to prevent. `isThePublisher` (`:120`) therefore also requires the recorded
+  `started_at` to match the live process's `startInstant()`.
+- **The two sides of the registry must change together.** `junon/dashboard_registry.py` writes these
+  files and `JunonDashboards` reads them, and the Kotlin test fixtures
+  (`JunonDashboardsTest.kt`) are hand-copied from what the Python side writes. A field added on one
+  side and not the other, or a tolerance tightened here but not there, shows up as a tool window
+  quietly offering nothing — so the tolerance constant names its Python counterpart, and the test
+  file carries a real entry verbatim for comparison.

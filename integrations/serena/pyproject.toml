@@ -29,7 +29,12 @@ classifiers = [
 # `websockets` for its **synchronous** client. A Serena tool call is a blocking operation, and an
 # async-only client would drag an event loop into a code path that has no use for one. Serena ships
 # no websocket library of its own, and the daemon's only RPC door is a WebSocket — see ADR-0036.
-dependencies = ["aenum>=3.1", "websockets>=13"]
+# `psutil` for one fact with no portable stdlib source: when the process holding a given pid started.
+# `dashboard_registry` records it so a recycled pid cannot pass as a running dashboard. It arrives
+# anyway in Serena's own dependency tree, which is exactly why it is named here — this package is
+# installed *into* an environment it does not control, and a guarantee resting on someone else's
+# transitive dependency is one upstream can drop without ever knowing it was load-bearing.
+dependencies = ["aenum>=3.1", "websockets>=13", "psutil>=5.9"]
 
 [project.optional-dependencies]
 dev = [
