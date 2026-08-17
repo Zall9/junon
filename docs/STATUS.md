@@ -370,6 +370,14 @@ early when its part is absent, and a lost capture would otherwise take five chec
   the Kotlin side had no serializer at all, and the suite went green; only a forced rerun showed it.
   The fixtures directory is now a declared input, proved by changing a fixture's content and watching
   the task execute.
+- **A pid outlives the process it named, and the registry trusted it anyway.** Both readers of the
+  dashboard registry decided an entry was live from the pid alone, while both files carried a comment
+  saying a link to a dead port is worse than none. Twenty entries were found in one directory, the
+  oldest three days old, nineteen dead — each one an offer waiting for its number to come round on an
+  unrelated process. Entries now carry the publishing process's start time and both readers require
+  it to match, within a tolerance measured rather than guessed
+  ([ADR-0040](adr/0040-a-pid-does-not-identify-a-process.md)). Proved by mutation on both sides, and
+  on a live entry: 149 µs between what Python wrote and what the JVM read back for the same process.
 - A green suite says nothing about a path it never takes. Every JetBrains rename test renamed within
   one file, so four defects lived in the cross-file path — including a **stale plan being applied**,
   the exact failure §30 step 12 exists to prevent
