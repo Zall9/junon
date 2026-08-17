@@ -24,6 +24,7 @@ tests/test_composition.py
 tests/test_config.py
 tests/test_dashboard_registry.py
 tests/test_dashboard_serves.py
+tests/test_dashboard_start_shapes.py
 tests/test_entry_point.py
 tests/test_models.py
 tests/test_symbol_kinds.py
