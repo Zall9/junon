@@ -48,9 +48,19 @@ which they previously did not.
 
 **The IDE offers a link to the JUNON dashboard.** Its port cannot be guessed — four dashboards were
 running on one machine in one evening, on 24282, 24283, 24284 and 24286 — so each Serena process
-publishes an entry naming its own URL and pid, and the plugin shows only the entries whose process is
-still alive. A link to a stopped dashboard is worse than none. Confirmed on screen, and the link
-opens the dashboard.
+publishes an entry naming its own URL, pid and start time, and the plugin shows only the entries
+still published by the process that published them. A link to a stopped dashboard is worse than
+none. Confirmed on screen, and the link opens the dashboard.
+
+**And a pid is not a process.** The entries outlive the processes that write them — twenty were found
+in one directory, the oldest three days old, all but one dead — so a reader that trusted the pid alone
+would eventually offer a link to whatever inherited the number. The start time is what settles it.
+Measured on a live entry, both readers agreeing about one process: Python recorded
+`started_at: 1786953493.905149`, the JVM's `ProcessHandle.startInstant()` reported
+`1786953493.905` for the same pid, **149 µs apart** against a two-second tolerance, and the entry was
+accepted. The nineteen dead entries beside it were pruned as they were read. Both sides are held to
+this by mutation: an entry with a live pid and a mismatched start time must be refused, and making
+either reader accept it fails exactly one test.
 
 ## Method coverage
 

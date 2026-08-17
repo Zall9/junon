@@ -421,9 +421,12 @@ the launcher's full path:
 "$PWD/integrations/serena/.venv/bin/junon" start-mcp-server --project-from-cwd --transport stdio
 ```
 
-Started this way, the launcher publishes `{"url": …, "pid": …, "project": "moneta"}` within seconds,
-its dashboard answers `200` and is JUNON's page rather than Serena's, and a clean exit removes the
-entry again.
+Started this way, the launcher publishes
+`{"url": …, "pid": …, "project": "moneta", "started_at": …}` within seconds, its dashboard answers
+`200` and is JUNON's page rather than Serena's, and a clean exit removes the entry again. The
+`started_at` is the publishing process's own start time, read back from the operating system: pids
+are reused, so a reader checks it before offering the link rather than trusting the pid to still mean
+what it meant.
 
 Measured:
 
