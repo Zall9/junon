@@ -183,7 +183,37 @@ Python >= 3.12 required (or Serena-imposed version; package metadata declares >=
 
 ---
 
-## 11. Git Constraints (Non-Negotiable)
+## 11. Use the IDE Before Reading the Disk
+
+This repository builds JUNON, and the fastest way to find its defects is to work through it. When an
+IDE is connected, prefer the `ide_*` tools over `read`, `grep` and `glob`.
+
+They are served by the MCP named **`serena`**, which is started as `junon start-mcp-server` — plain
+`serena` publishes none of them. `ide_status` says whether an IDE is connected and what it has open;
+call it first, because every other `ide_*` tool refuses without one.
+
+| Instead of | Use |
+| --- | --- |
+| `read` a file | `ide_read_document` — the file **as the editor holds it**, unsaved edits included |
+| `read` then hunt for a declaration | `ide_read_symbol` — one declaration, cut to the IDE's own range |
+| `grep` for a definition | `ide_find_symbol` — the IDE's symbol index, narrowed by kind |
+| `read` to see a file's shape | `ide_symbols_overview` |
+| `grep` for callers | `ide_hierarchy` — callers, callees, supertypes, subtypes |
+| Guessing whether a change holds | `ide_diagnostics` — real inspections, with the fixes offered |
+| `grep -r TODO` | `ide_todos` — as the IDE recognises them, not as a search guesses |
+
+`ide_apply_fix` applies a fix `ide_diagnostics` offered; `confirm` separates looking from doing. It
+is **not** a general editor — writing code remains `edit`/`write`. Ask the IDE what is true, edit
+with your own tools, then ask `ide_diagnostics` what you broke.
+
+A refusal from these tools is information about this product, not an obstacle to route around. If a
+route refuses, or answers something a text search contradicts, that is a defect worth reporting
+before falling back to `read`/`grep` — and say in your summary that you fell back, so a green result
+is never mistaken for one the IDE confirmed.
+
+---
+
+## 12. Git Constraints (Non-Negotiable)
 
 - Never create a commit.
 - Never modify a commit.

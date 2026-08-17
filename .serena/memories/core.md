@@ -4,6 +4,7 @@
 - Product scope is `TASK.md`; never edit it. Agent rules are `AGENTS.md`. Living phase status is `docs/IMPLEMENTATION_PLAN.md`.
 - JSON Schema 2020-12 is canonical for every public wire request/response/event/error; generated TypeScript is derivative.
 - Audit relevant schemas, ADRs, security boundaries, and existing tests before each implementation increment.
+- Prefer the `ide_*` tools over reading and searching files: they answer from the running IDE, unsaved edits included. Call `ide_status` first. See `mem:junon-tools`.
 - Never commit, amend, push, publish, release, open PR/MR, or modify remotes. Never modify `.idea/`.
 - Keep progress visible: after each meaningful action state what changed, result, and next step.
 - For toolchain/version pins and module layout: `mem:tech_stack`.
