@@ -15,6 +15,22 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.2.4
+
+- **A manual check for a newer release.** Every comparison until now was between things already on
+  this machine, so a daemon, a CLI and three plugins all at 0.2.1 agreed with each other however long
+  0.2.4 had been published. The dashboard's _Check for a new release_ button and
+  `ide-bridge doctor --check-updates` ask the plugin repository — one `GET` of a public file, only
+  when asked, nothing about this installation in the request, and _could not ask_ is never rendered
+  as _up to date_. See SECURITY.md §5a.
+- **A stale daemon is no longer invisible with every IDE closed.** `doctor` returned
+  `versions: skip` whenever no adapter was registered, which threw away the one comparison that needs
+  no adapter — the daemon against the CLI it shipped with. That is precisely the state a daemon left
+  running across an update is in.
+- **The dashboard's disk verdict now really compares against the daemon.** `base.get("daemonVersion")`
+  had never returned anything: the key was read in two places and set in none, so the comparison
+  silently fell back to JUNON's own version.
+
 ## 0.2.3
 
 - **The toast can close the IDEs it needs to write to** — by asking, never by killing. A second button

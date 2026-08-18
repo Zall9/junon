@@ -153,3 +153,78 @@ def compare(
         newer=tuple(newer),
         consumer=consumer_version,
     )
+
+
+#: What to do when this machine is behind the published release. Deliberately not `REMEDY`: nothing
+#: in this product downloads a release, so the first step is the person's, not the button's.
+PUBLISHED_REMEDY = (
+    "Update the checkout and rebuild: git pull, then pnpm -r build, then restart the daemon and press "
+    "Install now. The Install button installs the plugin built from this checkout and never downloads "
+    "one, so pulling first is what makes it the published release rather than the one you already had. "
+    "An IDE configured with the plugin repository will also offer the update itself."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Published:
+    """What the plugin repository advertises, measured against what is on this machine.
+
+    Separate from `Skew`, because the two questions are independent and the reassuring one is the
+    easier to answer: every half here can agree at 0.2.1 — nothing at all to report locally — while
+    0.2.4 has been published for a week.
+
+    `reason` carries the case where the question could not be asked. It must never render as "up to
+    date": an offline laptop that reports "you are current" is worse than one that reports nothing,
+    because the reader stops looking.
+    """
+
+    latest: str = ""
+    behind: tuple[str, ...] = ()
+    reason: str = ""
+
+    @property
+    def asked(self) -> bool:
+        """Whether an answer came back at all."""
+        return bool(self.latest)
+
+    @property
+    def up_to_date(self) -> bool:
+        return self.asked and not self.behind
+
+    @property
+    def summary(self) -> str:
+        if not self.asked:
+            return self.reason or "The published release could not be established."
+        if self.up_to_date:
+            return f"This machine is on the latest published release ({self.latest})."
+        return f"Release {self.latest} is published. Older here: {', '.join(self.behind)}."
+
+    @property
+    def remedy(self) -> str:
+        return PUBLISHED_REMEDY if self.asked and self.behind else ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "latest": self.latest,
+            "behind": list(self.behind),
+            "asked": self.asked,
+            "upToDate": self.up_to_date,
+            "summary": self.summary,
+            "remedy": self.remedy,
+        }
+
+
+def published_gap(latest: str, local: dict[str, str], reason: str = "") -> Published:
+    """Which halves on this machine are older than the published release.
+
+    Named rather than counted, for the reason `compare` names adapters: "two things are behind" makes
+    the reader go and find out which two.
+    """
+    if not latest:
+        return Published(reason=reason)
+    behind = tuple(
+        f"{name} ({version})"
+        for name, version in sorted(local.items())
+        if version and release_order(version, latest) < 0
+    )
+    return Published(latest=latest, behind=behind)

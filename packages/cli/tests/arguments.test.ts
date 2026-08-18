@@ -24,6 +24,7 @@ describe("CLI arguments and paths", () => {
       logLevel: "warn",
       logLevelSpecified: true,
       dashboard: false,
+      checkUpdates: false,
       help: false,
     });
   });
@@ -32,6 +33,7 @@ describe("CLI arguments and paths", () => {
     expect(parseCliArguments(["daemon", "--dashboard"])).toMatchObject({
       command: "daemon",
       dashboard: true,
+      checkUpdates: false,
     });
     // Refused rather than ignored: a flag silently accepted where it does nothing teaches the reader
     // that it did something.

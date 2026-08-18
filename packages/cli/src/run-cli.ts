@@ -35,6 +35,7 @@ Options:
   --discovery-file <path>  Override the private discovery file
   --log-level <level>      daemon only: debug|info|warn|error|silent
   --dashboard              daemon only: start the read-only local dashboard surface
+  --check-updates          doctor only: ask the plugin repository for the latest release
   --help, -h               Show this help
 `;
 
@@ -134,7 +135,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
         return 0;
       }
       case "doctor": {
-        const report = await runDoctor(discoveryFile);
+        const report = await runDoctor(discoveryFile, { checkUpdates: parsed.checkUpdates });
         writeJson(io.stdout, { command: "doctor", ...report });
         return report.ok ? 0 : 1;
       }

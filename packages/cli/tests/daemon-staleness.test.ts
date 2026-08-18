@@ -49,9 +49,23 @@ describe("the versions check", () => {
     expect(check.detail).toBe(`all-at-${DAEMON_VERSION}`);
   });
 
-  it("skips rather than guessing when no adapter is connected", async () => {
+  it("still names a stale daemon when every IDE is closed", async () => {
+    // The state this check used to be blind in, and the likeliest one to be in: nothing is open, the
+    // daemon has been running since before the update, and no adapter exists to disagree with it.
+    // It returned `skip` here — for a daemon two releases behind, exactly as for a current one.
+    const check = await versionCheck(connectionReporting("0.0.1", []));
+
+    expect(check.status).toBe("warn");
+    expect(check.detail).toContain(`daemon-0.0.1-older-than-this-cli-${DAEMON_VERSION}`);
+  });
+
+  it("says what it did not look at when no adapter is connected", async () => {
     const check = await versionCheck(connectionReporting(DAEMON_VERSION, []));
 
-    expect(check.status).toBe("skip");
+    expect(check.status).toBe("pass");
+    // Not `all-at-…`: no plugin was examined, and a reader must not take this for "every plugin is
+    // current" when none of them was asked.
+    expect(check.detail).toContain("no-adapter-registered");
+    expect(check.detail).not.toContain("all-at");
   });
 });

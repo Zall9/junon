@@ -135,6 +135,12 @@ def read_status() -> dict[str, Any]:
         ),
         timeout_seconds=PANEL_TIMEOUT_SECONDS,
     )
+    # Asked here rather than in the connected branch below, because the branches that matter most
+    # for this answer are the ones where no IDE is attached: nothing else in the product can see the
+    # daemon's version then, and a daemon left running across an update is exactly what goes stale.
+    if version := _ask_daemon_version(client):
+        base["daemonVersion"] = version
+
     try:
         workspaces = client.call("workspace/list", {}).get("workspaces", [])
     except IdeBridgeError as error:
@@ -182,18 +188,11 @@ def read_status() -> dict[str, Any]:
     # person looking at this page: an IDE updates its plugin without knowing a daemon exists, and
     # `pipx` updates JUNON without knowing either.
     versions: dict[str, Any] | None = None
-    if all_adapters:
-        try:
-            daemon_version = client.call("bridge/getStatus", {}).get("daemonVersion")
-            if isinstance(daemon_version, str):
-                from junon.client import JUNON_VERSION
+    daemon_version = base.get("daemonVersion")
+    if all_adapters and daemon_version:
+        from junon.client import JUNON_VERSION
 
-                versions = compare(
-                    daemon_version, all_adapters, consumer_version=JUNON_VERSION
-                ).as_dict()
-        except IdeBridgeError:
-            # An aside, never the reason this endpoint fails: the card's real subject is above.
-            versions = None
+        versions = compare(daemon_version, all_adapters, consumer_version=JUNON_VERSION).as_dict()
 
     adapter = adapters_by_id.get(adapter_id, {})
 
@@ -223,6 +222,21 @@ def read_status() -> dict[str, Any]:
             for workspace in workspaces
         ],
     }
+
+def _ask_daemon_version(client: Any) -> str:
+    """The running daemon's own version, or "" when it will not say.
+
+    Never raises: this is an aside on a status call, and a panel that goes blank because a version
+    could not be read has thrown away the answer it was actually asked for.
+    """
+    from junon.client import IdeBridgeError
+
+    try:
+        version = client.call("bridge/getStatus", {}).get("daemonVersion")
+    except IdeBridgeError:
+        return ""
+    return version if isinstance(version, str) else ""
+
 
 def _install_token() -> str:
     """This process's install token. Imported late: the dashboard is optional, the status is not."""

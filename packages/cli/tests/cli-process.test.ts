@@ -163,6 +163,9 @@ describe("ide-bridge CLI process integration", () => {
     // Every check reports, including the ones that could not run: a report whose shape changes with
     // the failure makes a reader guess whether a check exists at all.
     expect(report.checks.map(({ name }) => name)).toEqual([
+      // First, and present even here: this one needs no daemon, and the person with nothing running
+      // is the likeliest to want to know a newer release exists.
+      "published-release",
       "discovery-file",
       "permissions",
       "daemon-process",

@@ -148,6 +148,30 @@ restoration is bounded and completes before the new session is published.
 
 ---
 
+## 5a. The One Outbound Request
+
+Everything else in this product compares this machine against itself. The version check added in
+0.2.4 asks the plugin repository what the latest release is, and it is the only code here that talks
+to anything but loopback.
+
+- **Only when a person asks.** The dashboard button *Check for a new release*, or
+  `ide-bridge doctor --check-updates`. There is no timer, no check at start-up, and no check on the
+  status poll — a test asserts that reading the status reaches no network, because the dashboard
+  polls that endpoint every couple of seconds.
+- **What is sent:** a plain `GET` of a public file, the same URL an IDE polls for plugin updates. No
+  query string, no identifier, no version, nothing about this installation. The repository learns
+  that somebody fetched a public URL.
+- **What comes back is read, not run.** The response is scanned for an advertised release number.
+  Nothing is downloaded, installed, or written. Updating remains a thing you do deliberately.
+- **Blocking it is supported.** With the request blocked, the check reports *could not ask* — never
+  *up to date*. An installation that never makes this request works exactly as it did before 0.2.4;
+  it just cannot tell you about a release you have not fetched.
+- **The dashboard route is guarded like the install:** this session's token in a header a cross-site
+  request cannot set, and no parameters — the URL is fixed in the source, so a caller cannot make
+  this process fetch an address of their choosing.
+
+---
+
 ## 6. Log Redaction
 
 Structured logs use the closed catalogue in ADR-0011. They include level, component, canonical

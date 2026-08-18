@@ -27,7 +27,10 @@ export interface DoctorCheck {
     | "protocol"
     | "adapters"
     | "sessions-expired"
-    | "versions";
+    | "versions"
+    // The only check that leaves the machine, and the only one that can see a release nobody here
+    // has fetched. Runs on `--check-updates` and reports `skip` otherwise.
+    | "published-release";
   status: DoctorCheckStatus;
   detail: string;
 }
@@ -133,12 +136,12 @@ export async function versionCheck(connection: AuthenticatedBridgeConnection): P
       connection.request("bridge/listAdapters", {}, { timeoutMs: CLI_REQUEST_TIMEOUT_MS }),
       connection.request("bridge/getStatus", {}, { timeoutMs: CLI_REQUEST_TIMEOUT_MS }),
     ]);
-    if (adapters.length === 0) {
-      return { name: "versions", status: "skip", detail: "no-adapter-registered" };
-    }
-    // This CLI ships with the daemon, so its own version is the reference the daemon lacked: every
-    // other comparison measured peers *against* the daemon, which made a stale daemon correct by
-    // construction. It happened here — restarted without being rebuilt — and nothing said a word.
+    // Before the adapter count, not after. This CLI ships with the daemon, so its own version is the
+    // reference the daemon lacked: every other comparison measures peers *against* the daemon, which
+    // makes a stale daemon correct by construction. It happened here — restarted without being
+    // rebuilt — and nothing said a word. Returning early on "no adapter" threw this away too, and
+    // took the daemon-versus-CLI comparison with it precisely when nothing else could make it: with
+    // every IDE closed, no other half of the installation is present to disagree with.
     if (compareReleases(status.daemonVersion, DAEMON_VERSION) < 0) {
       return {
         name: "versions",
@@ -177,6 +180,15 @@ export async function versionCheck(connection: AuthenticatedBridgeConnection): P
         detail: `daemon-${status.daemonVersion}-older-than-adapter: ${named}`,
       };
     }
+    if (adapters.length === 0) {
+      // Not a `skip`: something was compared, and it agreed. The detail says what was left out so
+      // nobody reads this as "every plugin is current" — none of them was asked.
+      return {
+        name: "versions",
+        status: "pass",
+        detail: `daemon-and-cli-at-${status.daemonVersion}-no-adapter-registered`,
+      };
+    }
     return { name: "versions", status: "pass", detail: `all-at-${status.daemonVersion}` };
   } catch {
     return { name: "versions", status: "fail", detail: "state-query-failed" };
@@ -203,6 +215,64 @@ export function compareReleases(left: string, right: string): number {
   if (a.minor !== b.minor) return a.minor < b.minor ? -1 : 1;
   if (a.patch !== b.patch) return a.patch < b.patch ? -1 : 1;
   return 0;
+}
+
+/**
+ * The plugin repository the IDEs poll. Fetched only when `--check-updates` is passed.
+ */
+export const PUBLISHED_RELEASE_URL =
+  "https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml";
+
+/** Bounded: a doctor run that hangs on a network read is worse than one that says it could not ask. */
+const PUBLISHED_RELEASE_TIMEOUT_MS = 10_000;
+
+/**
+ * Whether a newer release than this build has been published.
+ *
+ * Every other check here compares things already on this machine, which is exactly why none of them
+ * can see a release nobody has fetched: a daemon, a CLI and three plugins all sitting at 0.2.1 agree
+ * with each other, and agreement is what they report, however long 0.2.4 has been out.
+ *
+ * Unreachable is a `skip`, not a `fail`. A laptop on a train has nothing wrong with its installation,
+ * and a doctor that goes red when the wifi is down teaches people to ignore it.
+ */
+export async function publishedCheck(
+  url: string = PUBLISHED_RELEASE_URL,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DoctorCheck> {
+  let body: string;
+  try {
+    const response = await fetchImpl(url, {
+      signal: AbortSignal.timeout(PUBLISHED_RELEASE_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      return {
+        name: "published-release",
+        status: "skip",
+        detail: `repository-answered-${response.status}`,
+      };
+    }
+    body = await response.text();
+  } catch {
+    return { name: "published-release", status: "skip", detail: "repository-unreachable" };
+  }
+  // A captive portal answers 200 with a login page. That is not a release number.
+  const advertised = /version="(\d+\.\d+\.\d+)"/.exec(body)?.[1];
+  if (advertised === undefined) {
+    return { name: "published-release", status: "skip", detail: "no-release-advertised" };
+  }
+  if (compareReleases(DAEMON_VERSION, advertised) < 0) {
+    return {
+      name: "published-release",
+      status: "warn",
+      // The remedy travels with the fault, and it starts with `git pull` on purpose: nothing in this
+      // product downloads a release, so the first step is the reader's, not a button's.
+      detail:
+        `published-${advertised}-newer-than-this-build-${DAEMON_VERSION} — git pull, then ` +
+        `pnpm -r build, then restart the daemon and reinstall the plugins`,
+    };
+  }
+  return { name: "published-release", status: "pass", detail: `latest-published-is-${advertised}` };
 }
 
 async function sessionExpirationCheck(
@@ -234,9 +304,20 @@ async function sessionExpirationCheck(
 
 export async function runDoctor(
   discoveryFile: string,
-  options: { now?: () => Date } = {},
+  options: { now?: () => Date; checkUpdates?: boolean } = {},
 ): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
+  // First, and present in every report: a check that is silently absent cannot be told apart from
+  // one that passed. When the flag is not given the line says so, in the place the answer would be.
+  checks.push(
+    options.checkUpdates === true
+      ? await publishedCheck()
+      : {
+          name: "published-release",
+          status: "skip",
+          detail: "not-asked — pass --check-updates to ask the plugin repository",
+        },
+  );
   let discovery;
   try {
     discovery = await readPrivateDiscoveryFile(discoveryFile);

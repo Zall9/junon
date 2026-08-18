@@ -259,6 +259,16 @@
       box-shadow: 0 18px 48px rgba(0, 0, 0, .55); padding: 16px 18px; color: #f6f4ef;
     }
     #update-toast[hidden] { display: none; }
+    /* The manual release check. Quiet by design: it is a question the reader chooses to ask, not
+       a claim the page is making. */
+    .upstream { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .upstream button {
+      background: transparent; color: #cfcac2; border: 1px solid #3a3630;
+      border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+    }
+    .upstream button[disabled] { opacity: .6; cursor: progress; }
+    .upstream p { margin: 0; flex-basis: 100%; }
+
     #update-toast h3 { margin: 0 0 6px; font-size: 15px; color: var(--gold, #eaa45d); }
     #update-toast p { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
     #update-toast code { font-size: 12px; word-break: break-word; }
@@ -484,6 +494,11 @@
       document.addEventListener("DOMContentLoaded", () => {
         // Called, not passed: as a listener it would receive the click event as its `route`,
         // and the event's string form became the URL — a POST to /dashboard/[object PointerEvent].
+        // Delegated to the container, because the button inside it is thrown away and rebuilt on
+        // every poll. The handler takes the event and passes it on to nobody.
+        $("bridge").addEventListener("click", (event) => {
+          if (event.target && event.target.id === "check-upstream") checkUpstream();
+        });
         $("toast-install").addEventListener("click", () => installUpdate());
         $("toast-dismiss").addEventListener("click", () => { $("update-toast").hidden = true; });
         $("toast-quit").addEventListener("click", () => {
@@ -510,6 +525,38 @@
       // Latched once the button has acted: the page polls its status, and every refresh was
       // rewriting the toast from the payload — the answer survived about a second.
       let toastLatched = false;
+
+      // Kept out of the card: `renderBridge` replaces its whole contents on every poll, so an answer
+      // written into the card is gone before it can be read.
+      let upstreamNote = "";
+      let upstreamTone = "muted";
+
+      async function checkUpstream() {
+        const button = $("check-upstream");
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Asking the repository…";
+        }
+        try {
+          const response = await fetch("/junon/ide-bridge/check-upstream", {
+            method: "POST",
+            headers: { "X-JUNON-Token": installToken || "" },
+          });
+          const result = await response.json();
+          const remedy = result.remedy ? ` ${result.remedy}` : "";
+          upstreamNote = (result.summary || result.reason || "No answer.") + remedy;
+          // `asked` and not `upToDate`: a check that could not reach the repository must not be
+          // drawn in the same calm grey as one that came back current.
+          upstreamTone = result.upToDate ? "muted" : "warn";
+        } catch (error) {
+          upstreamNote = `Could not ask the plugin repository: ${error}`;
+          upstreamTone = "warn";
+        }
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Check for a new release";
+        }
+      }
 
       function showUpdateToast(versions) {
         const toast = $("update-toast");
@@ -614,6 +661,14 @@
               <code>${escapeHtml(versions.remedy)}</code></p>`;
           }
         }
+
+        // Everything above compares this machine against itself, which is why none of it can see a
+        // release nobody here has fetched. This asks the repository — on a click, never on a poll.
+        // The answer is held outside the card because the card is redrawn every couple of seconds.
+        html += `<div class="upstream">
+          <button id="check-upstream" type="button">Check for a new release</button>
+          ${upstreamNote ? `<p class="reason ${upstreamTone}">${escapeHtml(upstreamNote)}</p>` : ""}
+        </div>`;
 
 
         // One block per workspace rather than a three-column table. With `table-layout: fixed` and

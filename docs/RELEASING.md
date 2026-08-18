@@ -155,3 +155,19 @@ reinstall.
 
 A mismatch **warns**; it does not fail. A peer one release behind usually works, and the handshake
 already refuses the case where it genuinely cannot. What it must not do is stay quiet.
+
+### And what that still cannot see
+
+Every comparison above is between things already on this machine, so all of them are silent in the
+one case where nothing has been updated at all: a daemon, a CLI and three plugins at 0.2.1 agree with
+each other however long 0.2.4 has been published. Since 0.2.4 two surfaces ask the repository itself
+— `ide-bridge doctor --check-updates`, and the dashboard's **Check for a new release** button:
+
+```
+pass  published-release   latest-published-is-0.2.4
+warn  published-release   published-0.2.5-newer-than-this-build-0.2.4 - git pull, then pnpm -r build, ...
+```
+
+One `GET` of the same public file the IDEs poll, only when a person asks for it, and *could not ask*
+is never reported as *up to date*. The terms are in [SECURITY.md](SECURITY.md) §5a; the reason they
+are terms at all is that this is the only outbound request in the product.

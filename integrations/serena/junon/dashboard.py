@@ -208,6 +208,27 @@ class JunonDashboardAPI(SerenaDashboardAPI):
                 "next": outcome.next_step,
             })
 
+        @self._app.route("/junon/ide-bridge/check-upstream", methods=["POST"])
+        def junon_check_upstream() -> Any:
+            """Asks the plugin repository what the latest release is. Only ever from a click.
+
+            Every other comparison this page makes is between things already on this machine, which
+            is why none of them can see a release nobody has fetched yet. This one can, and it is the
+            only outbound request in the product — so it sits behind the same guards as the install:
+            this session's token and this page's origin. Nothing else on the machine can make this
+            process talk to the network, and a stolen token buys one GET of a public file.
+            """
+            from flask import jsonify, request
+
+            from junon.published import check
+            from junon.update_action import SESSION_TOKEN
+
+            if request.headers.get("X-JUNON-Token") != SESSION_TOKEN:
+                log.warning("[JUNON] refused a release check without this session's token")
+                return jsonify({"ok": False, "reason": "This request did not carry the session token."}), 403
+
+            return jsonify({"ok": True, **check().as_dict()})
+
         @self._app.route("/junon/ide-bridge/status", methods=["GET"])
         def get_ide_bridge_status() -> dict[str, Any]:
             """What the IDE Bridge panel shows: which adapter is connected, and whether it answers.

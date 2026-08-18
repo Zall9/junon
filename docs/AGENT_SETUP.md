@@ -320,6 +320,7 @@ module it imported at start-up.
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |
 | A file changed on disk is not visible to reads | Up to ~15 s: an unfocused IDE only refreshes when asked, and the adapter asks on a timer |
 | Answers look right but behave oddly | The halves may be different releases. `doctor` names the `versions` check; see [RELEASING.md](RELEASING.md) |
+| Everything agrees, and everything is old | Local checks compare this machine against itself, so they cannot see a release nobody fetched. `node packages/cli/dist/bin.js doctor --check-updates` asks the repository — one `GET`, only when you type it |
 
 ## Rules that are not yours to relax
 
@@ -328,6 +329,10 @@ module it imported at start-up.
 - No method executes shell commands or evaluates code in the IDE. If a task seems to need that, it
   is out of scope — say so rather than adding it.
 - Do not modify `TASK.md`; it is the authoritative scope.
+- Nothing here reaches the network on its own. `--check-updates` and the dashboard's *Check for a new
+  release* button are the only outbound requests in the product, and both are things a person types
+  or clicks. Do not add a check on start-up, on a timer, or "while we are here" — the guarantee is
+  that a machine which never asks never sends anything ([SECURITY.md](SECURITY.md) §5a).
 - Never push, publish, open a PR, or touch any remote.
 
 `AGENTS.md` holds the full development rules, [STATUS.md](STATUS.md) what is actually verified, and

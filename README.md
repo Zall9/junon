@@ -134,7 +134,21 @@ one that gets skipped, after which that IDE can never tell you a newer version e
 
 An IDE that has **not** been given it can still be told the halves are out of step, but only by
 asking: `ide-bridge doctor`, whose `versions` check compares the daemon against every connected
-plugin.
+plugin — and against the CLI it shipped with, so a daemon left running across an update is named even
+with every IDE closed.
+
+That comparison is between things already on this machine, which is why it cannot see a release
+nobody here has fetched: a daemon, a CLI and three plugins all at 0.2.1 agree with each other however
+long 0.2.4 has been out. Two places ask the repository itself, and only when you ask them to:
+
+```bash
+node packages/cli/dist/bin.js doctor --check-updates
+```
+
+and the **Check for a new release** button on the JUNON dashboard. Both make one `GET` of the public
+repository file — nothing about your installation is sent, nothing is downloaded, and a machine that
+cannot reach it is told *could not ask* rather than *up to date*. It is the only outbound request in
+this product; [docs/SECURITY.md](docs/SECURITY.md) §5a states the terms.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
 ### Setting it up with a coding agent

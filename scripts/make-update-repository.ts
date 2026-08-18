@@ -20,7 +20,14 @@ const REPOSITORY_ROOT = join(import.meta.dirname, "..");
 const PLUGIN_ID = "com.idebridge.jetbrains";
 
 interface Options {
-  /** Where the zip will be reachable from. Releases are the obvious host; anything HTTP serves. */
+  /**
+   * Where the zip will actually be reachable from.
+   *
+   * Not "the obvious host": the obvious one was GitHub releases, and this repository has none —
+   * every release is the zip committed under `dist/` and served raw (RELEASING.md §2). The default
+   * pointed at a release URL that answers 404, which would have had the IDE offer an update it then
+   * could not download. Pass `--base-url` the day real releases exist.
+   */
   readonly baseUrl: string;
   readonly output: string;
 }
@@ -32,7 +39,7 @@ function parseArguments(argv: readonly string[]): Options {
   };
   const version = readFileSync(join(REPOSITORY_ROOT, "VERSION"), "utf8").trim();
   return {
-    baseUrl: value("--base-url", `https://github.com/Zall9/junon/releases/download/v${version}`),
+    baseUrl: value("--base-url", "https://raw.githubusercontent.com/Zall9/junon/main/dist"),
     output: value("--out", join(REPOSITORY_ROOT, "build", "updatePlugins.xml")),
   };
 }
