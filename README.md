@@ -116,21 +116,21 @@ Then bring up an adapter — `cd jetbrains-plugin && ./gradlew runIde` (`runPyCh
 `runPhpStorm` also exist), or `cd packages/vscode-extension && pnpm test:integration`, which
 downloads VS Code, installs the extension and drives the whole walkthrough itself.
 
-To install into an IDE you already use, `./gradlew buildPlugin` and install the zip from disk — then
-add the plugin repository URL under *Settings → Plugins → ⚙ → Manage Plugin Repositories*, or that
-IDE will never be able to tell you a newer version exists. A plugin installed from a file has no
-update path at all; [docs/RELEASING.md](docs/RELEASING.md) explains what to publish and why.
+To install into the IDEs you already use, one command does all of them:
 
-The repository to add is:
-
-```
-https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml
+```bash
+scripts/install-jetbrains-plugin.sh          # --dry-run first, if you prefer
 ```
 
-Released as `v0.2.1` and served from the repository itself, because creating a GitHub release needs
-the API and this project ships no credentials — see [docs/RELEASING.md](docs/RELEASING.md) for what
-that costs. Once an IDE has that URL it polls it like any Marketplace entry: a version higher than the
-one installed produces the update badge, and nothing else has to happen.
+It builds the plugin if needed, installs it into every IDE on the machine whose build can run it, and
+gives each one the plugin repository so it can announce future versions by itself. Then restart those
+IDEs once — a plugin and a repository URL are both read at start-up, so an IDE running at that moment
+has neither.
+
+Doing it by hand is three steps per IDE, and the third — *Settings → Plugins → ⚙ → Manage Plugin
+Repositories* → `https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml` — is the
+one that gets skipped, after which that IDE can never tell you a newer version exists.
+[docs/RELEASING.md](docs/RELEASING.md) explains what is published and what it costs.
 
 An IDE that has **not** been given it can still be told the halves are out of step, but only by
 asking: `ide-bridge doctor`, whose `versions` check compares the daemon against every connected

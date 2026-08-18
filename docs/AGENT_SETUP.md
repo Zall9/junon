@@ -108,25 +108,45 @@ nothing exported. **If** you isolated that daemon with `IDE_BRIDGE_DISCOVERY_FIL
 value here — a sandbox pointed at a path where no daemon is listening reports no daemon, correctly
 and unhelpfully.
 
-For an IDE you already have, `./gradlew buildPlugin` produces
-`build/distributions/ide-bridge-jetbrains-*.zip`; install it with *Settings → Plugins → Install from
-disk*, in each IDE separately, and restart it. Launched from the Dock it will read the default
-discovery file — which is where step 2 put the daemon, so there is nothing to export. That is the
-whole reason step 2 uses the default: an IDE you start normally cannot be told anything by a shell.
+For the IDEs already on the machine, do not drive the dialogs — run:
 
-**Then give that IDE somewhere to look for updates**, in the same dialog (⚙ → *Manage Plugin
-Repositories* → `+`):
+```bash
+scripts/install-jetbrains-plugin.sh --dry-run    # what it would touch
+scripts/install-jetbrains-plugin.sh              # build, install, configure
+```
+
+It installs into every IDE whose build satisfies the plugin's `since-build`, skips the ones below it
+by name, and gives each a plugin repository so future versions announce themselves. Then **each of
+those IDEs must be restarted once**: a plugin and a repository URL are read at start-up, so an IDE
+running at that moment has neither. This is the ordering that hid the update badge here — an IDE was
+restarted *before* the setting existed, and its `LAST_TIME_CHECKED` still predated the change.
+
+Such an IDE, launched from the Dock, reads the default discovery file — which is where step 2 put the
+daemon, so there is nothing to export. That is the whole reason step 2 uses the default: an IDE you
+start normally cannot be told anything by a shell.
+
+**Checks that need no GUI.** Both settings are files, so read them rather than asking someone to open
+a dialog:
+
+```bash
+grep idea.plugin.hosts ~/Library/Application\ Support/JetBrains/*/idea.properties
+```
+
+Both should name:
 
 ```
 https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml
 ```
 
-A plugin installed from a zip has no update path — the IDE does not know where the file came from — so
-without this it can never tell anyone a newer version exists. With it, the IDE polls that URL
-alongside the Marketplace and shows its usual badge whenever the advertised version is higher than
-the installed one. The setting lives in `options/updates.xml` under `pluginHosts`, which is worth
-knowing because it means you can read whether an IDE has been told, rather than asking someone to
-open a dialog.
+`options/updates.xml` → `pluginHosts` is what the *Manage Plugin Repositories* dialog writes and what
+the IDE loads into memory at start-up. A **running** IDE rewrites that file from its own memory, so an
+entry written under one is erased — measured here, twice. `idea.properties` →
+`idea.plugin.hosts` is written as well because the IDE never rewrites that file.
+
+**If an IDE still shows no update**, the deterministic fix is order, not configuration: quit it, write
+the settings entry while it is closed, and start it again — then the repository is in memory from the
+first second. Opening *Settings → Plugins* also forces a poll rather than waiting for the IDE's own
+interval, which can be a day.
 
 A project **links itself when it opens**; there is nothing to click. The *IDE Bridge* tool window
 shows one row per open project with its state, and a refusal states its reason there and in the log.
