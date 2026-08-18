@@ -93,15 +93,20 @@ not a hack.
 
 ```bash
 cd jetbrains-plugin
-export IDE_BRIDGE_DISCOVERY_FILE=/tmp/ide-bridge.json    # the plugin reads this
-export IDE_BRIDGE_SAMPLE_PROJECT=$PWD                    # or any project with source roots
-./gradlew runIde                                          # runPyCharm / runGoLand / runPhpStorm too
+export IDE_BRIDGE_SAMPLE_PROJECT=$PWD    # or any project with source roots
+./gradlew runIde                          # runPyCharm / runGoLand / runPhpStorm too
 ```
+
+The sandbox IDE inherits this shell, so it finds the daemon from step 2 at the default path with
+nothing exported. **If** you isolated that daemon with `IDE_BRIDGE_DISCOVERY_FILE`, export the same
+value here — a sandbox pointed at a path where no daemon is listening reports no daemon, correctly
+and unhelpfully.
 
 For an IDE you already have, `./gradlew buildPlugin` produces
 `build/distributions/ide-bridge-jetbrains-*.zip`; install it with *Settings → Plugins → Install from
-disk*. The IDE must then be launched from a shell that exports the variable — an IDE started from
-the Dock or a launcher inherits none of it and will look at the default path instead.
+disk*, in each IDE separately, and restart it. Launched from the Dock it will read the default
+discovery file — which is where step 2 put the daemon, so there is nothing to export. That is the
+whole reason step 2 uses the default: an IDE you start normally cannot be told anything by a shell.
 
 A project **links itself when it opens**; there is nothing to click. The *IDE Bridge* tool window
 shows one row per open project with its state, and a refusal states its reason there and in the log.

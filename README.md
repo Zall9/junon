@@ -88,11 +88,14 @@ pnpm -r build
 **Start the daemon first** — adapters and consumers both connect to it, and it is the fixed point:
 
 ```bash
-export IDE_BRIDGE_DISCOVERY_FILE=/tmp/ide-bridge.json
-node packages/cli/dist/bin.js daemon
+nohup node packages/cli/dist/bin.js daemon > ~/.ide-bridge/daemon.log 2>&1 &
 ```
 
-It writes its endpoint and token to that file, `0600`. From another shell with the same variable:
+It is a foreground server, hence the `&`: a shell that starts it plainly never gets its prompt back.
+It writes its endpoint and token to `~/.ide-bridge/discovery.json`, mode `0600` — the path an IDE
+reads when it was started normally, since a GUI application inherits nothing from your shell. Set
+`IDE_BRIDGE_DISCOVERY_FILE` only to isolate a daemon, and then export it for the IDE too. From any
+shell:
 
 ```bash
 node packages/cli/dist/bin.js status
