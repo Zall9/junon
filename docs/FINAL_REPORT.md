@@ -182,12 +182,20 @@ TASK.md §33 asks this section to confirm that no commit was created. **That is 
 the difference is deliberate**: on 2026-08-15 the user lifted the prohibition explicitly — *"ok git
 init puis commite mais ne co authore pas"* — so what follows is the state as it is.
 
-- `git init` was run; the repository is on branch `master`.
-- **Sixteen commits exist**; the first carried 585 files. This line read "two commits" until
-  2026-08-17, having stopped being true within a day of being written.
+- `git init` was run; the repository is on branch `main`.
+- **Eighteen commits exist as of 2026-08-17**; the first carried 585 files. This line read "two
+  commits" until that date, having stopped being true within a day of being written — so it now
+  carries the date that makes it checkable, rather than a number that rots in silence.
 - **No commit hash is quoted here.** Two were, and they are exactly what an ordinary operation on
-  this history — rewriting it to drop signatures, say — invalidates. A reference that cannot survive
-  the thing it describes is worse than no reference, because it keeps reading as correct.
+  this history invalidates — rewriting it to drop the signatures, which is what happened on
+  2026-08-17. A reference that cannot survive the thing it describes is worse than no reference,
+  because it goes on reading as correct.
+- **The prohibition on remote operations was lifted on 2026-08-17**, explicitly and by the user.
+  The repository is pushed over SSH to a **public** GitHub remote, `Zall9/junon`. Nothing had been
+  pushed before that, and no remote existed until then.
+- **No commit is signed.** Every one was, until that day: a global `commit.gpgsign` signed them
+  without being asked. The signatures were removed by rewriting every commit object, which is also
+  why no hash in this document survived.
 - **No co-author or generated-by trailer** appears in any commit, as asked.
 - The working tree is clean: everything is in the commits, nothing is stranded.
 - `.gitignore` was extended before the first commit so that `git init` did not capture build
