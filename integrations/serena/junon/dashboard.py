@@ -148,6 +148,32 @@ class JunonDashboardAPI(SerenaDashboardAPI):
         def serve_serena_dashboard_asset(filename: str) -> Response:
             return send_from_directory(SERENA_DASHBOARD_DIR, filename)
 
+        @self._app.route("/junon/ide-bridge/quit-and-install", methods=["POST"])
+        def junon_quit_and_install() -> Any:
+            """The same install, after asking the running IDEs to quit.
+
+            A separate route rather than a flag on the first one: "this endpoint takes no parameters"
+            is one of the four things that keep the button from being a back door, and a boolean the
+            caller chooses would have been the end of it. Two routes, each with nothing to smuggle.
+            """
+            from flask import jsonify, request
+
+            from junon.update_action import SESSION_TOKEN, install
+
+            if request.headers.get("X-JUNON-Token") != SESSION_TOKEN:
+                log.warning("[JUNON] refused a quit-and-install without this session's token")
+                return jsonify({"ok": False, "reason": "This request did not carry the session token."}), 403
+
+            outcome = install(quit_running=True)
+            return jsonify({
+                "ok": outcome.ok,
+                "installed": list(outcome.installed),
+                "unchanged": list(outcome.unchanged),
+                "failed": list(outcome.failed),
+                "running": list(outcome.running),
+                "next": outcome.next_step,
+            })
+
         @self._app.route("/junon/ide-bridge/install", methods=["POST"])
         def junon_install_plugin() -> Any:
             """Installs the current plugin into every JetBrains IDE on this machine.

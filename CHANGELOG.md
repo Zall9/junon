@@ -17,6 +17,12 @@ tells the agent — and through it, you.
 
 ## 0.2.3
 
+- **The toast can close the IDEs it needs to write to** — by asking, never by killing. A second button
+  appears only when an IDE actually blocked the install, names it, and asks for confirmation first: the
+  IDE is requested to quit the way its own menu does, so it saves, may prompt, and may refuse. It is a
+  separate parameterless route rather than a flag, because "this endpoint takes nothing from the
+  caller" is one of the four things keeping the button from being a back door.
+
 **The instruction people read.** The remedy told a human to run `installPlugins`, a command measured
 the same day to be incapable of replacing an existing plugin — so it named a path only someone in the
 checkout could use, to run something that exits zero and does nothing. It now says what to do: quit

@@ -172,7 +172,30 @@ def plugins_directory(ide: str) -> Path | None:
     return None
 
 
-def install(timeout: float = 300.0) -> InstallOutcome:
+def ask_to_quit(ide: str, timeout: float = 45.0) -> bool:
+    """Asks an IDE to quit, the way its menu does, and waits for it to be gone.
+
+    Never a signal: `kill` denies the IDE its save-and-shutdown path, and a JetBrains IDE that dies
+    mid-write leaves indexes to rebuild. The trade is that this can be refused — a modal dialog, an
+    unsaved editor asking a question — which is a legitimate answer and is reported as such.
+    """
+    import time
+
+    subprocess.run(
+        ["osascript", "-e", f'tell application "{ide}" to quit'],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not is_running(ide):
+            return True
+        time.sleep(1.5)
+    return not is_running(ide)
+
+
+def install(timeout: float = 300.0, quit_running: bool = False) -> InstallOutcome:
     """Puts the current plugin in place, and reports what changed rather than what exited zero.
 
     The archive is unpacked directly, because the IDE's `installPlugins` refuses to replace a plugin
@@ -190,6 +213,9 @@ def install(timeout: float = 300.0) -> InstallOutcome:
 
     for name, launcher in installed_ides():
         before = installed_version(name)
+        if is_running(name) and quit_running:
+            # Asked, not killed — and if it declines, that is the answer, not a reason to insist.
+            ask_to_quit(name)
         if is_running(name):
             # Replacing a jar under a live IDE is how you get a half-loaded plugin; the platform
             # reads them at start-up and holds them open.

@@ -268,6 +268,8 @@
       border: 1px solid var(--gold, #eaa45d); background: var(--gold, #eaa45d); color: #101315;
     }
     #update-toast button.ghost { background: transparent; color: #cfcac2; border-color: #3a3630; }
+    #update-toast #toast-quit { background: transparent; color: var(--gold, #eaa45d); }
+    #update-toast #toast-quit[hidden] { display: none; }
     #update-toast button[disabled] { opacity: .6; cursor: progress; }
   </style>
   </head>
@@ -345,6 +347,7 @@
       <p id="toast-body"></p>
       <div class="row">
         <button id="toast-install" type="button">Install now</button>
+        <button id="toast-quit" type="button" hidden>Quit those IDEs and install</button>
         <button id="toast-dismiss" class="ghost" type="button">Later</button>
       </div>
     </aside>
@@ -479,8 +482,22 @@
       const IDE_KINDS = { jetbrains: "JetBrains IDE", vscode: "VS Code" };
 
       document.addEventListener("DOMContentLoaded", () => {
-        $("toast-install").addEventListener("click", installUpdate);
+        // Called, not passed: as a listener it would receive the click event as its `route`,
+        // and the event's string form became the URL — a POST to /dashboard/[object PointerEvent].
+        $("toast-install").addEventListener("click", () => installUpdate());
         $("toast-dismiss").addEventListener("click", () => { $("update-toast").hidden = true; });
+        $("toast-quit").addEventListener("click", () => {
+          const ides = $("toast-quit").dataset.ides || "the running IDEs";
+          // A confirmation that names them, and says what will be asked. The IDE is asked to quit
+          // the way its own menu asks — it saves, it may prompt, and it may refuse.
+          const agreed = window.confirm(
+            `Close ${ides}?\n\n` +
+              `Each one is asked to quit as if from its own menu: it saves and may ask you about ` +
+              `unsaved work, and it can refuse — nothing is killed. The plugin is installed into ` +
+              `whichever ones actually close.`,
+          );
+          if (agreed) installUpdate("/junon/ide-bridge/quit-and-install");
+        });
       });
 
       function escapeHtml(value) {
@@ -512,12 +529,13 @@
         toast.hidden = false;
       }
 
-      async function installUpdate() {
+      async function installUpdate(route = "/junon/ide-bridge/install") {
         const button = $("toast-install");
         button.disabled = true;
         button.textContent = "Installing…";
+        $("toast-quit").hidden = true;
         try {
-          const response = await fetch("/junon/ide-bridge/install", {
+          const response = await fetch(route, {
             method: "POST",
             headers: { "X-JUNON-Token": installToken || "" },
           });
@@ -530,6 +548,15 @@
           // is not a failure.
           $("toast-body").textContent = result.next || result.reason || "";
           toastLatched = true;
+          // Only offered when something actually blocked the install, and only for those IDEs: a
+          // button that closes editors must not be sitting there when there is nothing to close.
+          const blocked = result.running || [];
+          if (blocked.length) {
+            const quit = $("toast-quit");
+            quit.hidden = false;
+            quit.textContent = `Quit ${blocked.join(", ")} and install`;
+            quit.dataset.ides = blocked.join(", ");
+          }
           button.hidden = true;
           $("toast-dismiss").textContent = "Close";
         } catch (error) {
