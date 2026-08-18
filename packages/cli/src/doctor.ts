@@ -2,6 +2,7 @@ import { lstat } from "node:fs/promises";
 
 import { readPrivateDiscoveryFile } from "@ide-bridge/bridge-client";
 import {
+  DAEMON_VERSION,
   MAX_HEARTBEAT_INTERVAL_MS,
   MAX_MISSED_HEARTBEATS,
   compareProtocolVersions,
@@ -126,7 +127,7 @@ async function adapterCheck(connection: AuthenticatedBridgeConnection): Promise<
  * handshake already refuses the case where it genuinely cannot. What it must not do is stay quiet,
  * which is what it did until now.
  */
-async function versionCheck(connection: AuthenticatedBridgeConnection): Promise<DoctorCheck> {
+export async function versionCheck(connection: AuthenticatedBridgeConnection): Promise<DoctorCheck> {
   try {
     const [{ adapters }, status] = await Promise.all([
       connection.request("bridge/listAdapters", {}, { timeoutMs: CLI_REQUEST_TIMEOUT_MS }),
@@ -134,6 +135,19 @@ async function versionCheck(connection: AuthenticatedBridgeConnection): Promise<
     ]);
     if (adapters.length === 0) {
       return { name: "versions", status: "skip", detail: "no-adapter-registered" };
+    }
+    // This CLI ships with the daemon, so its own version is the reference the daemon lacked: every
+    // other comparison measured peers *against* the daemon, which made a stale daemon correct by
+    // construction. It happened here — restarted without being rebuilt — and nothing said a word.
+    if (compareReleases(status.daemonVersion, DAEMON_VERSION) < 0) {
+      return {
+        name: "versions",
+        status: "warn",
+        detail:
+          `daemon-${status.daemonVersion}-older-than-this-cli-${DAEMON_VERSION} — rebuild and ` +
+          `restart it: pnpm -r build, then stop the running daemon and start it again (a rebuild ` +
+          `alone changes nothing; the process keeps the code it started with)`,
+      };
     }
     const behind = adapters.filter(
       ({ version }) => compareReleases(version, status.daemonVersion) < 0,

@@ -34,6 +34,7 @@ from junon.client import (
     RequestFailedError,
     read_discovery,
 )
+from junon.client import JUNON_VERSION
 from junon.versions import compare as _compare_versions
 from junon.versions import release_order as _release_order
 
@@ -211,7 +212,9 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
         if not adapters:
             return [f"  versions: daemon {daemon}, no adapter connected"]
 
-        skew = _compare_versions(str(daemon), adapters)
+        # This JUNON's own version is the third peer: without it the daemon is the reference,
+        # and a reference cannot be measured — a stale daemon reported agreement.
+        skew = _compare_versions(str(daemon), adapters, consumer_version=JUNON_VERSION)
         behind = list(skew.older)
         ahead = list(skew.newer)
 

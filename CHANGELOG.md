@@ -17,6 +17,12 @@ tells the agent — and through it, you.
 
 ## 0.2.2
 
+- **The daemon can now be named as the stale half.** Every comparison measured peers _against_ the
+  daemon, which made it correct by construction: a 0.2.1 daemon serving 0.2.1 plugins reported
+  agreement while the rest of the installation had moved on. Both surfaces gained the reference they
+  lacked — JUNON's own version for `ide_status` and the dashboard, this CLI's for `doctor` — and both
+  say to rebuild _and restart_, since a rebuild alone changes nothing.
+
 **The update surface people actually see.** 0.2.1 could be announced; this is the release that says so
 where you are looking.
 

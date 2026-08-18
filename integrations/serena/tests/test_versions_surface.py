@@ -51,13 +51,18 @@ class TestTheComparison:
 
         assert skew.newer == ("GO-261.23567.143@0.2.1",)
         assert "daemon" in skew.summary
-        assert "restart the daemon" in skew.remedy
+        # The daemon is rebuilt and restarted, never reinstalled — and a rebuild without a restart
+        # changes nothing, which the sentence has to say because it is the mistake people make.
+        assert "Rebuild and restart" in skew.remedy
+        assert "a rebuild alone changes nothing" in skew.remedy
         assert REMEDY not in skew.remedy
 
     def test_a_dict_is_what_the_dashboard_receives(self) -> None:
         payload = compare("0.2.1", [adapter("0.2.0")]).as_dict()
 
-        assert set(payload) == {"daemon", "older", "newer", "agrees", "summary", "remedy"}
+        assert set(payload) == {
+            "daemon", "consumer", "older", "newer", "daemonStale", "agrees", "summary", "remedy",
+        }
         assert payload["agrees"] is False
 
 
@@ -103,3 +108,39 @@ class TestItSurvivesBeingRendered:
         card = page[page.index("const versions = status.versions;") :][:700]
         assert "escapeHtml(versions.summary)" in card
         assert "escapeHtml(versions.remedy)" in card
+
+class TestTheDaemonCanBeTheStaleOne:
+    """Until the consumer joined the comparison, this case could not be expressed.
+
+    Everything was compared *to* the daemon, so the daemon was correct by construction: with a daemon
+    at 0.2.1 and every plugin at 0.2.1, the answer was "all at 0.2.1" — even with a 0.2.2 JUNON
+    talking to it, which is exactly what happened here after a restart without a rebuild.
+    """
+
+    def test_a_newer_junon_names_the_daemon(self) -> None:
+        skew = compare("0.2.1", [adapter("0.2.1")], consumer_version="0.2.2")
+
+        assert not skew.agrees
+        assert skew.daemon_is_stale
+        assert "the daemon (0.2.1) is older than this JUNON (0.2.2)" in skew.summary
+        assert "pnpm -r build" in skew.remedy
+
+    def test_agreement_still_agrees_when_all_three_match(self) -> None:
+        skew = compare("0.2.2", [adapter("0.2.2")], consumer_version="0.2.2")
+
+        assert skew.agrees
+        assert skew.remedy == ""
+
+    def test_both_halves_can_be_wrong_at_once_and_the_daemon_comes_first(self) -> None:
+        """Updating a plugin against a stale daemon leaves the skew in place, so the order matters."""
+        skew = compare("0.2.1", [adapter("0.2.0")], consumer_version="0.2.2")
+
+        assert skew.daemon_is_stale and skew.older
+        assert skew.remedy.index("pnpm -r build") < skew.remedy.index("installPlugins")
+
+    def test_without_a_consumer_version_it_says_nothing_about_the_daemon(self) -> None:
+        """A caller that does not know its own version must not produce a verdict about anyone."""
+        skew = compare("0.2.1", [adapter("0.2.1")])
+
+        assert not skew.daemon_is_stale
+        assert skew.agrees

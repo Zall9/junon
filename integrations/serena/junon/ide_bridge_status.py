@@ -141,7 +141,11 @@ def read_status() -> dict[str, Any]:
         try:
             daemon_version = client.call("bridge/getStatus", {}).get("daemonVersion")
             if isinstance(daemon_version, str):
-                versions = compare(daemon_version, all_adapters).as_dict()
+                from junon.client import JUNON_VERSION
+
+                versions = compare(
+                    daemon_version, all_adapters, consumer_version=JUNON_VERSION
+                ).as_dict()
         except IdeBridgeError:
             # An aside, never the reason this endpoint fails: the card's real subject is above.
             versions = None

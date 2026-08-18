@@ -48,56 +48,91 @@ def release_order(left: str, right: str) -> int:
     return (a > b) - (a < b)
 
 
+#: What to run when the daemon is the stale half. It is rebuilt and restarted, not reinstalled.
+DAEMON_REMEDY = (
+    "The daemon is running an older build than this JUNON. Rebuild and restart it: pnpm -r build, "
+    "then stop the running daemon and start it again — a rebuild alone changes nothing, since the "
+    "process keeps the code it was started with."
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Skew:
     """The verdict, in the shape every surface needs.
 
-    `agrees` is stated even when nothing is wrong: a signal that only ever appears on failure teaches
-    a reader that its absence means nothing was checked.
+    Three peers, not two. The daemon used to be the reference, which made a stale daemon
+    unmeasurable: everything was compared *to* it, so it was correct by construction. `consumer` is
+    this JUNON's own version — known without asking anyone — and it is what makes "the daemon is the
+    old one here" sayable at all.
+
+    `agrees` is stated even when nothing is wrong: a signal that only appears on failure teaches a
+    reader that its absence means nothing was checked.
     """
 
     daemon: str
     older: tuple[str, ...]
     newer: tuple[str, ...]
+    consumer: str = ""
+
+    @property
+    def daemon_is_stale(self) -> bool:
+        """Whether this JUNON is from a later release than the daemon it is talking to."""
+        return bool(self.consumer) and release_order(self.daemon, self.consumer) < 0
 
     @property
     def agrees(self) -> bool:
-        return not self.older and not self.newer
+        return not self.older and not self.newer and not self.daemon_is_stale
 
     @property
     def summary(self) -> str:
         if self.agrees:
             return f"daemon and every adapter at {self.daemon}"
+        parts: list[str] = []
+        if self.daemon_is_stale:
+            parts.append(f"the daemon ({self.daemon}) is older than this JUNON ({self.consumer})")
         if self.older:
-            return f"plugin(s) older than the daemon ({self.daemon}): {', '.join(self.older)}"
-        return f"the daemon ({self.daemon}) is older than: {', '.join(self.newer)}"
+            parts.append(
+                f"plugin(s) older than the daemon ({self.daemon}): {', '.join(self.older)}"
+            )
+        if self.newer:
+            parts.append(f"the daemon ({self.daemon}) is older than: {', '.join(self.newer)}")
+        return "; ".join(parts)
 
     @property
     def remedy(self) -> str:
         if self.agrees:
             return ""
+        parts: list[str] = []
+        # The daemon first when it is behind: updating a plugin against a stale daemon leaves the
+        # skew in place, and the person would be back here.
+        if self.daemon_is_stale or self.newer:
+            parts.append(DAEMON_REMEDY)
         if self.older:
-            return REMEDY
-        # Read from the other end the same skew has the opposite fix, and telling someone to
-        # reinstall a plugin that is already ahead would send them the wrong way.
-        return "restart the daemon from a current build: pnpm -r build, then ide-bridge daemon"
+            parts.append(REMEDY)
+        return " ".join(parts)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "daemon": self.daemon,
+            "consumer": self.consumer,
             "older": list(self.older),
             "newer": list(self.newer),
+            "daemonStale": self.daemon_is_stale,
             "agrees": self.agrees,
             "summary": self.summary,
             "remedy": self.remedy,
         }
 
 
-def compare(daemon_version: str, adapters: list[dict[str, Any]]) -> Skew:
-    """Sorts the adapters into those behind the daemon and those ahead of it.
+def compare(
+    daemon_version: str,
+    adapters: list[dict[str, Any]],
+    consumer_version: str = "",
+) -> Skew:
+    """Sorts the peers around the daemon, and measures the daemon against the consumer.
 
-    Each is named as `<ide build>@<plugin version>`, not counted: a plugin is installed per IDE, so a
-    number leaves the reader to work out which one to touch.
+    Each adapter is named as `<ide build>@<plugin version>`, not counted: a plugin is installed per
+    IDE, so a number leaves the reader to work out which one to touch.
     """
 
     def label(adapter: dict[str, Any]) -> str:
@@ -109,4 +144,9 @@ def compare(daemon_version: str, adapters: list[dict[str, Any]]) -> Skew:
     newer = sorted(
         {label(a) for a in adapters if release_order(str(a.get("version", "")), daemon_version) > 0}
     )
-    return Skew(daemon=daemon_version, older=tuple(older), newer=tuple(newer))
+    return Skew(
+        daemon=daemon_version,
+        older=tuple(older),
+        newer=tuple(newer),
+        consumer=consumer_version,
+    )
