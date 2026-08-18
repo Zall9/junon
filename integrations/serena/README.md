@@ -128,6 +128,20 @@ and 1.7.1.dev0.
 An incomplete composition is logged and **not** fatal: a JUNON that could not attach is a Serena that
 still works, and refusing to start would turn a cosmetic failure into an outage.
 
+## Updating it
+
+If you injected a local checkout, JUNON updates when the checkout does — an editable install is a
+pointer, and a `git pull` is the update. A copy taken from a path never updates. To get one that
+does, install from the git URL instead, and `pipx upgrade` will re-fetch:
+
+```bash
+pipx install "git+https://github.com/Zall9/junon@main#subdirectory=integrations/serena" --include-apps
+```
+
+Whichever way, the halves can end up in different releases — `pipx` knows nothing about the plugin
+in your IDE. `ide-bridge doctor` compares them and names the one that is behind; see
+[../../docs/RELEASING.md](../../docs/RELEASING.md).
+
 ## Removing it
 
 ```bash

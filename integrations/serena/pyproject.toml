@@ -47,7 +47,7 @@ dev = [
 junon = "junon.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/example/ide-bridge"
+Repository = "https://github.com/Zall9/junon"
 
 # --- setuptools config (src-less flat layout) ---
 

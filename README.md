@@ -115,6 +115,11 @@ cost this project three days of confident, wrong conclusions.
 Then bring up an adapter — `cd jetbrains-plugin && ./gradlew runIde` (`runPyCharm`, `runGoLand`,
 `runPhpStorm` also exist), or `cd packages/vscode-extension && pnpm test:integration`, which
 downloads VS Code, installs the extension and drives the whole walkthrough itself.
+
+To install into an IDE you already use, `./gradlew buildPlugin` and install the zip from disk — then
+add the plugin repository URL under *Settings → Plugins → ⚙ → Manage Plugin Repositories*, or that
+IDE will never be able to tell you a newer version exists. A plugin installed from a file has no
+update path at all; [docs/RELEASING.md](docs/RELEASING.md) explains what to publish and why.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
 ### Setting it up with a coding agent

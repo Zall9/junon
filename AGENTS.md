@@ -173,7 +173,22 @@ Python >= 3.12 required (or Serena-imposed version; package metadata declares >=
 
 ---
 
-## 10. Plan Maintenance
+## 10. Versions
+
+`VERSION` at the repository root is the product's version. **Never edit one of its copies by hand.**
+Gradle, six `package.json` files, `pyproject.toml` and a Kotlin constant each hold the same number
+because each build system wants it in its own file; three guards fail when one drifts
+(`packages/bridge-daemon/tests/metadata.test.ts`, `PluginVersionTest.kt`,
+`integrations/serena/tests/test_version_identity.py`).
+
+The number must stay orderable — `MAJOR.MINOR.PATCH`, no `-SNAPSHOT`. A JetBrains IDE decides
+whether an update exists by comparing this string, and a suffix makes that question unanswerable.
+Seven copies existed before this rule, no two agreeing, which is why nothing could tell a user that
+one half of their installation was older than the other.
+
+To cut a release, see [docs/RELEASING.md](docs/RELEASING.md).
+
+## 11. Plan Maintenance
 
 - `docs/IMPLEMENTATION_PLAN.md` is the canonical living plan. Update phase status and log after every phase increment.
 - Update the plan when: a phase starts, a phase completes, acceptance criteria change, risks are discovered or resolved, toolchain baselines are confirmed or changed.
@@ -183,7 +198,7 @@ Python >= 3.12 required (or Serena-imposed version; package metadata declares >=
 
 ---
 
-## 11. Use the IDE Before Reading the Disk
+## 12. Use the IDE Before Reading the Disk
 
 This repository builds JUNON, and the fastest way to find its defects is to work through it. When an
 IDE is connected, prefer the `ide_*` tools over `read`, `grep` and `glob`.
@@ -213,7 +228,7 @@ is never mistaken for one the IDE confirmed.
 
 ---
 
-## 12. Git Constraints (Non-Negotiable)
+## 13. Git Constraints (Non-Negotiable)
 
 - Never create a commit.
 - Never modify a commit.

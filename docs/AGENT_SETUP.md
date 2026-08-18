@@ -156,7 +156,7 @@ uv tool install serena-agent --with integrations/serena          # if it came fr
 junon tools list | grep '^ \* `ide_'
 ```
 
-Ten tools. Zero means plain Serena answered.
+Ten tools — the tenth is `ide_refactor`, the IDE's own rename. Zero means plain Serena answered.
 
 Then configure your MCP host to run **`junon`**, never `serena`:
 
