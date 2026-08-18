@@ -120,6 +120,12 @@ To install into an IDE you already use, `./gradlew buildPlugin` and install the 
 add the plugin repository URL under *Settings → Plugins → ⚙ → Manage Plugin Repositories*, or that
 IDE will never be able to tell you a newer version exists. A plugin installed from a file has no
 update path at all; [docs/RELEASING.md](docs/RELEASING.md) explains what to publish and why.
+
+> **No update notification works yet, and that is a publication step rather than a missing feature.**
+> The repository file is generated and valid, but nothing is published: the URL it points at answers
+> 404, and no IDE has been given it. Until a release is tagged with the zip attached and the XML is
+> served from a stable address, the only signal that anything is out of step is `ide-bridge doctor`,
+> whose `versions` check compares the halves of a local installation.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
 ### Setting it up with a coding agent

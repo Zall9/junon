@@ -113,7 +113,12 @@ For an IDE you already have, `./gradlew buildPlugin` produces
 disk*, in each IDE separately, and restart it. **Add the plugin repository URL while you are in that
 dialog** (⚙ → *Manage Plugin Repositories*): a plugin installed from a file has no update path at
 all, so without it that IDE can never tell anyone a newer version exists —
-[RELEASING.md](RELEASING.md) says what to publish there. Launched from the Dock it will read the default
+[RELEASING.md](RELEASING.md) says what to publish there.
+
+**As of now there is nothing to add**: the repository file is generated but unpublished, its URL
+answers 404, and no IDE has been configured with it. So do not expect an update notification from
+anywhere, and do not report the absence of one as a fault. The only thing that will tell you a half
+is out of step is the `versions` check in step 3. Launched from the Dock it will read the default
 discovery file — which is where step 2 put the daemon, so there is nothing to export. That is the
 whole reason step 2 uses the default: an IDE you start normally cannot be told anything by a shell.
 
