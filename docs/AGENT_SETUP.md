@@ -269,7 +269,7 @@ whole document.
 so the ratio is a query rather than an impression. A configuration change that cannot be measured
 afterwards is a hope.
 
-## 7. Redeploy after you change the source
+## 8. Redeploy after you change the source
 
 Editing a file changes nothing that is running, and neither half of this tells you so. Do the half
 you touched — or both, if you changed something they share, such as the format of a file one writes
