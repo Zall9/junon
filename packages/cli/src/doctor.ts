@@ -148,7 +148,11 @@ async function versionCheck(connection: AuthenticatedBridgeConnection): Promise<
       return {
         name: "versions",
         status: "warn",
-        detail: `adapter-older-than-daemon-${status.daemonVersion}: ${named}`,
+        // The remedy travels with the fault: this report is read by people who did not build any of
+        // this, and "older than the daemon" leaves them to guess which of three halves to touch.
+        detail:
+          `adapter-older-than-daemon-${status.daemonVersion}: ${named}` +
+          ` — run scripts/install-jetbrains-plugin.sh, then restart those IDEs`,
       };
     }
     if (ahead.length > 0) {

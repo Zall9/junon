@@ -162,6 +162,7 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
             )
 
         lines = [f"An IDE is connected with {len(workspaces)} workspace(s) open:"]
+        lines.extend(self._version_lines(client))
         for workspace in workspaces:
             roots = ", ".join(root.get("uri", "?") for root in workspace.get("roots", []))
             trust = workspace.get("trust", {})
@@ -185,6 +186,63 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
             state = str(status.get("state", "unknown"))
             lines.append(f"    readiness: {state}{self._readiness_note(state)}")
         return "\n".join(lines)
+
+    def _version_lines(self, client: IdeBridgeClient) -> list[str]:
+        """The version of each half, and the remedy when they differ.
+
+        Nothing else tells anyone. An IDE updates its plugin without knowing a daemon exists, `pipx`
+        updates this package without knowing either, and the halves read and write the same files —
+        so a mismatch is silent by construction and shows up later as a capability that is
+        mysteriously absent.
+
+        Reported even when everything agrees, because "all at 0.2.1" is the sentence that makes the
+        next answer trustworthy, and a line that only ever appears when something is wrong teaches a
+        reader to assume its absence means nothing was checked.
+        """
+        try:
+            daemon = client.call("bridge/getStatus", {}).get("daemonVersion", "unknown")
+            adapters = client.call("bridge/listAdapters", {}).get("adapters", [])
+        except IdeBridgeError:
+            # Never the reason this tool fails: the workspaces above are the answer it was asked for.
+            return []
+
+        if not adapters:
+            return [f"  versions: daemon {daemon}, no adapter connected"]
+
+        behind = sorted({
+            f"{a.get('ideVersion', '?')}@{a.get('version', '?')}"
+            for a in adapters
+            if _release_order(str(a.get("version", "")), str(daemon)) < 0
+        })
+        ahead = sorted({
+            f"{a.get('ideVersion', '?')}@{a.get('version', '?')}"
+            for a in adapters
+            if _release_order(str(a.get("version", "")), str(daemon)) > 0
+        })
+
+        if not behind and not ahead:
+            return [f"  versions: daemon and every adapter at {daemon}"]
+
+        lines = [f"  versions: daemon {daemon}"]
+        if behind:
+            lines.append(
+                f"    older plugin(s): {', '.join(behind)} — rebuild and reinstall, per IDE:"
+            )
+            lines.append("      scripts/install-jetbrains-plugin.sh")
+            lines.append(
+                "      or, for one IDE without leaving the shell: "
+                "<IDE>.app/Contents/MacOS/<ide> installPlugins com.idebridge.jetbrains"
+            )
+        if ahead:
+            lines.append(
+                f"    newer plugin(s): {', '.join(ahead)} — the daemon is the stale half here; "
+                "restart it from a current build."
+            )
+        lines.append(
+            "    Say this to the user rather than working around it: a plugin from another release "
+            "may be missing capabilities this session expects."
+        )
+        return lines
 
     @staticmethod
     def _readiness_note(state: str) -> str:
@@ -1053,6 +1111,25 @@ class IdeRefactorTool(IdeBridgeTool, ToolMarkerCanEdit):
         return exact[0]
 
 
+
+
+def _release_order(left: str, right: str) -> int:
+    """Orders two release numbers, with no opinion about anything it cannot parse.
+
+    A version carrying a suffix — `0.1.0-SNAPSHOT`, which this plugin built as for months — reads as
+    "no comparison" rather than as "older". Telling someone to reinstall because of a suffix would be
+    a worse answer than saying nothing.
+    """
+    import re
+
+    def parts(value: str) -> tuple[int, int, int] | None:
+        found = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", value.strip())
+        return (int(found[1]), int(found[2]), int(found[3])) if found else None
+
+    a, b = parts(left), parts(right)
+    if a is None or b is None:
+        return 0
+    return (a > b) - (a < b)
 
 def _count_unclassified(symbols: list[dict[str, Any]]) -> int:
     total = 0

@@ -220,6 +220,7 @@ one asserted nothing.
 | [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) | Ordered setup for a coding agent: what to run, what to check, what fails silently |
 | [docs/DEMO.md](docs/DEMO.md) | Reproducible walkthrough per adapter, with real output |
 | [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md) | The summary: architecture, results, remaining risks at full strength |
+| [CHANGELOG.md](CHANGELOG.md) | What changed per release, and what you have to do about it |
 | [docs/RELEASING.md](docs/RELEASING.md) | Cutting a release, and the three ways anyone learns one exists |
 | [docs/REMOTE_DEVELOPMENT.md](docs/REMOTE_DEVELOPMENT.md) | Remote and containerised setups |
 | [docs/adr/](docs/adr/) | 39 decision records, including the refactorings that were refused |

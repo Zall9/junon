@@ -23,7 +23,7 @@ They also refuse a version an IDE cannot order. `0.1.0-SNAPSHOT` is what this pl
 months, and a suffix like that makes "is there a newer one" unanswerable — the JetBrains update
 mechanism decides by comparing these strings.
 
-To cut a release: edit `VERSION`, run the three suites, and fix whatever the guards name.
+To cut a release: edit `VERSION`, run the three suites, fix whatever the guards name, and add a section to [CHANGELOG.md](../CHANGELOG.md) — the version number tells nobody what changed, and a release nobody can read is one nobody installs.
 
 ## 2. A custom plugin repository — the update notification itself
 
