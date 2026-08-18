@@ -525,17 +525,10 @@
           $("toast-title").textContent = result.ok ? "Installed" : "Not installed";
           // The sentence that matters is not "done" — a plugin that is installed is not a plugin
           // that is loaded, and the IDE reads them at start-up.
-          const where = result.installed && result.installed.length
-            ? `Installed into ${result.installed.join(", ")}.`
-            : "";
-          const failed = result.failed && result.failed.length
-            ? ` Failed for ${result.failed.join(", ")}.`
-            : "";
-          const unchanged = result.unchanged && result.unchanged.length
-            ? ` Left as it was: ${result.unchanged.join(", ")}.`
-            : "";
-          $("toast-body").innerHTML =
-            `${escapeHtml(where + failed + unchanged)}<br>${escapeHtml(result.next || result.reason || "")}`;
+          // Only the prepared sentence: the page used to build its own summary from the raw
+          // lists, which put "Failed for PhpStorm" one line above the explanation that a running IDE
+          // is not a failure.
+          $("toast-body").textContent = result.next || result.reason || "";
           toastLatched = true;
           button.hidden = true;
           $("toast-dismiss").textContent = "Close";
