@@ -21,8 +21,10 @@ from typing import Any
 #: No angle brackets. This string is rendered into an HTML page, and a browser parsed `<IDE>` as a
 #: tag and dropped it — leaving `.app/Contents/MacOS/ installPlugins`, which is not a command.
 REMEDY = (
-    "scripts/install-jetbrains-plugin.sh, then restart those IDEs — or, for one IDE without leaving "
-    "the shell: GoLand.app/Contents/MacOS/goland installPlugins com.idebridge.jetbrains"
+    "Install the current plugin in each IDE named above, then restart it. From a shell, per IDE: "
+    "GoLand.app/Contents/MacOS/goland installPlugins com.idebridge.jetbrains  "
+    "(inside a checkout of this repository, scripts/install-jetbrains-plugin.sh does every IDE at "
+    "once)"
 )
 
 _RELEASE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
