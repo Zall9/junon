@@ -148,6 +148,40 @@ class JunonDashboardAPI(SerenaDashboardAPI):
         def serve_serena_dashboard_asset(filename: str) -> Response:
             return send_from_directory(SERENA_DASHBOARD_DIR, filename)
 
+        @self._app.route("/junon/ide-bridge/install", methods=["POST"])
+        def junon_install_plugin() -> Any:
+            """Installs the current plugin into every JetBrains IDE on this machine.
+
+            Guarded rather than open, because this page lives on 127.0.0.1 and any site a browser
+            visits can post to a loopback port. Two things a cross-site request cannot do: read this
+            page to learn the token, and set a custom header. Both are required here, and the route
+            takes no parameters at all — a stolen token buys exactly the install the button offers.
+            """
+            from flask import jsonify, request
+
+            from junon.update_action import SESSION_TOKEN, install
+
+            if request.headers.get("X-JUNON-Token") != SESSION_TOKEN:
+                log.warning("[JUNON] refused an install request without this session's token")
+                return jsonify({"ok": False, "reason": "This request did not carry the session token."}), 403
+
+            origin = request.headers.get("Origin")
+            if origin and origin not in {f"http://{self._listen_address((), {})}:{request.host.rsplit(':', 1)[-1]}",
+                                         f"http://127.0.0.1:{request.host.rsplit(':', 1)[-1]}",
+                                         f"http://localhost:{request.host.rsplit(':', 1)[-1]}"}:
+                log.warning("[JUNON] refused an install request from %s", origin)
+                return jsonify({"ok": False, "reason": f"Refused a request from {origin}."}), 403
+
+            outcome = install()
+            return jsonify({
+                "ok": outcome.ok,
+                "installed": list(outcome.installed),
+                "unchanged": list(outcome.unchanged),
+                "failed": list(outcome.failed),
+                "running": list(outcome.running),
+                "next": outcome.next_step,
+            })
+
         @self._app.route("/junon/ide-bridge/status", methods=["GET"])
         def get_ide_bridge_status() -> dict[str, Any]:
             """What the IDE Bridge panel shows: which adapter is connected, and whether it answers.

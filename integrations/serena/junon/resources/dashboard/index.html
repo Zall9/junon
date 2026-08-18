@@ -250,7 +250,26 @@
         color: var(--muted);
         font-size: 12px;
       }
-    </style>
+  
+    /* The update toast. Fixed and loud on purpose: the same sentence inside the IDE Bridge card was
+       measured to be missable — it is one line among forty, and a reader scanning the page skips it. */
+    #update-toast {
+      position: fixed; right: 24px; bottom: 24px; z-index: 50; max-width: 460px;
+      background: #17110a; border: 1px solid var(--gold, #eaa45d); border-radius: 12px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .55); padding: 16px 18px; color: #f6f4ef;
+    }
+    #update-toast[hidden] { display: none; }
+    #update-toast h3 { margin: 0 0 6px; font-size: 15px; color: var(--gold, #eaa45d); }
+    #update-toast p { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
+    #update-toast code { font-size: 12px; word-break: break-word; }
+    #update-toast .row { display: flex; gap: 10px; align-items: center; }
+    #update-toast button {
+      font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--gold, #eaa45d); background: var(--gold, #eaa45d); color: #101315;
+    }
+    #update-toast button.ghost { background: transparent; color: #cfcac2; border-color: #3a3630; }
+    #update-toast button[disabled] { opacity: .6; cursor: progress; }
+  </style>
   </head>
   <body>
     <header>
@@ -321,6 +340,15 @@
         </section>
       </div>
     </main>
+    <aside id="update-toast" hidden role="alert" aria-live="assertive">
+      <h3 id="toast-title">Update available</h3>
+      <p id="toast-body"></p>
+      <div class="row">
+        <button id="toast-install" type="button">Install now</button>
+        <button id="toast-dismiss" class="ghost" type="button">Later</button>
+      </div>
+    </aside>
+
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -450,10 +478,73 @@
 
       const IDE_KINDS = { jetbrains: "JetBrains IDE", vscode: "VS Code" };
 
+      document.addEventListener("DOMContentLoaded", () => {
+        $("toast-install").addEventListener("click", installUpdate);
+        $("toast-dismiss").addEventListener("click", () => { $("update-toast").hidden = true; });
+      });
+
       function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, (character) => ({
           "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
         })[character]);
+      }
+
+      let installToken = null;
+      // Latched once the button has acted: the page polls its status, and every refresh was
+      // rewriting the toast from the payload — the answer survived about a second.
+      let toastLatched = false;
+
+      function showUpdateToast(versions) {
+        const toast = $("update-toast");
+        if (!toast) return;
+        if (!versions || versions.agrees) {
+          toast.hidden = true;
+          toastLatched = false;
+          return;
+        }
+        if (toastLatched) return;
+        $("toast-title").textContent = "Update available";
+        $("toast-body").innerHTML =
+          `${escapeHtml(versions.summary)}<br><code>${escapeHtml(versions.remedy)}</code>`;
+        $("toast-install").hidden = false;
+        $("toast-install").disabled = false;
+        $("toast-install").textContent = "Install now";
+        toast.hidden = false;
+      }
+
+      async function installUpdate() {
+        const button = $("toast-install");
+        button.disabled = true;
+        button.textContent = "Installing…";
+        try {
+          const response = await fetch("/junon/ide-bridge/install", {
+            method: "POST",
+            headers: { "X-JUNON-Token": installToken || "" },
+          });
+          const result = await response.json();
+          $("toast-title").textContent = result.ok ? "Installed" : "Not installed";
+          // The sentence that matters is not "done" — a plugin that is installed is not a plugin
+          // that is loaded, and the IDE reads them at start-up.
+          const where = result.installed && result.installed.length
+            ? `Installed into ${result.installed.join(", ")}.`
+            : "";
+          const failed = result.failed && result.failed.length
+            ? ` Failed for ${result.failed.join(", ")}.`
+            : "";
+          const unchanged = result.unchanged && result.unchanged.length
+            ? ` Left as it was: ${result.unchanged.join(", ")}.`
+            : "";
+          $("toast-body").innerHTML =
+            `${escapeHtml(where + failed + unchanged)}<br>${escapeHtml(result.next || result.reason || "")}`;
+          toastLatched = true;
+          button.hidden = true;
+          $("toast-dismiss").textContent = "Close";
+        } catch (error) {
+          $("toast-title").textContent = "Could not install";
+          $("toast-body").textContent = String(error);
+          button.disabled = false;
+          button.textContent = "Try again";
+        }
       }
 
       function renderBridge(status) {
@@ -603,7 +694,11 @@
 
         // Each panel is refreshed on its own so one failing endpoint blanks one card rather than
         // the page.
-        getJson("/junon/ide-bridge/status").then(renderBridge).catch(() => {
+        getJson("/junon/ide-bridge/status").then((status) => {
+          installToken = status.installToken || null;
+          renderBridge(status);
+          showUpdateToast(status.versions);
+        }).catch(() => {
           $("bridge").innerHTML = `<p class="empty">The IDE Bridge status endpoint did not answer.</p>`;
         });
         // An empty `catch` here left these two cards blank, which reads as "nothing is running"

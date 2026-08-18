@@ -152,6 +152,9 @@ def read_status() -> dict[str, Any]:
         **base,
         "status": "connected",
         "reason": None,
+        # Read by the page so it can prove a click came from here. A cross-site request cannot
+        # read this response, which is what makes the header unforgeable.
+        "installToken": _install_token(),
         "versions": versions,
         "adapter": {
             "adapterId": adapter_id,
@@ -171,3 +174,9 @@ def read_status() -> dict[str, Any]:
             for workspace in workspaces
         ],
     }
+
+def _install_token() -> str:
+    """This process's install token. Imported late: the dashboard is optional, the status is not."""
+    from junon.update_action import SESSION_TOKEN
+
+    return SESSION_TOKEN
