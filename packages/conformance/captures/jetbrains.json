@@ -2,12 +2,12 @@
   "adapter": "jetbrains",
   "requestedUri": "temp:///src/Service.java",
   "workspace": {
-    "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-    "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
+    "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+    "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
     "name": "a consumer reads symbols and diagnostics and renames through the real daemon",
     "roots": [
       {
-        "rootId": "root_wX3SF4keeTlW43x0jBDuKWME",
+        "rootId": "root_f_2CJ_OaKix4wSpQX2GjH65J",
         "name": "src",
         "uri": "temp:///src"
       }
@@ -17,8 +17,8 @@
   },
   "documentSymbols": {
     "document": {
-      "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-      "rootId": "root_wX3SF4keeTlW43x0jBDuKWME",
+      "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+      "rootId": "root_f_2CJ_OaKix4wSpQX2GjH65J",
       "uri": "temp:///src/Service.java",
       "logicalPath": "Service.java",
       "revision": {
@@ -33,9 +33,9 @@
     "symbols": [
       {
         "handle": {
-          "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-          "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-          "id": "sym_0BivZpSMBT75kGNcnGsd-nN1",
+          "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+          "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+          "id": "sym_4XC11KljNVIYeymMfM4bIwr6",
           "validUntilEpoch": 0
         },
         "locator": {
@@ -69,9 +69,9 @@
         "children": [
           {
             "handle": {
-              "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-              "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-              "id": "sym_d98JRLA4f9UKRCh3LE7h4uw3",
+              "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+              "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+              "id": "sym_Jm5RTMfGsLsPa7dgvRf2NsBA",
               "validUntilEpoch": 0
             },
             "locator": {
@@ -107,9 +107,9 @@
           },
           {
             "handle": {
-              "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-              "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-              "id": "sym_ByC4_wxSfMKxOja7arp_DHZP",
+              "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+              "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+              "id": "sym_OmVTFpA5neIrhrG3HkKtC3PR",
               "validUntilEpoch": 0
             },
             "locator": {
@@ -150,8 +150,8 @@
   "unspelledDocumentSymbols": {
     "requestedUri": "temp:///src/Registry.kt",
     "document": {
-      "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-      "rootId": "root_wX3SF4keeTlW43x0jBDuKWME",
+      "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+      "rootId": "root_f_2CJ_OaKix4wSpQX2GjH65J",
       "uri": "temp:///src/Registry.kt",
       "logicalPath": "Registry.kt",
       "revision": {
@@ -166,9 +166,9 @@
     "symbols": [
       {
         "handle": {
-          "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-          "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-          "id": "sym_zx7P4ty24RpODG7_QwnFsn1v",
+          "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+          "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+          "id": "sym_SHZffFD4WTADHDrf3-_lD8Pd",
           "validUntilEpoch": 0
         },
         "locator": {
@@ -202,9 +202,9 @@
         "children": [
           {
             "handle": {
-              "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-              "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-              "id": "sym_z5IZ-Vt5jUN1X_Wkv4tDGLeF",
+              "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+              "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+              "id": "sym_7_P_xad0bN0T-zRXEjeDm0zf",
               "validUntilEpoch": 0
             },
             "locator": {
@@ -239,9 +239,9 @@
             "children": [
               {
                 "handle": {
-                  "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-                  "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-                  "id": "sym_FFLg-x06BFTnpAQuiW57QFjd",
+                  "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+                  "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+                  "id": "sym_kRuPT5Oa4bZAqfk2JNoF6b85",
                   "validUntilEpoch": 0
                 },
                 "locator": {
@@ -277,9 +277,9 @@
               },
               {
                 "handle": {
-                  "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-                  "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-                  "id": "sym_NV69BGdrMBQsE2U9-4l-o3l0",
+                  "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+                  "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+                  "id": "sym_81xwoyqkK8ypHXJHLc_5zlei",
                   "validUntilEpoch": 0
                 },
                 "locator": {
@@ -324,9 +324,9 @@
     "symbols": [
       {
         "handle": {
-          "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-          "sessionId": "session_Qkdx1eDUhoBcCWXg7wr8QtFD",
-          "id": "sym_AsB-LRLrtLhg9KlVQOvnXseB",
+          "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+          "sessionId": "session_9NSUs21J13Sr26HX4akOmsoq",
+          "id": "sym_mLLFIK4Go8nOHHDBvhYZANDF",
           "validUntilEpoch": 0
         },
         "locator": {
@@ -366,8 +366,8 @@
     "documents": [
       {
         "document": {
-          "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-          "rootId": "root_wX3SF4keeTlW43x0jBDuKWME",
+          "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+          "rootId": "root_f_2CJ_OaKix4wSpQX2GjH65J",
           "uri": "temp:///src/Service.java",
           "logicalPath": "Service.java",
           "revision": {
@@ -408,7 +408,7 @@
         ]
       }
     ],
-    "capturedAt": "2026-08-16T16:29:44.171796Z",
+    "capturedAt": "2026-08-18T08:54:00.972543Z",
     "truncated": false
   },
   "hierarchy": {
@@ -433,11 +433,11 @@
     "truncated": false
   },
   "editPlan": {
-    "planId": "plan_5O3JzKAfAXy4sB-A-ltZbT1e",
-    "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-    "sessionId": "session_0PDdX4Km09q6dPaHIaaRpno8",
-    "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-    "expiresAt": "2026-08-16T16:31:44.179Z",
+    "planId": "plan_v9lO0wMK5QudgxicBloCAeFw",
+    "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+    "sessionId": "session_ikxU77w8efUi4BxAnxGyCQQQ",
+    "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+    "expiresAt": "2026-08-18T08:56:00.980Z",
     "operation": "rename",
     "guarantee": "semantic",
     "atomicity": "semantic",
@@ -462,8 +462,8 @@
     "modifiedDocuments": [
       {
         "document": {
-          "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-          "rootId": "root_wX3SF4keeTlW43x0jBDuKWME",
+          "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+          "rootId": "root_f_2CJ_OaKix4wSpQX2GjH65J",
           "uri": "temp:///src/Service.java",
           "logicalPath": "Service.java",
           "revision": {
@@ -480,11 +480,11 @@
       }
     ],
     "undoToken": {
-      "id": "undo_6WovykYlVLbzACZ4XkzoHP1c",
-      "adapterId": "adapter_EUmFhiUkqdvgOmtqdf6Vr7dW",
-      "sessionId": "session_0PDdX4Km09q6dPaHIaaRpno8",
-      "workspaceId": "ws_riRR3DO2kpF5J64gva2xcESd",
-      "expiresAt": "2026-08-16T16:34:44.241Z"
+      "id": "undo_YH_sbVi4izTdfS59xtIc90Zz",
+      "adapterId": "adapter_x1ayaqNVCF8r3Ni7Cg5E5-i8",
+      "sessionId": "session_ikxU77w8efUi4BxAnxGyCQQQ",
+      "workspaceId": "ws_flFyUq2lqSuBjxr6DZqdvF3s",
+      "expiresAt": "2026-08-18T08:59:01.057Z"
     }
   }
 }

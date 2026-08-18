@@ -1,13 +1,42 @@
+<p align="center">
+  <img src="docs/assets/ide-bridge.svg" alt="IDE Bridge — the answers your IDE already has" width="840">
+</p>
+
 # IDE Bridge
 
-An AI agent asking what a symbol is used for should get the answer the IDE already has, not a
-second-rate re-derivation of it. IDE Bridge is a protocol and a daemon that let an agent ask —
-IntelliJ, PyCharm, PhpStorm, GoLand or VS Code answering from its own indexes, PSI, analysers and
-refactoring engines, over an authenticated loopback WebSocket.
+Your IDE has already read the project. It holds the symbol index, the type information, the
+inspections and the refactoring engines — and an AI agent working in the same repository throws all
+of that away and starts again with a text search.
 
-Its central rule: **an answer says where it came from, and a refusal says why.** No text search
-dressed up as a semantic query, no capability implied by silence, no approximation standing in for
-an engine the IDE does not have.
+IDE Bridge gives the agent the IDE's answers instead. A daemon speaks one protocol to a plugin
+running inside IntelliJ, PyCharm, PhpStorm, GoLand or VS Code, and the agent asks through it: where
+is this symbol used, what does the analyser say about this file, rename it across the project. Every
+semantic answer comes from the IDE's own engines, over an authenticated loopback WebSocket. Nothing
+leaves the machine, and nothing is guessed from the text.
+
+**JUNON** is the ready-made consumer: nine `ide_*` tools composed onto an unmodified
+[Serena](https://github.com/oraios/serena), so any MCP-capable agent — Claude Code, opencode,
+Cursor — gets them without writing a client. Building your own instead means speaking IDEBP to the
+daemon; the protocol is the contract, not JUNON.
+
+### What that buys you, measured
+
+- **Search that knows what a class is.** `query: "User", kinds: ["class"]` returns classes only, and
+  the filter is applied by the IDE as results are collected — a rejected kind never spends the
+  caller's limit. Without it, the same query also returns methods.
+- **Edits you can read before they happen.** `refactor/prepare` returns a plan — every file it would
+  touch, with `"guarantee": "semantic"` — and writes nothing; verified by hashing the files. Apply it
+  and the response names what changed, with a token that undoes it.
+- **A plan that went stale is refused, not applied.** Change the document in between and the
+  **daemon** refuses `STALE_DOCUMENT` without ever forwarding the request, naming the revision to
+  prepare against. That defect was live until 2026-08-14: stale edits were written and only then
+  reported.
+
+And the rule the whole thing is built on: **an answer says where it came from, and a refusal says
+why.** No text search dressed up as a semantic query, no capability implied by silence, no
+approximation standing in for an engine the IDE does not have. When PyCharm opens a project with no
+interpreter, `diagnostics/getSnapshot` refuses `CAPABILITY_UNAVAILABLE` — it does not return an empty
+list that reads like a clean bill of health.
 
 ## What it does today
 
@@ -17,7 +46,7 @@ an engine the IDE does not have.
 | **JetBrains adapter** | All 16. Run in IntelliJ, PhpStorm, GoLand and PyCharm — run, not merely measured compatible |
 | **VS Code adapter** | 13 of 16. The three others are refusals with named reasons: no scoped undo, no TODO index, no bookmarks |
 | **Serena integration** | JUNON — nine `ide_*` tools composed onto an unmodified Serena |
-| **Tests** | 469 TypeScript — 54 of them the conformance suite, not a separate total — plus 281 Kotlin, 148 Python, and 9 VS Code host scenarios that drive a real editor |
+| **Tests** | 469 TypeScript — 54 of them the conformance suite, not a separate total — plus 284 Kotlin, 155 Python, and 9 VS Code host scenarios that drive a real editor |
 
 [docs/STATUS.md](docs/STATUS.md) is the authority on what is verified, what is refused, what is
 deferred, and — in its own section — the limits of the verification itself.
@@ -95,6 +124,8 @@ discovery file, a host configured for `serena` rather than `junon` — with the 
 apart, and the rules the agent is not free to relax.
 
 ### Connecting Serena
+
+<img src="integrations/serena/junon/resources/dashboard/junon-emblem.svg" alt="JUNON" width="72">
 
 JUNON installs **into** Serena's own environment, because it imports it:
 
