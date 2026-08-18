@@ -55,7 +55,14 @@ class InstallOutcome:
 
     @property
     def ok(self) -> bool:
-        return bool(self.installed) and not self.failed
+        """Whether this went as well as it could.
+
+        A running IDE is not a failure: it is a reason, stated in the answer, and the person can act
+        on it. Counting it as one made the toast announce "Not installed" over two IDEs that had just
+        been updated — and the title is what gets read.
+        """
+        unexplained = set(self.failed) - set(self.running)
+        return bool(self.installed) and not unexplained
 
     def _split(self, names: tuple[str, ...]) -> tuple[list[str], list[str]]:
         live = [name for name in names if name in self.running]
@@ -137,32 +144,89 @@ def installed_version(ide: str) -> str | None:
     return None
 
 
+def artefact() -> Path | None:
+    """The newest plugin zip this machine has, or nothing.
+
+    A checkout carries one; a `pipx` copy does not, and for that case there is no honest local
+    install — the IDE's own updater is what can upgrade, which the answer says rather than pretending.
+    """
+    root = Path(__file__).resolve().parents[3]
+    candidates = [
+        *(root / "dist").glob("ide-bridge-jetbrains-*.zip"),
+        *(root / "jetbrains-plugin/build/distributions").glob("ide-bridge-jetbrains-*.zip"),
+    ]
+    if not candidates:
+        return None
+
+    def release(path: Path) -> tuple[int, ...]:
+        digits = path.stem.rsplit("-", 1)[-1].split(".")
+        return tuple(int(part) for part in digits if part.isdigit())
+
+    return max(candidates, key=release)
+
+
+def plugins_directory(ide: str) -> Path | None:
+    base = Path.home() / "Library/Application Support/JetBrains"
+    for directory in sorted(base.glob(f"{ide.replace(' ', '')}*/plugins")):
+        return directory
+    return None
+
+
 def install(timeout: float = 300.0) -> InstallOutcome:
-    """Runs the IDE's own installer, and reports what changed rather than what exited zero."""
+    """Puts the current plugin in place, and reports what changed rather than what exited zero.
+
+    The archive is unpacked directly, because the IDE's `installPlugins` refuses to replace a plugin
+    that is already there — measured: *"already installed"*, exit code 0, nothing written. It is still
+    used when an IDE has no plugin at all, where it resolves the artefact from the repository itself.
+    """
+    import shutil
+    import zipfile
+
+    zip_path = artefact()
     installed: list[str] = []
     unchanged: list[str] = []
     failed: list[str] = []
     running: list[str] = []
+
     for name, launcher in installed_ides():
         before = installed_version(name)
         if is_running(name):
+            # Replacing a jar under a live IDE is how you get a half-loaded plugin; the platform
+            # reads them at start-up and holds them open.
             running.append(name)
-        try:
-            completed = subprocess.run(
-                [str(launcher), "installPlugins", PLUGIN_ID],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-        except (OSError, subprocess.SubprocessError):
             failed.append(name)
             continue
+
+        directory = plugins_directory(name)
+        if zip_path is not None and directory is not None:
+            try:
+                target = directory / "ide-bridge-jetbrains"
+                if target.exists():
+                    shutil.rmtree(target)
+                with zipfile.ZipFile(zip_path) as archive:
+                    archive.extractall(directory)
+            except (OSError, zipfile.BadZipFile):
+                failed.append(name)
+                continue
+        else:
+            try:
+                completed = subprocess.run(
+                    [str(launcher), "installPlugins", PLUGIN_ID],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+            except (OSError, subprocess.SubprocessError):
+                failed.append(name)
+                continue
+            if completed.returncode != 0:
+                failed.append(name)
+                continue
+
         after = installed_version(name)
-        if completed.returncode != 0:
-            failed.append(name)
-        elif after != before or (after is not None and before is None):
+        if after != before:
             installed.append(name)
         else:
-            # Exit code 0, nothing written. Measured against a running PyCharm.
             unchanged.append(name)
+
     return InstallOutcome(tuple(installed), tuple(unchanged), tuple(failed), tuple(running))

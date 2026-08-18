@@ -74,7 +74,13 @@ class TestItAlwaysSaysHowToCheck:
 
 
 class TestOk:
-    def test_ok_requires_something_installed_and_nothing_failed(self) -> None:
+    def test_ok_requires_something_installed(self) -> None:
         assert outcome(installed=("PyCharm",)).ok
         assert not outcome(unchanged=("GoLand",)).ok
+
+    def test_a_running_ide_does_not_make_a_success_a_failure(self) -> None:
+        """Measured: two IDEs updated, and the toast said "Not installed" because a third was open."""
+        assert outcome(installed=("GoLand", "PyCharm"), failed=("PhpStorm",), running=("PhpStorm",)).ok
+
+    def test_an_unexplained_failure_still_counts(self) -> None:
         assert not outcome(installed=("PyCharm",), failed=("PhpStorm",)).ok

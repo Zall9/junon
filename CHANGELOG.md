@@ -17,6 +17,11 @@ tells the agent — and through it, you.
 
 ## 0.2.2
 
+- **The install button installs.** It delegated to the IDE's `installPlugins`, which installs a plugin
+  that is absent and refuses to replace one that is present — _"already installed"_, exit code 0,
+  nothing written. Every press after the first was a no-op. It now unpacks the artefact, which is what
+  the script does and what was measured working; the launcher stays for an IDE with no plugin at all.
+
 - **The daemon can now be named as the stale half.** Every comparison measured peers _against_ the
   daemon, which made it correct by construction: a 0.2.1 daemon serving 0.2.1 plugins reported
   agreement while the rest of the installation had moved on. Both surfaces gained the reference they
