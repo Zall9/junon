@@ -232,6 +232,43 @@ Call `ide_status` through your agent. It reports whether an IDE is connected and
 That is the only check that exercises the whole chain — consumer, daemon, adapter, IDE — and it is
 the one to run before concluding that anything else is broken.
 
+## 7. Make the agent actually use it
+
+Installing the tools is not the same as them being used, and the difference is measurable. On this
+machine, one search agent over 332 sessions:
+
+```
+12 332 tool calls   6 609 read · 1 648 grep · 864 glob · 1 731 serena
+```
+
+Its prompt had said *"Do NOT use read/glob/grep when Serena can do the job"* the whole time. An
+instruction ignored six thousand times is not an instruction — it is a preference at the end of a
+thirty-kilobyte prompt, competing with a tool that is right there and easier.
+
+**So take the tool away.** In opencode, per agent:
+
+```json
+{ "agent": { "explorer": { "tools": { "read": false, "grep": false, "glob": false } } } }
+```
+
+Leave `bash`: an explorer without a shell is useless, and one honest escape hatch beats a prohibition
+that forces creativity. Say in the prompt that `cat`, `head`, `rg` and `find` through bash are the
+same mistake, so the rule covers the hole it leaves.
+
+Claude Code has no per-agent tool switch of that kind, so there the lever is instructions only —
+which is why they belong in the **global** file (`~/.claude/CLAUDE.md`, composed by import) rather
+than in one project's.
+
+**Order the tools in the prompt, not just permit them.** The same measurement showed that when that
+agent did reach for Serena, its most-used call was `serena_read_file` — reading whole files through a
+symbol-aware server. Reading is the last resort, not the first: `ide_symbols_overview` to see a
+file's shape, `ide_find_symbol` to locate, `ide_read_symbol` for one declaration, and only then a
+whole document.
+
+**Check it the same way**: opencode records every tool call in `~/.local/share/opencode/opencode.db`,
+so the ratio is a query rather than an impression. A configuration change that cannot be measured
+afterwards is a hope.
+
 ## 7. Redeploy after you change the source
 
 Editing a file changes nothing that is running, and neither half of this tells you so. Do the half

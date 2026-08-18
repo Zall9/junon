@@ -46,7 +46,7 @@ list that reads like a clean bill of health.
 | **JetBrains adapter** | All 16. Run in IntelliJ, PhpStorm, GoLand and PyCharm — run, not merely measured compatible |
 | **VS Code adapter** | 13 of 16. The three others are refusals with named reasons: no scoped undo, no TODO index, no bookmarks |
 | **Serena integration** | JUNON — ten `ide_*` tools composed onto an unmodified Serena, including the IDE's own rename |
-| **Tests** | 474 TypeScript — 54 of them the conformance suite, not a separate total — plus 287 Kotlin, 166 Python, and 9 VS Code host scenarios that drive a real editor |
+| **Tests** | 474 TypeScript — 54 of them the conformance suite, not a separate total — plus 287 Kotlin, 173 Python, and 9 VS Code host scenarios that drive a real editor |
 
 [docs/STATUS.md](docs/STATUS.md) is the authority on what is verified, what is refused, what is
 deferred, and — in its own section — the limits of the verification itself.
@@ -148,6 +148,11 @@ ending in a check to observe before moving on. It also names the failures that a
 a daemon left over from an earlier session that passes every check, an IDE reading a different
 discovery file, a host configured for `serena` rather than `junon` — with the command that tells them
 apart, and the rules the agent is not free to relax.
+
+It ends with the step that is easy to skip: **making the agent use any of it.** Measured on one
+search agent over 332 sessions — 12 332 tool calls, 6 609 of them `read` — while its prompt said not
+to. Instructions lose to the tool that is closer, so the fix is to remove the tool rather than repeat
+the sentence.
 
 ### Connecting Serena
 
