@@ -15,6 +15,22 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.2.2
+
+**The update surface people actually see.** 0.2.1 could be announced; this is the release that says so
+where you are looking.
+
+- The JUNON dashboard raises a **toast** when the halves are out of step, with an **Install now**
+  button. The button is guarded — a token minted per process and sent in a header, an `Origin` check,
+  no parameters, and the IDE's own `installPlugins` rather than a shell string — because a page on
+  127.0.0.1 that executes is a door.
+- It reports what actually changed, not what exited zero: `installPlugins` returns 0 against a running
+  IDE and writes nothing, so the plugin version is read off disk before and after. Running IDEs are
+  named as such rather than called failures.
+- Every answer ends with how to check it took, because an installed plugin is not a loaded one.
+- The agent-facing instructions changed shape: an opening move rather than a prohibition, a fallback
+  that must be justified in one line, and the reason stated in terms an agent can verify.
+
 ## 0.2.1
 
 **The first release an IDE can be told about.** Everything needed for an update notification existed

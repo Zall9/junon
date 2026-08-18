@@ -1,6 +1,6 @@
 {
   "name": "@ide-bridge/conformance",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "IDE Bridge Conformance Suite \u2014 IDE-independent test suite for IDEBP adapter validation",
   "license": "Apache-2.0",

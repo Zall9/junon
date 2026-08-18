@@ -1,6 +1,6 @@
 {
   "name": "@ide-bridge/protocol",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "IDE Bridge Protocol \u2014 JSON Schema 2020-12 wire contracts and TypeScript types",
   "license": "Apache-2.0",
