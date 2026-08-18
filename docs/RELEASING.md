@@ -68,9 +68,12 @@ minutes for the view.
 
 Two routes, and they fail in opposite places.
 
-- **`installPlugins` writes the jar** without opening the IDE — but it refuses a **running** one, and
-  its exit code does not say so. That is why the dashboard's install button reads the version off disk
-  before and after, and reports a live IDE as such rather than as a failure.
+- **`installPlugins` installs a plugin that is absent, and cannot replace one that is present.**
+  Measured on a closed IDE: *"already installed"*, exit code 0, nothing written — and passing the zip
+  URL instead of the plugin id is read as *another repository*, not as something to install. It is the
+  right tool for an IDE that has no plugin at all, and useless for an update. Unpack the artefact
+  instead, which is what `scripts/install-jetbrains-plugin.sh` and the dashboard's button do. Neither
+  can write into a **running** IDE.
 - **The IDE's own updater**, from the plugin repository configured in step 2, is the route that works
   while it is open. And the Plugin Verifier reports, against all four IDEs, *"Plugin can probably be
   enabled or disabled without IDE restart"* — the descriptor declares a dynamic extension point, a

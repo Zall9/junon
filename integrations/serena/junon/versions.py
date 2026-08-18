@@ -16,15 +16,18 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-#: What to run when a plugin is behind. Named once, because a remedy that differs between surfaces
-#: is a remedy a reader has to choose between.
-#: No angle brackets. This string is rendered into an HTML page, and a browser parsed `<IDE>` as a
-#: tag and dropped it — leaving `.app/Contents/MacOS/ installPlugins`, which is not a command.
+#: What to do when a plugin is behind. Named once, because a remedy that differs between surfaces is
+#: a remedy a reader has to choose between.
+#:
+#: No `installPlugins` here: it installs a plugin that is **absent** and refuses to replace one that
+#: is present — measured, exit code 0 and nothing written — so naming it sent people to a command that
+#: does nothing. No angle brackets either: this string is rendered into an HTML page, and a browser
+#: parsed `<IDE>` as a tag and dropped it.
 REMEDY = (
-    "Install the current plugin in each IDE named above, then restart it. From a shell, per IDE: "
-    "GoLand.app/Contents/MacOS/goland installPlugins com.idebridge.jetbrains  "
-    "(inside a checkout of this repository, scripts/install-jetbrains-plugin.sh does every IDE at "
-    "once)"
+    "Install the current plugin in each IDE named above, then restart it. Quit the IDE first — a "
+    "running one cannot be written to. Either press Install now on this dashboard, or run "
+    "scripts/install-jetbrains-plugin.sh from a checkout of this repository, which does every IDE at "
+    "once."
 )
 
 _RELEASE = re.compile(r"(\d+)\.(\d+)\.(\d+)")

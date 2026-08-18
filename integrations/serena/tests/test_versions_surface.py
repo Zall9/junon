@@ -136,7 +136,9 @@ class TestTheDaemonCanBeTheStaleOne:
         skew = compare("0.2.1", [adapter("0.2.0")], consumer_version="0.2.2")
 
         assert skew.daemon_is_stale and skew.older
-        assert skew.remedy.index("pnpm -r build") < skew.remedy.index("installPlugins")
+        assert skew.remedy.index("pnpm -r build") < skew.remedy.index(
+            "install-jetbrains-plugin.sh"
+        )
 
     def test_without_a_consumer_version_it_says_nothing_about_the_daemon(self) -> None:
         """A caller that does not know its own version must not produce a verdict about anyone."""

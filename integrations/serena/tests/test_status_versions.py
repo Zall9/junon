@@ -69,7 +69,9 @@ def test_an_older_plugin_is_named_with_what_to_run(
 
     assert "GO-261.23567.143@0.2.0" in lines
     assert "install-jetbrains-plugin.sh" in lines
-    assert "installPlugins com.idebridge.jetbrains" in lines
+    # `installPlugins` cannot replace an existing plugin, so naming it would send a reader to a
+    # command that exits zero and does nothing.
+    assert "installPlugins" not in lines
     # The agent must pass it on rather than quietly compensating.
     assert "Say this to the user" in lines
 

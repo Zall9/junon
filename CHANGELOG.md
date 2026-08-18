@@ -15,6 +15,15 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.2.3
+
+**The instruction people read.** The remedy told a human to run `installPlugins`, a command measured
+the same day to be incapable of replacing an existing plugin — so it named a path only someone in the
+checkout could use, to run something that exits zero and does nothing. It now says what to do: quit
+the IDE, then press the button or run the one script that does every IDE at once.
+
+- A running IDE no longer turns a partial success into "Not installed": it is a reason, not a failure.
+
 ## 0.2.2
 
 - **The install button installs.** It delegated to the IDE's `installPlugins`, which installs a plugin
