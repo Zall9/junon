@@ -2,9 +2,9 @@
   "name": "vscode-extension",
   "displayName": "IDE Bridge",
   "publisher": "ide-bridge",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "IDE Bridge VS Code Extension — adapter for the IDE Bridge Protocol",
+  "description": "IDE Bridge VS Code Extension \u2014 adapter for the IDE Bridge Protocol",
   "license": "Apache-2.0",
   "type": "commonjs",
   "categories": [

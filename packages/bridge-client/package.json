@@ -1,8 +1,8 @@
 {
   "name": "@ide-bridge/bridge-client",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "IDE Bridge Client — shared TypeScript client for daemon discovery, auth, and typed JSON-RPC calls",
+  "description": "IDE Bridge Client \u2014 shared TypeScript client for daemon discovery, auth, and typed JSON-RPC calls",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {

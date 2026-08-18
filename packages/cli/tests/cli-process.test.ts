@@ -159,8 +159,19 @@ describe("ide-bridge CLI process integration", () => {
     });
     const doctor = await runCommand(["doctor", "--discovery-file", discoveryFile]);
     expect(doctor.code).toBe(1);
-    const report = JSON.parse(doctor.stdout) as { checks: unknown[] };
-    expect(report.checks).toHaveLength(7);
+    const report = JSON.parse(doctor.stdout) as { checks: { name: string }[] };
+    // Every check reports, including the ones that could not run: a report whose shape changes with
+    // the failure makes a reader guess whether a check exists at all.
+    expect(report.checks.map(({ name }) => name)).toEqual([
+      "discovery-file",
+      "permissions",
+      "daemon-process",
+      "port",
+      "protocol",
+      "adapters",
+      "versions",
+      "sessions-expired",
+    ]);
     expect(doctor.stdout).not.toContain(discoveryFile);
     expect(doctor.stderr).toBe("");
     const status = await runCommand(["status", "--discovery-file", discoveryFile]);

@@ -25,7 +25,8 @@ export interface DoctorCheck {
     | "port"
     | "protocol"
     | "adapters"
-    | "sessions-expired";
+    | "sessions-expired"
+    | "versions";
   status: DoctorCheckStatus;
   detail: string;
 }
@@ -113,6 +114,79 @@ async function adapterCheck(connection: AuthenticatedBridgeConnection): Promise<
   }
 }
 
+/**
+ * Whether the halves of this installation are the same release.
+ *
+ * Nothing else can answer it. An IDE updates its plugin without knowing a daemon exists; `pipx`
+ * updates JUNON without knowing either. The daemon is the only process that sees every peer, and it
+ * already receives each adapter's declared version at registration — this compares them to its own
+ * and says which one is behind, because "there is a mismatch" leaves a reader with two suspects.
+ *
+ * A mismatch warns rather than fails: a peer one release behind usually works, and the protocol
+ * handshake already refuses the case where it genuinely cannot. What it must not do is stay quiet,
+ * which is what it did until now.
+ */
+async function versionCheck(connection: AuthenticatedBridgeConnection): Promise<DoctorCheck> {
+  try {
+    const [{ adapters }, status] = await Promise.all([
+      connection.request("bridge/listAdapters", {}, { timeoutMs: CLI_REQUEST_TIMEOUT_MS }),
+      connection.request("bridge/getStatus", {}, { timeoutMs: CLI_REQUEST_TIMEOUT_MS }),
+    ]);
+    if (adapters.length === 0) {
+      return { name: "versions", status: "skip", detail: "no-adapter-registered" };
+    }
+    const behind = adapters.filter(
+      ({ version }) => compareReleases(version, status.daemonVersion) < 0,
+    );
+    const ahead = adapters.filter(
+      ({ version }) => compareReleases(version, status.daemonVersion) > 0,
+    );
+    if (behind.length > 0) {
+      // Named, not counted: the reader has to know which IDE to reinstall in, and an install is
+      // per IDE.
+      const named = behind.map(({ ideVersion, version }) => `${ideVersion}@${version}`).join(", ");
+      return {
+        name: "versions",
+        status: "warn",
+        detail: `adapter-older-than-daemon-${status.daemonVersion}: ${named}`,
+      };
+    }
+    if (ahead.length > 0) {
+      const named = ahead.map(({ ideVersion, version }) => `${ideVersion}@${version}`).join(", ");
+      return {
+        name: "versions",
+        status: "warn",
+        detail: `daemon-${status.daemonVersion}-older-than-adapter: ${named}`,
+      };
+    }
+    return { name: "versions", status: "pass", detail: `all-at-${status.daemonVersion}` };
+  } catch {
+    return { name: "versions", status: "fail", detail: "state-query-failed" };
+  }
+}
+
+/**
+ * Orders two release numbers, and refuses to guess about anything else.
+ *
+ * Returns 0 for a pair it cannot order, so an unparseable version reads as "no opinion" rather than
+ * as "older" — telling someone to reinstall because their version string had a suffix would be a
+ * worse answer than saying nothing.
+ */
+export function compareReleases(left: string, right: string): number {
+  const parse = (value: string): { major: number; minor: number; patch: number } | undefined => {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value.trim());
+    if (match === null) return undefined;
+    return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+  };
+  const a = parse(left);
+  const b = parse(right);
+  if (a === undefined || b === undefined) return 0;
+  if (a.major !== b.major) return a.major < b.major ? -1 : 1;
+  if (a.minor !== b.minor) return a.minor < b.minor ? -1 : 1;
+  if (a.patch !== b.patch) return a.patch < b.patch ? -1 : 1;
+  return 0;
+}
+
 async function sessionExpirationCheck(
   connection: AuthenticatedBridgeConnection,
   now: Date,
@@ -155,7 +229,7 @@ export async function runDoctor(
   checks.push(await permissionCheck(discoveryFile));
   if (discovery === undefined) {
     checks.push(skipped("daemon-process"), skipped("port"), skipped("protocol"));
-    checks.push(skipped("adapters"), skipped("sessions-expired"));
+    checks.push(skipped("adapters"), skipped("versions"), skipped("sessions-expired"));
     return { ok: false, checks };
   }
 
@@ -173,7 +247,8 @@ export async function runDoctor(
     checks.push({ name: "port", status: "pass", detail: "authenticated-loopback-reachable" });
   } catch {
     checks.push({ name: "port", status: "fail", detail: "unreachable-or-rejected" });
-    checks.push(skipped("protocol"), skipped("adapters"), skipped("sessions-expired"));
+    checks.push(skipped("protocol"), skipped("adapters"), skipped("versions"));
+    checks.push(skipped("sessions-expired"));
     return { ok: false, checks, daemon };
   }
 
@@ -197,6 +272,7 @@ export async function runDoctor(
       checks.push({ name: "protocol", status: "fail", detail: "status-query-failed" });
     }
     checks.push(await adapterCheck(connection));
+    checks.push(await versionCheck(connection));
     checks.push(await sessionExpirationCheck(connection, options.now?.() ?? new Date()));
   } finally {
     await connection.close().catch(() => undefined);

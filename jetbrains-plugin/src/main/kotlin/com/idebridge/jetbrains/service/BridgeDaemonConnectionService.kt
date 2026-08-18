@@ -780,7 +780,9 @@ class BridgeDaemonConnectionService(
 
     companion object {
         private const val PLUGIN_NAME = "ide-bridge-jetbrains"
-        private const val PLUGIN_VERSION = "0.1.0"
+        // Internal rather than private: a test asserts it equals the repository's VERSION file, and a
+        // number the plugin announces to the daemon is exactly the kind that drifts unobserved.
+        internal const val PLUGIN_VERSION = "0.2.0"
 
         /**
          * How long a read action may take before the IDE counts as not answering.

@@ -241,6 +241,7 @@ module it imported at start-up.
 | A source change has no effect anywhere | Nothing was redeployed. Step 7 — the plugin is a built jar, and the editable install may point at a different checkout |
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |
 | A file changed on disk is not visible to reads | Up to ~15 s: an unfocused IDE only refreshes when asked, and the adapter asks on a timer |
+| Answers look right but behave oddly | The halves may be different releases. `doctor` names the `versions` check; see [RELEASING.md](RELEASING.md) |
 
 ## Rules that are not yours to relax
 

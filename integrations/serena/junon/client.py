@@ -16,6 +16,23 @@ that reports them as an unexplained error teaches its user to distrust the tool.
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version as _distribution_version
+
+
+def _junon_version() -> str:
+    """What this build calls itself, from the installed distribution.
+
+    Falls back rather than raising: an editable checkout run without installation still has to be
+    able to speak, and a handshake is the wrong place to discover a packaging problem.
+    """
+    try:
+        return _distribution_version("ide_bridge")
+    except PackageNotFoundError:
+        return "0.0.0+unpackaged"
+
+
+JUNON_VERSION = _junon_version()
+
 import json
 import stat
 from collections.abc import Callable, Iterator
@@ -183,7 +200,7 @@ class IdeBridgeClient:
                     "environmentKind": "local",
                     "uriSchemes": ["file"],
                 },
-                "clientInfo": {"name": "junon", "version": "0.1.0"},
+                "clientInfo": {"name": "junon", "version": JUNON_VERSION},
             },
         }
 

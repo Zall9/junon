@@ -8,7 +8,10 @@ plugins {
 }
 
 group = "com.idebridge"
-version = "0.1.0-SNAPSHOT"
+// One declaration, from gradle.properties, because this is the one that names the built zip — and a
+// custom plugin repository points at that file by name. Two versions here meant the artefact was
+// called something no other part of the product had ever heard of.
+version = providers.gradleProperty("pluginVersion").get()
 
 repositories {
     mavenCentral()

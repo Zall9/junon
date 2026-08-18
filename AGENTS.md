@@ -192,15 +192,15 @@ They are served by the MCP named **`serena`**, which is started as `junon start-
 `serena` publishes none of them. `ide_status` says whether an IDE is connected and what it has open;
 call it first, because every other `ide_*` tool refuses without one.
 
-| Instead of | Use |
-| --- | --- |
-| `read` a file | `ide_read_document` — the file **as the editor holds it**, unsaved edits included |
-| `read` then hunt for a declaration | `ide_read_symbol` — one declaration, cut to the IDE's own range |
-| `grep` for a definition | `ide_find_symbol` — the IDE's symbol index, narrowed by kind |
-| `read` to see a file's shape | `ide_symbols_overview` |
-| `grep` for callers | `ide_hierarchy` — callers, callees, supertypes, subtypes |
-| Guessing whether a change holds | `ide_diagnostics` — real inspections, with the fixes offered |
-| `grep -r TODO` | `ide_todos` — as the IDE recognises them, not as a search guesses |
+| Instead of                         | Use                                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `read` a file                      | `ide_read_document` — the file **as the editor holds it**, unsaved edits included |
+| `read` then hunt for a declaration | `ide_read_symbol` — one declaration, cut to the IDE's own range                   |
+| `grep` for a definition            | `ide_find_symbol` — the IDE's symbol index, narrowed by kind                      |
+| `read` to see a file's shape       | `ide_symbols_overview`                                                            |
+| `grep` for callers                 | `ide_hierarchy` — callers, callees, supertypes, subtypes                          |
+| Guessing whether a change holds    | `ide_diagnostics` — real inspections, with the fixes offered                      |
+| `grep -r TODO`                     | `ide_todos` — as the IDE recognises them, not as a search guesses                 |
 
 `ide_apply_fix` applies a fix `ide_diagnostics` offered; `confirm` separates looking from doing. It
 is **not** a general editor — writing code remains `edit`/`write`. Ask the IDE what is true, edit
