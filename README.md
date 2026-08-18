@@ -14,7 +14,7 @@ is this symbol used, what does the analyser say about this file, rename it acros
 semantic answer comes from the IDE's own engines, over an authenticated loopback WebSocket. Nothing
 leaves the machine, and nothing is guessed from the text.
 
-**JUNON** is the ready-made consumer: nine `ide_*` tools composed onto an unmodified
+**JUNON** is the ready-made consumer: ten `ide_*` tools composed onto an unmodified
 [Serena](https://github.com/oraios/serena), so any MCP-capable agent — Claude Code, opencode,
 Cursor — gets them without writing a client. Building your own instead means speaking IDEBP to the
 daemon; the protocol is the contract, not JUNON.
@@ -45,7 +45,7 @@ list that reads like a clean bill of health.
 | **Protocol** | 27 application methods, 16 routed to an IDE. JSON Schema 2020-12 is the contract; TypeScript is generated from it, never the reverse |
 | **JetBrains adapter** | All 16. Run in IntelliJ, PhpStorm, GoLand and PyCharm — run, not merely measured compatible |
 | **VS Code adapter** | 13 of 16. The three others are refusals with named reasons: no scoped undo, no TODO index, no bookmarks |
-| **Serena integration** | JUNON — nine `ide_*` tools composed onto an unmodified Serena |
+| **Serena integration** | JUNON — ten `ide_*` tools composed onto an unmodified Serena, including the IDE's own rename |
 | **Tests** | 469 TypeScript — 54 of them the conformance suite, not a separate total — plus 284 Kotlin, 155 Python, and 9 VS Code host scenarios that drive a real editor |
 
 [docs/STATUS.md](docs/STATUS.md) is the authority on what is verified, what is refused, what is

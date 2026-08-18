@@ -1,7 +1,7 @@
 # Using the `ide_*` tools
 
 The MCP you are connected through is **JUNON** — `junon start-mcp-server`, not plain `serena`. It
-registers nine `ide_*` tools alongside Serena's own, and they answer from the **running IDE** instead
+registers ten `ide_*` tools alongside Serena's own, and they answer from the **running IDE** instead
 of from disk. Plain `serena` publishes none of them; if you cannot see them, the host was configured
 for the wrong command.
 

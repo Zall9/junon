@@ -197,6 +197,9 @@ than left to be discovered.
 
 ## Edit operations
 
+**Reachable from Serena since `ide_refactor`.** Until it existed, JUNON's only editing tool hard-coded `quickFix`, so `rename`, `reformat` and `optimizeImports` were served by both adapters, exercised in the demo and reachable by nobody — the one refactoring an IDE does better than anything else was missing from the integration built to expose it. The tool prepares and applies inside a single session, because a plan carries the id of the session that made it, and refuses to resolve an ambiguous name rather than renaming the first match. Both guarantees are held by mutation. It has **not** yet been run against a live IDE: no adapter is connected while the two IDEs wait for a restart.
+
+
 The plan vocabulary is `rename`, `reformat`, `optimizeImports`, `extractMethod`, `inline`, `move`,
 `changeSignature`, `quickFix` — all through the same two-phase machinery.
 

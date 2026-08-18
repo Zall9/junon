@@ -43,7 +43,7 @@ cannot share one generator — and are held to the contract by fixtures both sta
   announces `ready`. `degraded` is the first any adapter here has emitted.
 - **Notifications**: the JetBrains adapter sends the §12 vocabulary — workspace readiness, and
   `document/opened|changed|saved|closed|renamed|deleted` plus `diagnostics/changed`.
-- **JUNON**: nine `ide_*` tools composed onto Serena at run time, without editing it.
+- **JUNON**: ten `ide_*` tools composed onto Serena at run time, without editing it — including `ide_refactor`, the IDE's own rename.
 - **Conformance**: invariants judged against captures both adapters record from their own runs.
 
 ### Partial

@@ -63,8 +63,9 @@ working perfectly and the customisation absent:
 junon tools list | grep '^ \* `ide_'
 ```
 
-Nine tools should be listed — `ide_status`, `ide_diagnostics`, `ide_find_symbol`, `ide_read_symbol`,
-`ide_read_document`, `ide_symbols_overview`, `ide_hierarchy`, `ide_apply_fix`, `ide_todos`. Measured
+Ten tools should be listed — `ide_status`, `ide_diagnostics`, `ide_find_symbol`, `ide_read_symbol`,
+`ide_read_document`, `ide_symbols_overview`, `ide_hierarchy`, `ide_refactor`, `ide_apply_fix`,
+`ide_todos`. Measured
 on Serena 1.5.3 with all four seams present and `Composition(tools_package_added=True,
 dashboard_rebound=True)`. In the same environment, plain `serena` reports **zero** `ide_*` tools and
 keeps `SerenaDashboardAPI` — the separation is real, not a claim.

@@ -73,6 +73,25 @@ class IdeBridgeTool(Tool, ABC):
             "Open this project in your IDE, or activate the project the IDE has open.",
         )
 
+    def _resolve_workspace(self, call: Any) -> str:
+        """The workspace lookup, on a caller-supplied session rather than its own connection."""
+        workspaces = call("workspace/list", {}).get("workspaces", [])
+        if not workspaces:
+            raise RequestFailedError(
+                "WORKSPACE_NOT_FOUND", "An IDE is connected but has no workspace open."
+            )
+        project = Path(self.get_project_root()).resolve()
+        for workspace in workspaces:
+            for root in workspace.get("roots", []):
+                uri = root.get("uri", "")
+                if uri.startswith("file://") and _same_tree(Path(uri[len("file://") :]), project):
+                    return str(workspace["workspaceId"])
+        opened = ", ".join(str(w.get("name", "?")) for w in workspaces)
+        raise RequestFailedError(
+            "WORKSPACE_NOT_FOUND",
+            f"No open workspace covers {project}. The IDE has these open: {opened}.",
+        )
+
     def _explain(self, error: IdeBridgeError) -> str:
         """Turns a typed failure into something an agent can act on.
 
@@ -815,24 +834,224 @@ class IdeApplyFixTool(IdeBridgeTool, ToolMarkerCanEdit):
             )
         return self._limit_length(json.dumps(answer), max_answer_chars)
 
-    def _resolve_workspace(self, call: Any) -> str:
-        """The workspace lookup, on a caller-supplied session rather than its own connection."""
-        workspaces = call("workspace/list", {}).get("workspaces", [])
-        if not workspaces:
-            raise RequestFailedError(
-                "WORKSPACE_NOT_FOUND", "An IDE is connected but has no workspace open."
+
+class IdeRefactorTool(IdeBridgeTool, ToolMarkerCanEdit):
+    """A refactoring the IDE performs itself — or, by default, only says what it would do.
+
+    The IDE's rename is not a search and replace: it follows the references its own engine resolved,
+    across files, and refuses when it cannot. That is the operation this integration exists to
+    expose, and until now it did not — `ide_apply_fix` hard-codes `quickFix`, so `rename`,
+    `reformat` and `optimizeImports` were served by both adapters, exercised in the demo, and
+    reachable by nobody.
+
+    Prepare and apply live in one call for the same reason they do in `ide_apply_fix`: a plan
+    carries the id of the session that made it, this client opens a connection per call, and a plan
+    prepared on one connection is refused `PLAN_NOT_FOUND` on the next. `confirm` is what separates
+    looking from doing.
+
+    The structural refactorings — `extractMethod`, `inline`, `move`, `changeSignature` — are not
+    offered, because the adapters refuse them by name: the platform's only language-neutral route to
+    them is a dialog-driven handler that cannot run behind a socket (ADR-0028). Listing them here
+    would invite an agent to spend a turn discovering that.
+    """
+
+    #: What the adapters actually perform. `quickFix` is deliberately absent: it needs a fix id from
+    #: `ide_diagnostics`, and it has its own tool.
+    OPERATIONS = ("rename", "reformat", "optimizeImports")
+
+    #: Refused by name by both adapters. Named so the answer can say why rather than pass it on.
+    STRUCTURAL = ("extractMethod", "inline", "move", "changeSignature")
+
+    def _advice(self, error: RequestFailedError) -> str:
+        """The refusals that mean "this plan no longer describes the code"."""
+        if error.code == "STALE_DOCUMENT":
+            revision = error.details.get("currentRevision")
+            named = ""
+            if isinstance(revision, dict) and revision.get("contentHash"):
+                named = f" The document is now at {revision['contentHash']}."
+            return (
+                " Often this is an edit made earlier in this same session. Nothing was written."
+                f"{named} Read the file again and ask for the refactoring again."
             )
-        project = Path(self.get_project_root()).resolve()
-        for workspace in workspaces:
-            for root in workspace.get("roots", []):
-                uri = root.get("uri", "")
-                if uri.startswith("file://") and _same_tree(Path(uri[len("file://") :]), project):
-                    return str(workspace["workspaceId"])
-        opened = ", ".join(str(w.get("name", "?")) for w in workspaces)
-        raise RequestFailedError(
-            "WORKSPACE_NOT_FOUND",
-            f"No open workspace covers {project}. The IDE has these open: {opened}.",
-        )
+        if error.code == "PRECONDITION_FAILED":
+            return (
+                " The code changed between preparing the refactoring and applying it, so the IDE "
+                "refused rather than write edits computed for text that has moved. Nothing was "
+                "written."
+            )
+        if error.code == "PLAN_NOT_FOUND":
+            return (
+                " The plan is gone rather than stale — expired, already applied, or never known. "
+                "Nothing was written. Ask again; a plan belongs to the session that prepared it."
+            )
+        if error.code == "CAPABILITY_UNAVAILABLE":
+            return (
+                " This IDE does not offer that refactoring on this element. The refusal is the "
+                "answer: do not fall back to editing the text by hand and call it the same thing."
+            )
+        return ""
+
+    def apply(
+        self,
+        operation: str,
+        name: str = "",
+        new_name: str = "",
+        relative_path: str = "",
+        confirm: bool = False,
+        include_comments: bool = False,
+        include_strings: bool = False,
+        max_answer_chars: int = -1,
+    ) -> str:
+        """
+        Have the IDE perform a refactoring. **With confirm=True this modifies files on disk.**
+
+        Leave `confirm` false to see every file that would change and how many edits each would
+        take, without writing anything.
+
+        :param operation: "rename" (needs `name` and `new_name`), or "reformat" /
+            "optimizeImports" (need `relative_path`).
+        :param name: for a rename, the symbol's current name. It must match exactly one symbol; if
+            it matches several you will be told which, so you can be more specific.
+        :param new_name: for a rename, the name to give it.
+        :param relative_path: for a document-scoped operation, the file, relative to the project
+            root.
+        :param confirm: false reports the plan and discards it; true applies it.
+        :param include_comments: rename occurrences in comments too. Off by default: a rename that
+            edits prose is harder to review than one that does not.
+        :param include_strings: rename occurrences in string literals too. Off by default, and for
+            a stronger reason — a string may be a protocol constant, a database column, or a key
+            some other system reads.
+        :param max_answer_chars: if the answer is longer than this, it is not returned.
+            -1 uses the configured default.
+        :return: a JSON object describing what would change, or what did.
+        """
+        if operation in self.STRUCTURAL:
+            return (
+                f"'{operation}' is refused by both adapters, not missing: the platform's only "
+                "language-neutral route to it is a dialog-driven handler, which cannot run behind "
+                f"a socket (ADR-0028). Available here: {', '.join(self.OPERATIONS)}."
+            )
+        if operation not in self.OPERATIONS:
+            return (
+                f"Not an operation: {operation}. Available: {', '.join(self.OPERATIONS)}. "
+                "For a quick fix, use ide_apply_fix, which takes a fixId from ide_diagnostics."
+            )
+        if operation == "rename" and not (name and new_name):
+            return "A rename needs both 'name' (the symbol now) and 'new_name' (what to call it)."
+        if operation != "rename" and not relative_path:
+            return f"'{operation}' applies to a document: pass relative_path."
+
+        try:
+            client = self._client()
+            # One session, start to finish: the plan below carries this session's id, and applying
+            # it on another connection is refused PLAN_NOT_FOUND.
+            with client.session() as call:
+                workspace_id = self._resolve_workspace(call)
+
+                if operation == "rename":
+                    target = self._one_symbol(call, workspace_id, name)
+                    if isinstance(target, str):
+                        return target
+                    plan = call(
+                        "refactor/prepareRename",
+                        {
+                            "workspaceId": workspace_id,
+                            "symbol": {
+                                "handle": target["handle"],
+                                "locator": target["locator"],
+                            },
+                            "newName": new_name,
+                            "options": {
+                                "includeComments": include_comments,
+                                "includeStrings": include_strings,
+                            },
+                        },
+                    ).get("plan", {})
+                else:
+                    plan = call(
+                        "refactor/prepare",
+                        {
+                            "workspaceId": workspace_id,
+                            "operation": operation,
+                            "uri": (Path(self.get_project_root()) / relative_path)
+                            .resolve()
+                            .as_uri(),
+                        },
+                    ).get("plan", {})
+
+                preview: dict[str, Any] = {
+                    "operation": plan.get("operation"),
+                    "guarantee": plan.get("guarantee"),
+                    "atomicity": plan.get("atomicity"),
+                    "changes": plan.get("changes", []),
+                    "warnings": plan.get("warnings", []),
+                    "preconditions": plan.get("preconditions", []),
+                }
+
+                if not confirm:
+                    preview["applied"] = False
+                    preview["note"] = (
+                        "Nothing was written. Call again with confirm=true to have the IDE apply "
+                        "this."
+                    )
+                    return self._limit_length(json.dumps(preview), max_answer_chars)
+
+                applied = call(
+                    "workspace/applyPlan",
+                    {
+                        "workspaceId": workspace_id,
+                        "planId": plan["planId"],
+                        "includePostApplyDiagnostics": True,
+                    },
+                )
+        except IdeBridgeError as error:
+            return self._explain(error)
+
+        modified = applied.get("modifiedDocuments", [])
+        answer: dict[str, Any] = {
+            "applied": True,
+            "modifiedDocuments": modified,
+            "planned": preview,
+            "summary": f"{len(modified)} document(s) changed by the IDE.",
+            "undo_note": (
+                "This cannot be undone through the bridge: an undo token belongs to the session "
+                "that made the edit, and that session ended with this call. Undo in the IDE, or "
+                "revert with version control."
+            ),
+        }
+        if applied.get("diagnostics"):
+            answer["diagnostics_after"] = applied["diagnostics"]
+            answer["diagnostics_note"] = (
+                "Problems the IDE reports after the change. A rename that introduces one is worth "
+                "seeing before moving on."
+            )
+        return self._limit_length(json.dumps(answer), max_answer_chars)
+
+    def _one_symbol(self, call: Any, workspace_id: str, name: str) -> Any:
+        """The single symbol that name refers to, or a sentence saying why there isn't one.
+
+        Renaming the first of several matches would rename something the caller did not ask about,
+        and the answer would look exactly like success.
+        """
+        found = call(
+            "workspace/searchSymbols",
+            {"workspaceId": workspace_id, "query": name, "limit": 20},
+        ).get("symbols", [])
+        exact = [s for s in found if s.get("locator", {}).get("name") == name] or found
+        if not exact:
+            return f"No symbol named '{name}' was found in the IDE's index."
+        if len(exact) > 1:
+            candidates = [
+                f"{s['locator'].get('name')} ({s['locator'].get('kind')}) in "
+                f"{s['locator'].get('documentUri', '').rsplit('/', 1)[-1]}"
+                for s in exact
+            ]
+            return (
+                f"'{name}' matches {len(exact)} symbols, so which one to rename is ambiguous: "
+                f"{'; '.join(candidates)}. Ask again with a more specific name."
+            )
+        return exact[0]
+
 
 
 def _count_unclassified(symbols: list[dict[str, Any]]) -> int:
