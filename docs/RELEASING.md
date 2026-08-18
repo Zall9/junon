@@ -53,6 +53,35 @@ keeps its version in its filename. The cost, stated rather than discovered later
 release stays in git history.** Installing `gh` and switching to real releases would remove that, and
 nothing else about the mechanism would change.
 
+### A release is not visible the moment it is pushed
+
+`raw.githubusercontent.com` answers `cache-control: max-age=300`, so an IDE that polls immediately
+after a push sees the previous release. Measured on 0.2.2: the XML still advertised 0.2.1 for **124
+seconds** after the tag was on the remote, and adding a query string does not bypass the cache — the
+CDN keys on the path.
+
+This matters when checking your own work: fetching the URL and seeing the old version is not a failed
+publish, and re-pushing will not help. Look at `git ls-remote` for the truth, and wait out the five
+minutes for the view.
+
+### Updating an IDE that is open
+
+Two routes, and they fail in opposite places.
+
+- **`installPlugins` writes the jar** without opening the IDE — but it refuses a **running** one, and
+  its exit code does not say so. That is why the dashboard's install button reads the version off disk
+  before and after, and reports a live IDE as such rather than as a failure.
+- **The IDE's own updater**, from the plugin repository configured in step 2, is the route that works
+  while it is open. And the Plugin Verifier reports, against all four IDEs, *"Plugin can probably be
+  enabled or disabled without IDE restart"* — the descriptor declares a dynamic extension point, a
+  tool window, listeners and a `postStartupActivity`, all of which the platform can load dynamically.
+
+So the answer to "must I restart every IDE" is: **not to install it** — a closed IDE takes the jar
+headlessly, and an open one can take it through its own updater. What a dynamic reload does *not*
+re-run is `postStartupActivity`, which is what links a project; if the tool window shows a project
+unlinked afterwards, reopen that project rather than the IDE. That last part is reasoning from the
+descriptor, not a measurement — it has not been watched happening.
+
 ### Configuring the IDEs without clicking
 
 ```bash

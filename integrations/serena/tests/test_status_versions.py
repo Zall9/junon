@@ -68,8 +68,9 @@ def test_a_newer_plugin_blames_the_daemon(tool: IdeStatusTool) -> None:
     ahead would send them the wrong way."""
     lines = "\n".join(tool._version_lines(FakeClient("0.2.0", [adapter("0.2.1")])))
 
-    assert "newer plugin(s)" in lines
-    assert "the daemon is the stale half" in lines
+    # The wording lives in junon.versions now; what matters is which side is named and what is asked.
+    assert "the daemon (0.2.0) is older than" in lines
+    assert "restart the daemon" in lines
     assert "install-jetbrains-plugin.sh" not in lines
 
 

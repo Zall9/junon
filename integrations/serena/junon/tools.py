@@ -215,24 +215,12 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
         behind = list(skew.older)
         ahead = list(skew.newer)
 
-        if not behind and not ahead:
-            return [f"  versions: daemon and every adapter at {daemon}"]
+        if skew.agrees:
+            return [f"  versions: {skew.summary}"]
 
-        lines = [f"  versions: daemon {daemon}"]
-        if behind:
-            lines.append(
-                f"    older plugin(s): {', '.join(behind)} — rebuild and reinstall, per IDE:"
-            )
-            lines.append("      scripts/install-jetbrains-plugin.sh")
-            lines.append(
-                "      or, for one IDE without leaving the shell: "
-                "<IDE>.app/Contents/MacOS/<ide> installPlugins com.idebridge.jetbrains"
-            )
-        if ahead:
-            lines.append(
-                f"    newer plugin(s): {', '.join(ahead)} — the daemon is the stale half here; "
-                "restart it from a current build."
-            )
+        # One sentence, from `junon.versions`, so the agent and the dashboard cannot disagree about
+        # what to do — they did, and the copy that lived here was the stale one.
+        lines = [f"  versions: {skew.summary}", f"    {skew.remedy}"]
         lines.append(
             "    Say this to the user rather than working around it: a plugin from another release "
             "may be missing capabilities this session expects."
