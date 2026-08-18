@@ -37,9 +37,46 @@ def _discovery_path() -> Path:
 PANEL_TIMEOUT_SECONDS = 3.0
 
 
+def _disk_versions(daemon_version: str | None) -> dict[str, Any] | None:
+    """A verdict from what the IDEs have installed, for when none of them is running.
+
+    The comparison the card usually makes needs a connected adapter, and a closed IDE has none — yet
+    a closed IDE is the only kind the installer can write to. Reading the jar is the same question
+    asked of the disk rather than of a live process, and the answer says so.
+    """
+    from junon.client import JUNON_VERSION
+    from junon.update_action import installed_ides, installed_version
+    from junon.versions import compare
+
+    reference = daemon_version or JUNON_VERSION
+    found = [
+        {"ideVersion": name, "version": version}
+        for name, _ in installed_ides()
+        if (version := installed_version(name)) is not None
+    ]
+    if not found:
+        return None
+    verdict = compare(reference, found, consumer_version=JUNON_VERSION).as_dict()
+    verdict["source"] = "disk"
+    if not verdict["agrees"]:
+        verdict["summary"] = verdict["summary"].replace("plugin(s)", "installed plugin(s)")
+    return verdict
+
+
 def _unavailable(status: Status, reason: str) -> dict[str, Any]:
-    """A state the panel can render, never an error it has to interpret."""
-    return {"status": status, "reason": reason, "adapter": None}
+    """The shape every failure answers with — carrying what is still knowable.
+
+    A page that loses the token and the version verdict whenever an IDE is closed is a page whose
+    install button stops working exactly when the install would succeed.
+    """
+    from junon.update_action import SESSION_TOKEN
+
+    return {
+        "status": status,
+        "reason": reason,
+        "installToken": SESSION_TOKEN,
+        "versions": _disk_versions(None),
+    }
 
 
 def read_status() -> dict[str, Any]:
@@ -106,6 +143,10 @@ def read_status() -> dict[str, Any]:
             "status": "no-adapter",
             "reason": f"The daemon is running but did not answer: {error}",
             "adapter": None,
+            # Both of these mean every IDE is closed — which is the state the install
+            # button can act in, so the page must still get its token and a verdict.
+            "installToken": _install_token(),
+            "versions": _disk_versions(base.get("daemonVersion")),
         }
 
     if not workspaces:
@@ -114,6 +155,10 @@ def read_status() -> dict[str, Any]:
             "status": "no-adapter",
             "reason": "The daemon is running; no IDE has a workspace open.",
             "adapter": None,
+            # Both of these mean every IDE is closed — which is the state the install
+            # button can act in, so the page must still get its token and a verdict.
+            "installToken": _install_token(),
+            "versions": _disk_versions(base.get("daemonVersion")),
         }
 
     # The panel used to show only an adapter id, which tells a reader nothing they can act on. The
