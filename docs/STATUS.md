@@ -197,7 +197,20 @@ than left to be discovered.
 
 ## Edit operations
 
-**Reachable from Serena since `ide_refactor`.** Until it existed, JUNON's only editing tool hard-coded `quickFix`, so `rename`, `reformat` and `optimizeImports` were served by both adapters, exercised in the demo and reachable by nobody — the one refactoring an IDE does better than anything else was missing from the integration built to expose it. The tool prepares and applies inside a single session, because a plan carries the id of the session that made it, and refuses to resolve an ambiguous name rather than renaming the first match. Both guarantees are held by mutation. It has **not** yet been run against a live IDE: no adapter is connected while the two IDEs wait for a restart.
+**Reachable from Serena since `ide_refactor`.** Until it existed, JUNON's only editing tool hard-coded `quickFix`, so `rename`, `reformat` and `optimizeImports` were served by both adapters, exercised in the demo and reachable by nobody — the one refactoring an IDE does better than anything else was missing from the integration built to expose it. The tool prepares and applies inside a single session, because a plan carries the id of the session that made it, and refuses to resolve an ambiguous name rather than renaming the first match. Both guarantees are held by mutation.
+
+**Run against a live IDE**, on IC-252.23892.409 with this repository's `jetbrains-plugin` open. Renaming `dashboardLine`, which is declared in one file, called from a second and asserted in a third:
+
+```
+preview   BridgePanelModel.kt 1 edit · BridgeToolWindowFactory.kt 1 · BridgePanelModelTest.kt 3
+          git status: clean          <- nothing written
+apply     3 document(s) changed by the IDE
+on disk   dashboardLine: 0 in code, 2 left in codemap.md
+```
+
+The two survivors are the measurement worth keeping: `codemap.md` mentions the symbol in prose, and the IDE left it alone because a rename follows references its engine resolved, not text that matches. A `sed` would have edited the documentation and called it the same operation. The tree was restored with `git checkout` afterwards, and the response carries a before and after hash per document, so a caller can check the same thing without trusting the summary.
+
+Four PhpStorm windows on the user's own projects were connected to the same daemon throughout, having linked themselves after the restart that loaded the plugin — the first time the adapters have run outside a sandbox. Nothing was written in any of them.
 
 
 The plan vocabulary is `rename`, `reformat`, `optimizeImports`, `extractMethod`, `inline`, `move`,
