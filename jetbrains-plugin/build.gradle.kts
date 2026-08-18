@@ -43,8 +43,20 @@ configurations.testRuntimeClasspath {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
 }
 
+/*
+ * Build with JDK 21 **or newer**; produce Java 21 bytecode either way.
+ *
+ * The bytecode level is not a preference. PhpStorm 2025.3 ships JBR 21.0.10, and a JBR 21 refuses a
+ * class file above major 65 — so while `sinceBuild` is 252, `jvmTarget` stays 21. What used to be
+ * pinned alongside it was the *toolchain*, which is a different thing: the JDK that runs the
+ * compiler. Pinning it meant a machine with only a newer JDK could not build at all, and the newer
+ * JDK is not hypothetical — GoLand 2026.1 ships JBR 25.0.2, PyCharm 2026.2 ships 25.0.3.
+ *
+ * Measured before removing it: Gradle run on JBR 25 with no toolchain declared compiles all 555
+ * classes to major 65, and the full test suite passes. CI still installs 21, which is now the floor
+ * rather than the requirement.
+ */
 kotlin {
-    jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.add("-Xjsr305=strict")
@@ -52,9 +64,9 @@ kotlin {
 }
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    // The level the classes are emitted at, not the JDK that emits them. See the comment above.
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 intellijPlatform {

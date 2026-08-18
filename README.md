@@ -75,7 +75,10 @@ workspace it names, and it keeps the two-phase edit plans; every semantic answer
 
 ## Getting started
 
-Node 24, pnpm 10, Python ≥ 3.12, JDK 21 and Gradle ≥ 9 for the JetBrains plugin.
+Node 24, pnpm 10, Python ≥ 3.12, and — for the JetBrains plugin — Gradle ≥ 9 with a JDK **21 or
+newer**. The plugin is always emitted as Java 21 bytecode, whichever JDK builds it, because the
+IDEs it has to load into are not all on the same one: PhpStorm 2025.3 still runs JBR 21 while
+GoLand 2026.1 runs JBR 25.
 
 ```bash
 pnpm install

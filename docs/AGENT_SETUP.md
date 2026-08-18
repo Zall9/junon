@@ -18,7 +18,7 @@ just as promptly as the right one.
 | Node | 24 (`node --version`) |
 | pnpm | 10 (`pnpm --version`) |
 | Python | ≥ 3.12, only for the Serena integration |
-| JDK 21 + Gradle ≥ 9 | only for the JetBrains adapter |
+| JDK 21 or newer + Gradle ≥ 9 | only for the JetBrains adapter. The build emits Java 21 bytecode whichever JDK you use — that part is fixed by the oldest IDE it must load into |
 
 macOS and Linux. The discovery file is written with POSIX permissions and Windows is not supported.
 
@@ -34,25 +34,42 @@ install and you should not add one.
 
 ## 2. Start the daemon
 
-Pick one discovery file and export it in **every** shell you use afterwards. This is the single most
-common source of confusion: two shells with different values are two daemons.
+**Use the default discovery file unless you have a reason not to.** The daemon writes its endpoint
+and token to `~/.ide-bridge/discovery.json`, mode `0600`, and that is the path an IDE reads when it
+was started normally — from the Dock, a launcher, or Toolbox. Measured on this machine: a running
+PhpStorm has no `IDE_BRIDGE_DISCOVERY_FILE` in its environment at all, because a GUI application
+inherits nothing from your shell. Point the daemon somewhere else and that IDE will still look in
+the default place and find whatever is there — nothing, or worse, something old.
 
 ```bash
-export IDE_BRIDGE_DISCOVERY_FILE=/tmp/ide-bridge.json
 node packages/cli/dist/bin.js daemon
 ```
 
-Leave it running. It writes its endpoint and token to that path, mode `0600`. Unset, the default is
-`~/.ide-bridge/discovery.json`.
+**It does not return.** It is a foreground server: measured, still running four seconds later, and a
+shell that starts it without `&` never gets its prompt back — which for an agent means the command
+never returns and the setup stops there. Run it detached, and keep the log:
 
-**Check**, from a second shell with the same variable exported:
+```bash
+nohup node packages/cli/dist/bin.js daemon > ~/.ide-bridge/daemon.log 2>&1 &
+```
+
+Set `IDE_BRIDGE_DISCOVERY_FILE` only to *isolate* a daemon — a demo, a sandbox IDE started from the
+same shell, two experiments at once. Then every shell **and** the IDE must be started with it
+exported, or you have made exactly the split this step exists to avoid.
+
+**Check**, from any shell:
 
 ```bash
 node packages/cli/dist/bin.js status
 ```
 
-`{"ok":true,...,"adapterCount":0,"workspaceCount":0}` — zero is correct here; no IDE has connected
-yet.
+```json
+{"ok":true,"command":"status","result":{"daemonVersion":"0.0.0","protocol":{"minimum":"0.1.0",
+ "maximum":"0.1.0"},"startedAt":"…","uptimeMs":4012,"adapterCount":0,"workspaceCount":0}}
+```
+
+`adapterCount: 0` is correct here — no IDE has connected yet, and the daemon says so rather than
+waiting for one to appear.
 
 ## 3. Identify the daemon before trusting it
 
