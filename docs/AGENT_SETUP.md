@@ -110,17 +110,23 @@ and unhelpfully.
 
 For an IDE you already have, `./gradlew buildPlugin` produces
 `build/distributions/ide-bridge-jetbrains-*.zip`; install it with *Settings → Plugins → Install from
-disk*, in each IDE separately, and restart it. **Add the plugin repository URL while you are in that
-dialog** (⚙ → *Manage Plugin Repositories*): a plugin installed from a file has no update path at
-all, so without it that IDE can never tell anyone a newer version exists —
-[RELEASING.md](RELEASING.md) says what to publish there.
-
-**As of now there is nothing to add**: the repository file is generated but unpublished, its URL
-answers 404, and no IDE has been configured with it. So do not expect an update notification from
-anywhere, and do not report the absence of one as a fault. The only thing that will tell you a half
-is out of step is the `versions` check in step 3. Launched from the Dock it will read the default
+disk*, in each IDE separately, and restart it. Launched from the Dock it will read the default
 discovery file — which is where step 2 put the daemon, so there is nothing to export. That is the
 whole reason step 2 uses the default: an IDE you start normally cannot be told anything by a shell.
+
+**Then give that IDE somewhere to look for updates**, in the same dialog (⚙ → *Manage Plugin
+Repositories* → `+`):
+
+```
+https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml
+```
+
+A plugin installed from a zip has no update path — the IDE does not know where the file came from — so
+without this it can never tell anyone a newer version exists. With it, the IDE polls that URL
+alongside the Marketplace and shows its usual badge whenever the advertised version is higher than
+the installed one. The setting lives in `options/updates.xml` under `pluginHosts`, which is worth
+knowing because it means you can read whether an IDE has been told, rather than asking someone to
+open a dialog.
 
 A project **links itself when it opens**; there is nothing to click. The *IDE Bridge* tool window
 shows one row per open project with its state, and a refusal states its reason there and in the log.

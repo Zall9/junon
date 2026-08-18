@@ -39,11 +39,27 @@ It reads `VERSION`, `pluginSinceBuild` and the zip itself, and **refuses** to de
 that is not there — a repository file that disagrees with its zip is worse than none, because the
 IDE offers an update, downloads it, and installs something other than what was advertised.
 
-Publish both: attach `ide-bridge-jetbrains-<version>.zip` to a GitHub release tagged `v<version>`,
-and serve `updatePlugins.xml` from a stable URL (a release asset, GitHub Pages, any HTTP host). Then
-a user adds it **once**:
+**What this repository actually does**, since the obvious route was not available: `gh` is not
+installed here and creating a release or uploading an asset goes through the API, while git over SSH
+works. So the artefact and the XML are committed under `dist/` and served by
+raw.githubusercontent.com from `main`:
 
-> Settings → Plugins → ⚙ → Manage Plugin Repositories → `https://…/updatePlugins.xml`
+```
+https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml
+```
+
+The URL is stable across releases, and an XML an IDE cached earlier still resolves because the zip
+keeps its version in its filename. The cost, stated rather than discovered later: **a megabyte per
+release stays in git history.** Installing `gh` and switching to real releases would remove that, and
+nothing else about the mechanism would change.
+
+A user then adds that URL **once**:
+
+> Settings → Plugins → ⚙ → Manage Plugin Repositories → `+`
+
+**The advertised version must be higher than the installed one**, or there is no badge and nothing is
+broken — which is how 0.2.0 became invisible here: it was installed by hand before it was published,
+so 0.2.1 is the first release these IDEs can be offered.
 
 From then on the IDE checks it, badges the update, and installs it. Nothing in the plugin reaches the
 network, and the daemon — which holds the token — is not involved at all.

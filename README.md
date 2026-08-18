@@ -121,11 +121,20 @@ add the plugin repository URL under *Settings → Plugins → ⚙ → Manage Plu
 IDE will never be able to tell you a newer version exists. A plugin installed from a file has no
 update path at all; [docs/RELEASING.md](docs/RELEASING.md) explains what to publish and why.
 
-> **No update notification works yet, and that is a publication step rather than a missing feature.**
-> The repository file is generated and valid, but nothing is published: the URL it points at answers
-> 404, and no IDE has been given it. Until a release is tagged with the zip attached and the XML is
-> served from a stable address, the only signal that anything is out of step is `ide-bridge doctor`,
-> whose `versions` check compares the halves of a local installation.
+The repository to add is:
+
+```
+https://raw.githubusercontent.com/Zall9/junon/main/dist/updatePlugins.xml
+```
+
+Released as `v0.2.1` and served from the repository itself, because creating a GitHub release needs
+the API and this project ships no credentials — see [docs/RELEASING.md](docs/RELEASING.md) for what
+that costs. Once an IDE has that URL it polls it like any Marketplace entry: a version higher than the
+one installed produces the update badge, and nothing else has to happen.
+
+An IDE that has **not** been given it can still be told the halves are out of step, but only by
+asking: `ide-bridge doctor`, whose `versions` check compares the daemon against every connected
+plugin.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
 ### Setting it up with a coding agent
