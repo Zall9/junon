@@ -84,6 +84,12 @@ left running from an earlier session passes every check and answers every reques
 two apart afterwards is nearly impossible. If the uptime is large and you did not intend that, stop
 the old one before going on.
 
+Read the `versions` check too. It is the only thing that compares the halves of this installation —
+the daemon, and the plugin inside each IDE — and it names the ones that are behind rather than
+counting them, because a plugin is installed per IDE and you need to know which one to reinstall. It
+warns rather than fails: a peer one release behind usually works, and the handshake already refuses
+what genuinely cannot. `skip` means no adapter has connected yet, which at this step is expected.
+
 ## 4. Attach an IDE
 
 Do one of the two. Both can run at once against the same daemon — that is a supported configuration,
@@ -104,7 +110,10 @@ and unhelpfully.
 
 For an IDE you already have, `./gradlew buildPlugin` produces
 `build/distributions/ide-bridge-jetbrains-*.zip`; install it with *Settings → Plugins → Install from
-disk*, in each IDE separately, and restart it. Launched from the Dock it will read the default
+disk*, in each IDE separately, and restart it. **Add the plugin repository URL while you are in that
+dialog** (⚙ → *Manage Plugin Repositories*): a plugin installed from a file has no update path at
+all, so without it that IDE can never tell anyone a newer version exists —
+[RELEASING.md](RELEASING.md) says what to publish there. Launched from the Dock it will read the default
 discovery file — which is where step 2 put the daemon, so there is nothing to export. That is the
 whole reason step 2 uses the default: an IDE you start normally cannot be told anything by a shell.
 
