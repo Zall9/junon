@@ -37,3 +37,8 @@ coverage/
 # Upstream Serena, cloned for inspection and for running the seam tests against the real thing.
 # Not vendored: it is re-cloned at the pinned version rather than carried in this repository.
 serena-upstream/
+
+# The plugin repository a JetBrains IDE polls — see docs/RELEASING.md. Root only; a package
+# build directory called dist/ stays ignored, which is why the negation is anchored.
+!/dist/
+!/dist/*
