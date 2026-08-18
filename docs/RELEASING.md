@@ -53,6 +53,34 @@ keeps its version in its filename. The cost, stated rather than discovered later
 release stays in git history.** Installing `gh` and switching to real releases would remove that, and
 nothing else about the mechanism would change.
 
+### Configuring the IDEs without clicking
+
+```bash
+scripts/ensure-plugin-repository.sh
+```
+
+It writes **two** routes into every eligible IDE's configuration directory, because they fail
+differently:
+
+| Route | Read by | Failure mode |
+| --- | --- | --- |
+| `idea.properties` → `idea.plugin.hosts` | `RepositoryHelper` at start-up | None known: the IDE never rewrites this file |
+| `options/updates.xml` → `pluginHosts` | the settings UI | **A running IDE erases it.** It holds the component in memory and rewrites the file when it saves |
+
+That second row is measured, not feared. Both entries were written while GoLand and PhpStorm were
+running and PyCharm was closed; afterwards the URL was gone from both running IDEs' `updates.xml` and
+still present in PyCharm's. So the property is the one that carries the setting, and the XML entry is
+there only so the dialog shows what is configured.
+
+An IDE below the plugin's `since-build` is skipped — the build number is derived from the
+configuration directory's name, and adding a repository an IDE can never install from would only add
+a poll. Running the script twice changes nothing; an existing `idea.plugin.hosts` gets the URL
+appended rather than replaced, since another repository may already be there.
+
+Either way it takes effect at that IDE's **next start**, which is also the trap worth naming: an IDE
+started before the setting existed has not read it, and its `LAST_TIME_CHECKED` will still predate
+the change.
+
 A user then adds that URL **once**:
 
 > Settings → Plugins → ⚙ → Manage Plugin Repositories → `+`
