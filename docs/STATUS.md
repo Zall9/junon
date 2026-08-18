@@ -326,9 +326,9 @@ early when its part is absent, and a lost capture would otherwise take five chec
 
 | Stack | Tests | Notes |
 | --- | --- | --- |
-| TypeScript | 469 across 53 files | Plus 171 schema entries and 49 protocol fixtures |
-| Kotlin | 284 across 54 classes | Includes platform-fixture and real-daemon suites |
-| Python | 155 | The JUNON tools and their Serena composition |
+| TypeScript | 474 across 55 files | Plus 171 schema entries and 49 protocol fixtures |
+| Kotlin | 287 across 54 classes | Includes platform-fixture and real-daemon suites |
+| Python | 166 | The JUNON tools and their Serena composition |
 | Conformance | 54 | Judges two captured adapters. **Inside** the TypeScript figure, not additional to it — it runs under the same vitest invocation, and this row read as a separate suite until it was counted |
 | VS Code host | 9 scenarios | Runs a real extension host it starts itself, and records a capture |
 
