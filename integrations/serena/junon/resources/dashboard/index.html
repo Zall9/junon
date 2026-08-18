@@ -450,6 +450,12 @@
 
       const IDE_KINDS = { jetbrains: "JetBrains IDE", vscode: "VS Code" };
 
+      function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+        })[character]);
+      }
+
       function renderBridge(status) {
         const state = status.status;
         const label =
@@ -491,8 +497,10 @@
           if (versions.agrees) {
             html += `<p class="reason muted">Versions: ${versions.summary}</p>`;
           } else {
-            html += `<p class="reason warn"><strong>Update needed.</strong> ${versions.summary}<br>
-              <code>${versions.remedy}</code></p>`;
+            // Escaped, not trusted: this text arrives from a process, and the first version of
+            // it lost `<IDE>` to the parser without anything looking wrong.
+            html += `<p class="reason warn"><strong>Update needed.</strong> ${escapeHtml(versions.summary)}<br>
+              <code>${escapeHtml(versions.remedy)}</code></p>`;
           }
         }
 

@@ -18,9 +18,11 @@ from typing import Any
 
 #: What to run when a plugin is behind. Named once, because a remedy that differs between surfaces
 #: is a remedy a reader has to choose between.
+#: No angle brackets. This string is rendered into an HTML page, and a browser parsed `<IDE>` as a
+#: tag and dropped it — leaving `.app/Contents/MacOS/ installPlugins`, which is not a command.
 REMEDY = (
     "scripts/install-jetbrains-plugin.sh, then restart those IDEs — or, for one IDE without leaving "
-    "the shell: <IDE>.app/Contents/MacOS/<ide> installPlugins com.idebridge.jetbrains"
+    "the shell: GoLand.app/Contents/MacOS/goland installPlugins com.idebridge.jetbrains"
 )
 
 _RELEASE = re.compile(r"(\d+)\.(\d+)\.(\d+)")

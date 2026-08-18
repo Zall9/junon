@@ -78,3 +78,28 @@ class TestThePageAgreesWithThePayload:
 
         assert "Versions:" in card
         assert "Update needed" in card
+
+class TestItSurvivesBeingRendered:
+    """Found by opening the page, not by reading it.
+
+    The remedy reached the card inside an `innerHTML` assignment carrying `<IDE>.app/...`, and the
+    browser parsed the placeholder as a tag and dropped it. The card displayed
+    `.app/Contents/MacOS/ installPlugins` — an instruction nobody can follow, with nothing looking
+    wrong.
+    """
+
+    def test_the_remedy_carries_nothing_a_parser_will_eat(self) -> None:
+        from junon.versions import REMEDY, compare
+
+        for text in (REMEDY, compare("0.2.0", [adapter("0.2.1")]).remedy):
+            assert "<" not in text and ">" not in text, text
+
+    def test_the_card_escapes_what_it_renders_anyway(self) -> None:
+        """Fixing the string alone would leave the next one to be swallowed as quietly. This text
+        arrives from a process, not from a constant a reviewer can eyeball."""
+        page = PAGE.read_text()
+
+        assert "function escapeHtml(" in page
+        card = page[page.index("const versions = status.versions;") :][:700]
+        assert "escapeHtml(versions.summary)" in card
+        assert "escapeHtml(versions.remedy)" in card
