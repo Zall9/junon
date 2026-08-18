@@ -46,7 +46,7 @@ list that reads like a clean bill of health.
 | **JetBrains adapter** | All 16. Run in IntelliJ, PhpStorm, GoLand and PyCharm — run, not merely measured compatible |
 | **VS Code adapter** | 13 of 16. The three others are refusals with named reasons: no scoped undo, no TODO index, no bookmarks |
 | **Serena integration** | JUNON — ten `ide_*` tools composed onto an unmodified Serena, including the IDE's own rename |
-| **Tests** | 474 TypeScript — 54 of them the conformance suite, not a separate total — plus 287 Kotlin, 173 Python, and 9 VS Code host scenarios that drive a real editor |
+| **Tests** | 474 TypeScript — 54 of them the conformance suite, not a separate total — plus 287 Kotlin, 190 Python, and 9 VS Code host scenarios that drive a real editor |
 
 [docs/STATUS.md](docs/STATUS.md) is the authority on what is verified, what is refused, what is
 deferred, and — in its own section — the limits of the verification itself.

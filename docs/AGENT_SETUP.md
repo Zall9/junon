@@ -245,29 +245,30 @@ Its prompt had said *"Do NOT use read/glob/grep when Serena can do the job"* the
 instruction ignored six thousand times is not an instruction — it is a preference at the end of a
 thirty-kilobyte prompt, competing with a tool that is right there and easier.
 
-**So take the tool away.** In opencode, per agent:
+**Removing the tool works, and costs more than it looks.** `{"tools": {"read": false}}` per agent
+makes the rule a mechanism, and it was tried here. But an agent that cannot read a lock file fails in
+a new way, `bash` leaves the ban leaky anyway, and a subagent that hits a Serena outage has nowhere to
+go. It is the right lever for an agent with one narrow job, and the wrong default.
 
-```json
-{ "agent": { "explorer": { "tools": { "read": false, "grep": false, "glob": false } } } }
-```
+**What to write instead of a prohibition**, in the order models actually respond to:
 
-Leave `bash`: an explorer without a shell is useless, and one honest escape hatch beats a prohibition
-that forces creativity. Say in the prompt that `cat`, `head`, `rg` and `find` through bash are the
-same mistake, so the rule covers the hole it leaves.
+1. **An opening move, not a ban.** "Do NOT use read" competes with a tool in reach. A numbered first
+   step competes with nothing: status, then locate by symbol, then read one declaration, and only
+   then a whole file.
+2. **A cost on the fallback.** Reading stays allowed and has to be justified in one line in the
+   report — *"read pnpm-lock.yaml: not code"*. A habit that must be written down stops being a habit.
+3. **The reason, once, in terms an agent can check.** Not "Serena is faster" but what a grep cannot
+   do: resolve an override, tell a comment from a call, or see the buffer the editor holds while
+   someone is typing.
 
-Claude Code has no per-agent tool switch of that kind, so there the lever is instructions only —
-which is why they belong in the **global** file (`~/.claude/CLAUDE.md`, composed by import) rather
-than in one project's.
+**Order the tools, not just permit them.** The same measurement showed that when that agent did reach
+for Serena, its most-used call was `serena_read_file` — reading whole files through a symbol-aware
+server. Reading is the last rung of the ladder, not the first.
 
-**Order the tools in the prompt, not just permit them.** The same measurement showed that when that
-agent did reach for Serena, its most-used call was `serena_read_file` — reading whole files through a
-symbol-aware server. Reading is the last resort, not the first: `ide_symbols_overview` to see a
-file's shape, `ide_find_symbol` to locate, `ide_read_symbol` for one declaration, and only then a
-whole document.
-
-**Check it the same way**: opencode records every tool call in `~/.local/share/opencode/opencode.db`,
-so the ratio is a query rather than an impression. A configuration change that cannot be measured
-afterwards is a hope.
+**Then check, because none of this is self-evidently effective**: opencode records every tool call in
+`~/.local/share/opencode/opencode.db`, so the ratio is a query rather than an impression. Re-run it a
+few sessions later. A prompt change that cannot be measured afterwards is a hope, and this one is
+weaker than removing the tool — which is exactly why it has to be watched.
 
 ## 8. Redeploy after you change the source
 
