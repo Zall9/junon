@@ -84,6 +84,7 @@ def read_status() -> dict[str, Any]:
     # that happened to be right whenever no IDE was open and wrong the rest of the time. Asking is
     # cheap: one connection, one call, and the answer is the daemon's rather than ours.
     from junon.client import Discovery, IdeBridgeClient, IdeBridgeError
+    from junon.versions import compare
 
     token = discovery.get("token")
     if not isinstance(token, str):
@@ -121,20 +122,37 @@ def read_status() -> dict[str, Any]:
     # gives it (`IC-252.23892.409`); turning a build number into a marketing name would be a table
     # this code has no business inventing.
     adapters_by_id: dict[str, dict[str, Any]] = {}
+    all_adapters: list[dict[str, Any]] = []
     try:
         for adapter in client.call("bridge/listAdapters", {}).get("adapters", []):
             adapters_by_id[str(adapter.get("adapterId"))] = adapter
+            all_adapters.append(adapter)
     except IdeBridgeError:
         # Non-fatal: the panel is still worth showing without the IDE's name on it.
         adapters_by_id = {}
+        all_adapters = []
 
     adapter_id = str(workspaces[0].get("adapterId", ""))
+    # Whether the halves of this installation are the same release. Nothing else can tell the
+    # person looking at this page: an IDE updates its plugin without knowing a daemon exists, and
+    # `pipx` updates JUNON without knowing either.
+    versions: dict[str, Any] | None = None
+    if all_adapters:
+        try:
+            daemon_version = client.call("bridge/getStatus", {}).get("daemonVersion")
+            if isinstance(daemon_version, str):
+                versions = compare(daemon_version, all_adapters).as_dict()
+        except IdeBridgeError:
+            # An aside, never the reason this endpoint fails: the card's real subject is above.
+            versions = None
+
     adapter = adapters_by_id.get(adapter_id, {})
 
     return {
         **base,
         "status": "connected",
         "reason": None,
+        "versions": versions,
         "adapter": {
             "adapterId": adapter_id,
             "ideKind": adapter.get("ideKind"),

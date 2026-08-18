@@ -34,6 +34,8 @@ from junon.client import (
     RequestFailedError,
     read_discovery,
 )
+from junon.versions import compare as _compare_versions
+from junon.versions import release_order as _release_order
 
 
 class IdeBridgeTool(Tool, ABC):
@@ -209,16 +211,9 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
         if not adapters:
             return [f"  versions: daemon {daemon}, no adapter connected"]
 
-        behind = sorted({
-            f"{a.get('ideVersion', '?')}@{a.get('version', '?')}"
-            for a in adapters
-            if _release_order(str(a.get("version", "")), str(daemon)) < 0
-        })
-        ahead = sorted({
-            f"{a.get('ideVersion', '?')}@{a.get('version', '?')}"
-            for a in adapters
-            if _release_order(str(a.get("version", "")), str(daemon)) > 0
-        })
+        skew = _compare_versions(str(daemon), adapters)
+        behind = list(skew.older)
+        ahead = list(skew.newer)
 
         if not behind and not ahead:
             return [f"  versions: daemon and every adapter at {daemon}"]
@@ -1112,24 +1107,6 @@ class IdeRefactorTool(IdeBridgeTool, ToolMarkerCanEdit):
 
 
 
-
-def _release_order(left: str, right: str) -> int:
-    """Orders two release numbers, with no opinion about anything it cannot parse.
-
-    A version carrying a suffix — `0.1.0-SNAPSHOT`, which this plugin built as for months — reads as
-    "no comparison" rather than as "older". Telling someone to reinstall because of a suffix would be
-    a worse answer than saying nothing.
-    """
-    import re
-
-    def parts(value: str) -> tuple[int, int, int] | None:
-        found = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", value.strip())
-        return (int(found[1]), int(found[2]), int(found[3])) if found else None
-
-    a, b = parts(left), parts(right)
-    if a is None or b is None:
-        return 0
-    return (a > b) - (a < b)
 
 def _count_unclassified(symbols: list[dict[str, Any]]) -> int:
     total = 0

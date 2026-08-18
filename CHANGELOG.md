@@ -29,6 +29,9 @@ except a version higher than the one installed and a URL that answers; both are 
   differently: `idea.properties` → `idea.plugin.hosts`, which the IDE never rewrites, and
   `options/updates.xml` → `pluginHosts`, which a **running** IDE erases from memory on exit — measured
   twice here.
+- The JUNON dashboard's **IDE Bridge card** now states whether the halves are the same release, and
+  the command to run when they are not — the surface for someone who opens neither a terminal nor an
+  agent.
 - `ide_status` now reports the version of the daemon and of every connected plugin, with the command
   to run when they differ. Nothing else could say it: an IDE updates its plugin without knowing a
   daemon exists, and `pipx` updates JUNON without knowing either.

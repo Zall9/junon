@@ -483,6 +483,20 @@
 
         if (status.reason) html += `<p class="reason">${status.reason}</p>`;
 
+        // Whether the two halves are the same release. Shown when they agree as well as when they
+        // do not: a line that appears only on failure teaches a reader that its absence means
+        // nothing was checked.
+        const versions = status.versions;
+        if (versions) {
+          if (versions.agrees) {
+            html += `<p class="reason muted">Versions: ${versions.summary}</p>`;
+          } else {
+            html += `<p class="reason warn"><strong>Update needed.</strong> ${versions.summary}<br>
+              <code>${versions.remedy}</code></p>`;
+          }
+        }
+
+
         // One block per workspace rather than a three-column table. With `table-layout: fixed` and
         // break-all, a long root path wrapped mid-word beside the trust column and the two read as
         // one string — a screenshot showed `…/pauldelifer/de` + `trusted` as "detrusted", which is
