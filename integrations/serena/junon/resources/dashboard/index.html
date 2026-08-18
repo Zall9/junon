@@ -183,6 +183,7 @@
          past two screens of scrolling. A dashboard is a glance, so the long lists scroll inside
          their own card and the row heights stay comparable. The header carries the full count, so
          capping the height never hides how many there are. */
+      .workspace-summary { font-size: 12px; margin: 10px 0 8px; display: flex; align-items: center; gap: 6px; }
       .scroller { max-height: 268px; overflow-y: auto; padding-right: 4px; }
       .scroller::-webkit-scrollbar { width: 8px; }
       .scroller::-webkit-scrollbar-thumb { background: #263230; border-radius: 4px; }
@@ -486,17 +487,45 @@
         // break-all, a long root path wrapped mid-word beside the trust column and the two read as
         // one string — a screenshot showed `…/pauldelifer/de` + `trusted` as "detrusted", which is
         // not a word, not a path, and not true.
-        for (const workspace of status.workspaces || []) {
-          html += `<div class="workspace">
-              <div class="workspace-head">
-                <strong>${text(workspace.name)}</strong>
-                <span class="tag ${workspace.trust === "trusted" ? "ok" : "warn"}">${text(
-                  workspace.trust,
-                )}</span>
-              </div>
-              ${(workspace.roots || []).map((root) => `<code>${root}</code>`).join("")}
-              <div class="sub">${text(workspace.workspaceId)}</div>
-            </div>`;
+        const workspaces = status.workspaces || [];
+        if (workspaces.length) {
+          // The exception is the information. `trusted` repeated down every row was a column of
+          // noise whose only job was to bury the one row that is not trusted, so the tag is drawn
+          // only when trust is absent and the summary carries the rest. A reader still learns that
+          // everything is trusted; they no longer have to check each line to find out.
+          const untrusted = workspaces.filter((w) => w.trust !== "trusted").length;
+          html += `<div class="workspace-summary">${workspaces.length} workspace${
+            workspaces.length === 1 ? "" : "s"
+          } · ${
+            untrusted
+              ? `<span class="tag warn">${untrusted} untrusted</span>`
+              : `<span class="muted">all trusted</span>`
+          }</div>`;
+
+          // Scrolls, like Active Tools and Registered Projects already do. Four IDE windows on one
+          // machine is an ordinary evening here, and this card grew until it pushed every section
+          // below it off the screen.
+          html += `<div class="scroller">`;
+          for (const workspace of workspaces) {
+            const roots = workspace.roots || [];
+            // The first root, not all of them. A project with a dozen content roots turned this
+            // into a wall of paths, and the extras have never been what anybody opened it for —
+            // the count says they exist, and the workspace id is on hover for when it is needed.
+            const extra =
+              roots.length > 1 ? `<span class="muted"> +${roots.length - 1} more</span>` : "";
+            html += `<div class="workspace" title="${text(workspace.workspaceId)}">
+                <div class="workspace-head">
+                  <strong>${text(workspace.name)}</strong>
+                  ${
+                    workspace.trust !== "trusted"
+                      ? `<span class="tag warn">${text(workspace.trust)}</span>`
+                      : ""
+                  }
+                </div>
+                ${roots.length ? `<code>${text(roots[0])}</code>${extra}` : ""}
+              </div>`;
+          }
+          html += `</div>`;
         }
         $("bridge").innerHTML = html;
       }
