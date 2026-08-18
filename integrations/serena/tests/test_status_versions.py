@@ -45,15 +45,26 @@ def tool() -> IdeStatusTool:
     return IdeStatusTool.__new__(IdeStatusTool)
 
 
-def test_agreement_is_reported_too(tool: IdeStatusTool) -> None:
+def test_agreement_is_reported_too(tool: IdeStatusTool, monkeypatch: pytest.MonkeyPatch) -> None:
     """A line that only appears when something is wrong teaches a reader that its absence means
-    nothing was checked."""
+    nothing was checked.
+
+    The consumer version is pinned here rather than inherited from the checkout: this test used to
+    agree only while the tree happened to sit on the version it hard-coded, and would have failed on
+    every release.
+    """
+    monkeypatch.setattr("junon.tools.JUNON_VERSION", "0.2.1")
+
     lines = tool._version_lines(FakeClient("0.2.1", [adapter("0.2.1"), adapter("0.2.1", "PS-253")]))
 
     assert lines == ["  versions: daemon and every adapter at 0.2.1"]
 
 
-def test_an_older_plugin_is_named_with_what_to_run(tool: IdeStatusTool) -> None:
+def test_an_older_plugin_is_named_with_what_to_run(
+    tool: IdeStatusTool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("junon.tools.JUNON_VERSION", "0.2.1")
+
     lines = "\n".join(tool._version_lines(FakeClient("0.2.1", [adapter("0.2.0")])))
 
     assert "GO-261.23567.143@0.2.0" in lines

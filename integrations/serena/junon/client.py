@@ -17,14 +17,29 @@ that reports them as an unexplained error teaches its user to distrust the tool.
 from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version as _distribution_version
+from pathlib import Path
 
 
 def _junon_version() -> str:
-    """What this build calls itself, from the installed distribution.
+    """What this build calls itself.
 
-    Falls back rather than raising: an editable checkout run without installation still has to be
-    able to speak, and a handshake is the wrong place to discover a packaging problem.
+    The repository's `VERSION` first, when this package is an editable install pointing at a
+    checkout. That is not a preference: `importlib.metadata` returns the version recorded **at
+    install time**, and an editable install never re-reads `pyproject.toml` — so a checkout that has
+    been bumped four times still introduces itself as whatever it was on the day it was injected.
+    Measured: 0.0.0, against a 0.2.2 tree, which silently disabled the comparison this version feeds.
+
+    A copy installed from a path or a URL has no `VERSION` beside it and falls back to the metadata,
+    which is accurate for that case. Neither route raises: a handshake is the wrong place to discover
+    a packaging problem.
     """
+    checkout = Path(__file__).resolve().parents[3] / "VERSION"
+    try:
+        declared = checkout.read_text(encoding="utf-8").strip()
+        if declared:
+            return declared
+    except OSError:
+        pass
     try:
         return _distribution_version("ide_bridge")
     except PackageNotFoundError:
