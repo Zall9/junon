@@ -259,6 +259,9 @@
       box-shadow: 0 18px 48px rgba(0, 0, 0, .55); padding: 16px 18px; color: #f6f4ef;
     }
     #update-toast[hidden] { display: none; }
+    /* Bounded so the buttons cannot leave the screen. Anchored at the bottom, an unbounded toast
+       grows upward: enough IDEs named and Install now would be above the top edge. */
+    #update-toast { max-height: calc(100vh - 48px); overflow-y: auto; }
     /* The manual release check. Quiet by design: it is a question the reader chooses to ask, not
        a claim the page is making. */
     .upstream { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
