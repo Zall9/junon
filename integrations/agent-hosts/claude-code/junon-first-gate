@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Sends Read and Grep to JUNON/Serena once per target, then gets out of the way.
+
+Measured, not assumed. Claude Code's own history over the last fortnight: 8 398 tool calls, of which
+305 (3.6%) went to serena and 5 041 (60%) to the file tools. opencode's database says the same thing
+louder — its `explorer` agent made 319 calls in the two days after its prompt was rewritten to insist
+on the symbolic tools, and **none** of them was a serena call.
+
+So this is not written in a prompt. A prompt is advice; this is the tool call not happening.
+
+**It refuses once per distinct target, then allows it.** `~/.claude/hooks/cbm-code-discovery-gate`
+already blocks the first file-tool call of a session for codebase-memory; this is narrower on
+purpose — it fires only where the symbolic route genuinely answers better, and it names the call that
+does it. Repeating the same call runs it, so nothing is ever unreachable: a log file, a real text
+search, a file outside any project all pass on the second attempt, and most pass on the first.
+
+Fails open. Every unexpected condition ends in exit 0, because a hook that blocks the agent when its
+own logic breaks is worse than no hook.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+#: Where a symbol tree exists and reading the whole file is the wasteful way in.
+CODE = re.compile(
+    r"\.(ts|tsx|js|jsx|mjs|cjs|py|kt|kts|go|java|rs|rb|php|c|h|hpp|cc|cpp|swift|scala|cs|vue|svelte)$",
+    re.IGNORECASE,
+)
+
+#: A bare name — what someone types looking for a definition, not for text.
+IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]{2,}$")
+
+#: Under this, the whole file is the cheaper answer and a nudge would be noise.
+WHOLE_FILE_IS_FINE = 300
+
+MARKERS = Path("/tmp")
+
+
+def already_nudged(session: str, kind: str, target: str) -> bool:
+    """One refusal per session and target. The second attempt is the agent's call, and it stands."""
+    digest = hashlib.sha256(f"{kind}:{target}".encode()).hexdigest()[:16]
+    marker = MARKERS / f"junon-first-gate-{session}-{digest}"
+    if marker.exists():
+        return True
+    marker.touch()
+    return False
+
+
+def prune() -> None:
+    cutoff = time.time() - 86_400
+    for stale in MARKERS.glob("junon-first-gate-*"):
+        try:
+            if stale.stat().st_mtime < cutoff:
+                stale.unlink()
+        except OSError:
+            pass
+
+
+def refuse(reason: str) -> int:
+    print(reason, file=sys.stderr)
+    return 2
+
+
+def main() -> int:
+    try:
+        event = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        return 0
+
+    tool = str(event.get("tool_name") or "")
+    arguments = event.get("tool_input") or {}
+    session = str(event.get("session_id") or os.getppid())
+    prune()
+
+    if tool == "Grep":
+        pattern = str(arguments.get("pattern") or "")
+        # A regex is a text search and this has no opinion about it. A bare identifier is a question
+        # about a symbol, which grep answers with every comment and string that contains the name.
+        if not IDENTIFIER.match(pattern):
+            return 0
+        if already_nudged(session, "grep", pattern):
+            return 0
+        return refuse(
+            f'Grep "{pattern}" was not run. Ask the index, which resolves what a text search cannot:\n'
+            f'  mcp__serena__find_symbol(name_path_pattern="{pattern}")   the declaration\n'
+            f"  mcp__serena__find_referencing_symbols(...)                callers, including overrides\n"
+            f"  mcp__serena__ide_find_symbol / ide_hierarchy              the same, from the running IDE\n"
+            f"If you want text — a log line, a config value, a string — run the same Grep again and it "
+            f"will go through, or use a regex."
+        )
+
+    if tool != "Read":
+        return 0
+
+    path = str(arguments.get("file_path") or "")
+    if not path or not CODE.search(path):
+        return 0
+    # A range means the caller already knows what they want.
+    if arguments.get("offset") is not None or arguments.get("limit") is not None:
+        return 0
+
+    try:
+        with open(path, "rb") as handle:
+            lines = sum(1 for _ in handle)
+    except OSError:
+        return 0
+    if lines < WHOLE_FILE_IS_FINE:
+        return 0
+    if already_nudged(session, "read", path):
+        return 0
+
+    return refuse(
+        f"Read of {path} ({lines} lines) was not run — the whole file would enter the context to "
+        f"answer a question about part of it:\n"
+        f'  mcp__serena__get_symbols_overview(relative_path="{path}")            what is in it\n'
+        f"  mcp__serena__find_symbol(name_path_pattern=..., include_body=True)   one declaration\n"
+        f'  mcp__serena__ide_read_document(path="{path}")                        the file as the editor\n'
+        f"      holds it, unsaved edits included — which the disk does not have\n"
+        f"If you do need the raw file, pass offset/limit, or run the same Read again and it will go "
+        f"through."
+    )
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:  # noqa: BLE001 - a broken gate must never stop the agent
+        sys.exit(0)

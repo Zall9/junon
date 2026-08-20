@@ -15,6 +15,16 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## Unreleased
+
+- **A gate that makes the agents use the tools, since telling them did not.** `scripts/install-agent-gate.sh`
+  installs an opencode plugin and a Claude Code hook that refuse a bare-identifier `grep` and a
+  ranged-less `read` of a code file over 300 lines — once per target, naming the symbolic call that
+  answers better. Repeating the call runs it, so nothing is unreachable and no agent can be trapped.
+  AGENT_SETUP §7 now records the measurement that made this necessary: two days after the prompts
+  were rewritten to insist on the symbolic tools, the search agent made 319 calls and none of them
+  was a Serena call.
+
 ## 0.2.4
 
 - **A manual check for a newer release.** Every comparison until now was between things already on

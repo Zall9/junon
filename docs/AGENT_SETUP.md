@@ -266,9 +266,63 @@ for Serena, its most-used call was `serena_read_file` — reading whole files th
 server. Reading is the last rung of the ladder, not the first.
 
 **Then check, because none of this is self-evidently effective**: opencode records every tool call in
-`~/.local/share/opencode/opencode.db`, so the ratio is a query rather than an impression. Re-run it a
-few sessions later. A prompt change that cannot be measured afterwards is a hope, and this one is
-weaker than removing the tool — which is exactly why it has to be watched.
+`~/.local/share/opencode/opencode.db`, so the ratio is a query rather than an impression.
+
+```bash
+python3 integrations/agent-hosts/junon-usage.py --days 2
+```
+
+### It was checked, and the advice above did not work
+
+The prompts were rewritten as this section recommends — an opening move, a cost on the fallback, the
+reason stated in checkable terms. Two days later, per agent:
+
+```
+explorer      319 calls   junon   0  (0.0%)   file 272 (85.3%)
+fixer         318 calls   junon  34 (10.7%)   file 230 (72.3%)
+orchestrator  756 calls   junon  15  (2.0%)   file 187 (24.7%)
+oracle        173 calls   junon 100 (57.8%)   file  37 (21.4%)
+```
+
+`explorer` had been at 10.8% over the preceding fortnight. Being told twice, in two files, took it to
+**zero**. One agent out of four moved the right way, which is what an intervention with no mechanism
+behind it looks like.
+
+### What replaced it: a refusal that names the alternative
+
+```bash
+scripts/install-agent-gate.sh          # --dry-run first, if you prefer
+```
+
+An opencode plugin and a Claude Code hook, refusing exactly two calls, **once per target**:
+
+| Refused | Why | To proceed anyway |
+| --- | --- | --- |
+| `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
+| `read` of a code file over 300 lines with no range | the whole file enters the context to answer a question about part of it | repeat it, or pass offset/limit |
+
+The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
+`ide_read_document`. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
+genuine text search, a file outside any project all go through, most on the first attempt. That is
+the difference from `{"tools": {"read": false}}` above — a ban an agent cannot escape becomes a new
+failure, and this one always has an exit.
+
+Two things it is careful about. It fires only where the symbolic route genuinely wins, so a short
+file, a ranged read, a regex and a missing path are never touched. And it fails open: any error
+inside the gate ends in "allow", because a gate that blocks the agent when its own logic breaks is
+worse than no gate.
+
+The Claude Code half needs one line registered in `settings.json`, and the installer will not write
+it for you:
+
+```bash
+python3 ~/.claude/hooks/register-junon-gate.py
+```
+
+Claude Code refuses to let an agent edit its own hook configuration — correctly, since a tool that
+can install its own hooks can install any hook. Restart the host afterwards; hooks are read at
+start-up. To remove the gate: delete the plugin file, and the `junon-first-gate` entry from
+`settings.json`.
 
 ## 8. Redeploy after you change the source
 
@@ -329,6 +383,8 @@ module it imported at start-up.
 - No method executes shell commands or evaluates code in the IDE. If a task seems to need that, it
   is out of scope — say so rather than adding it.
 - Do not modify `TASK.md`; it is the authoritative scope.
+- A refused `read` or `grep` naming a `serena_*` call is the gate, not a broken tool. Make the call it
+  names, or repeat yours — the second attempt always runs. Do not route around it with `bash cat`.
 - Nothing here reaches the network on its own. `--check-updates` and the dashboard's *Check for a new
   release* button are the only outbound requests in the product, and both are things a person types
   or clicks. Do not add a check on start-up, on a timer, or "while we are here" — the guarantee is

@@ -157,8 +157,22 @@ If an agent is doing the setup — Claude Code, Cursor, or anything else that ca
 it at **[docs/AGENT_SETUP.md](docs/AGENT_SETUP.md)** and let it work through that instead of this
 section.
 
-It is written for that reader: three processes that have to find each other, in order, each step
-ending in a check to observe before moving on. It also names the failures that are silent by nature —
+Installing the tools is not the same as an agent using them, and on this machine the gap was total:
+two days after the subagent prompts were rewritten to insist on the symbolic tools, the search agent
+made 319 calls of which **none** was a Serena call — down from 10.8% the fortnight before. A rule
+read and not followed is not a rule, so there is one that does not rely on being read:
+
+```bash
+scripts/install-agent-gate.sh
+```
+
+It installs an opencode plugin and a Claude Code hook that refuse two calls — `grep` for a bare
+identifier, and `read` of a code file over 300 lines with no range — **once per target**, naming the
+symbolic call that answers the same question better. Repeating the call runs it, so nothing is ever
+unreachable. [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) §7 has the measurements and the way out.
+
+The setup document is written for that reader: three processes that have to find each other, in
+order, each step ending in a check to observe before moving on. It also names the failures that are silent by nature —
 a daemon left over from an earlier session that passes every check, an IDE reading a different
 discovery file, a host configured for `serena` rather than `junon` — with the command that tells them
 apart, and the rules the agent is not free to relax.
