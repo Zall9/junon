@@ -41,6 +41,19 @@ const WHOLE_FILE_IS_FINE = 300
 /** One refusal per session and per call. The second attempt is the agent's decision, and it stands. */
 const alreadyNudged = new Set<string>()
 
+/**
+ * Whole-file reads of code allowed per session before the next one is refused.
+ *
+ * The size rule catches the wrong unit; this one catches the wrong pattern — thirty files opened to
+ * find one function. Swept over a fortnight of real calls: at five, explorer's refusal rate goes
+ * from 13.6% to 22.5% while orchestrator, which already reads by range 484 times a fortnight, moves
+ * 6.4% to 7.4%. A rule that starts punishing the agent doing it right is a rule that gets deleted.
+ */
+const WHOLE_FILE_BUDGET = 5
+
+/** Whole-file code reads seen this session. Per process, which is per opencode run. */
+const spent = new Map<string, number>()
+
 function lineCount(path: string): number {
   try {
     let lines = 0
@@ -90,11 +103,25 @@ export const JunonFirstPlugin: Plugin = async () => {
       if (args.offset !== undefined || args.limit !== undefined) return
 
       const lines = lineCount(path)
-      if (lines < WHOLE_FILE_IS_FINE) return
+      const used = (spent.get(session) ?? 0) + 1
+      spent.set(session, used)
+      const overBudget = used > WHOLE_FILE_BUDGET
+      if (lines < WHOLE_FILE_IS_FINE && !overBudget) return
 
       const key = `${session}:read:${path}`
       if (alreadyNudged.has(key)) return
       alreadyNudged.add(key)
+
+      if (overBudget && lines < WHOLE_FILE_IS_FINE) {
+        throw new Error(
+          `read of ${path} was not run — that is ${used} whole files opened in this session. Reading ` +
+            `them one after another to find something is the search the symbol index does in one call:\n` +
+            `  serena_find_symbol({ name_path_pattern: "…" })                 where it is defined\n` +
+            `  serena_find_referencing_symbols(...)                           who uses it\n` +
+            `  serena_search_for_pattern({ substring_pattern: "…" })          text, but scoped\n` +
+            `Run the same read again and it will go through.`,
+        )
+      }
 
       throw new Error(
         `read of ${path} (${lines} lines) was not run — the whole file would enter the context to ` +

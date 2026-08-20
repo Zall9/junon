@@ -24,6 +24,11 @@ tells the agent — and through it, you.
   AGENT_SETUP §7 now records the measurement that made this necessary: two days after the prompts
   were rewritten to insist on the symbolic tools, the search agent made 319 calls and none of them
   was a Serena call.
+- **A per-session budget, because the size rule alone barely bit.** Replaying a fortnight of recorded
+  calls through the gate showed it would have refused 13.6% of the search agent's — and let through
+  841 reads of code files under 300 lines, which is where the waste actually is. The sixth whole-file
+  code read in a session is now refused once. Swept before choosing: at five the search agent goes to
+  22.5% while the agent that already reads by range moves 6.4% to 7.4%.
 
 ## 0.2.4
 

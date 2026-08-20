@@ -300,6 +300,20 @@ An opencode plugin and a Claude Code hook, refusing exactly two calls, **once pe
 | --- | --- | --- |
 | `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
 | `read` of a code file over 300 lines with no range | the whole file enters the context to answer a question about part of it | repeat it, or pass offset/limit |
+| the **sixth** whole-file code read in one session | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
+
+Both numbers were swept over a fortnight of recorded calls rather than chosen by taste — what share
+of the calls that actually happened each setting would have refused:
+
+```
+> 300 lines, no budget      explorer 13.6%   fixer  5.9%   orchestrator 6.4%
+> 300 lines, budget 5       explorer 22.5%   fixer 11.5%   orchestrator 7.4%   <- chosen
+> 300 lines, budget 3       explorer 28.3%   fixer 16.3%   orchestrator 8.5%
+> 150 lines, budget 3       explorer 33.6%   fixer 18.8%   orchestrator 12.8%
+```
+
+Five rather than three because `orchestrator` already reads by range 484 times a fortnight, and a
+rule that starts punishing the agent doing it right is a rule that gets deleted.
 
 The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
 `ide_read_document`. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
@@ -320,8 +334,14 @@ python3 ~/.claude/hooks/register-junon-gate.py
 ```
 
 Claude Code refuses to let an agent edit its own hook configuration — correctly, since a tool that
-can install its own hooks can install any hook. Restart the host afterwards; hooks are read at
-start-up. To remove the gate: delete the plugin file, and the `junon-first-gate` entry from
+can install its own hooks can install any hook.
+
+**Then restart the host, and do not skip this.** Both hosts read plugins and hooks once, at start-up.
+Installed here at 10:01 and still not firing at 12:16, because the opencode server answering had been
+running since 23:40 two nights before: 39 tool calls in between, twelve of them `read`, and **zero**
+refusals. Nothing was broken and nothing said so — the check is
+`python3 integrations/agent-hosts/junon-usage.py --days 1`, and a gate that is working shows up as
+refusals in the transcript, not as an absence of reads. To remove the gate: delete the plugin file, and the `junon-first-gate` entry from
 `settings.json`.
 
 ## 8. Redeploy after you change the source

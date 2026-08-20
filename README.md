@@ -166,10 +166,12 @@ read and not followed is not a rule, so there is one that does not rely on being
 scripts/install-agent-gate.sh
 ```
 
-It installs an opencode plugin and a Claude Code hook that refuse two calls — `grep` for a bare
-identifier, and `read` of a code file over 300 lines with no range — **once per target**, naming the
-symbolic call that answers the same question better. Repeating the call runs it, so nothing is ever
-unreachable. [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) §7 has the measurements and the way out.
+It installs an opencode plugin and a Claude Code hook that refuse three things — `grep` for a bare
+identifier, `read` of a code file over 300 lines with no range, and the sixth whole-file code read in
+one session — **once per target**, naming the symbolic call that answers the same question better.
+Repeating the call runs it, so nothing is ever unreachable. Restart the host afterwards: both read
+their plugins once, at start-up, and a gate nothing has loaded is indistinguishable from one that
+does not work. [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) §7 has the measurements and the way out.
 
 The setup document is written for that reader: three processes that have to find each other, in
 order, each step ending in a check to observe before moving on. It also names the failures that are silent by nature —

@@ -40,6 +40,14 @@ IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]{2,}$")
 #: Under this, the whole file is the cheaper answer and a nudge would be noise.
 WHOLE_FILE_IS_FINE = 300
 
+#: Whole-file reads of code allowed per session before the next one is refused.
+#:
+#: The size rule catches the wrong unit; this catches the wrong pattern — thirty files opened to find
+#: one function. Swept over a fortnight of recorded calls before choosing: at five, the search agent's
+#: refusal rate goes from 13.6% to 22.5%, while the agent that already reads by range moves 6.4% to
+#: 7.4%. A rule that punishes the one doing it right is a rule that gets deleted.
+WHOLE_FILE_BUDGET = 5
+
 MARKERS = Path("/tmp")
 
 
@@ -51,6 +59,21 @@ def already_nudged(session: str, kind: str, target: str) -> bool:
         return True
     marker.touch()
     return False
+
+
+def spend(session: str) -> int:
+    """How many whole-file code reads this session has made, counting this one.
+
+    On disk because each hook call is its own process: a counter in memory would reset every time and
+    the budget would never be reached.
+    """
+    ledger = MARKERS / f"junon-first-gate-{session}.reads"
+    try:
+        with open(ledger, "a", encoding="utf-8") as handle:
+            handle.write("1")
+        return ledger.stat().st_size
+    except OSError:
+        return 0
 
 
 def prune() -> None:
@@ -111,10 +134,22 @@ def main() -> int:
             lines = sum(1 for _ in handle)
     except OSError:
         return 0
-    if lines < WHOLE_FILE_IS_FINE:
+    used = spend(session)
+    over_budget = used > WHOLE_FILE_BUDGET
+    if lines < WHOLE_FILE_IS_FINE and not over_budget:
         return 0
     if already_nudged(session, "read", path):
         return 0
+
+    if over_budget and lines < WHOLE_FILE_IS_FINE:
+        return refuse(
+            f"Read of {path} was not run — that is {used} whole files opened in this session. Reading "
+            f"them one after another to find something is the search the index does in one call:\n"
+            f"  mcp__serena__find_symbol(name_path_pattern=...)        where it is defined\n"
+            f"  mcp__serena__find_referencing_symbols(...)             who uses it\n"
+            f"  mcp__serena__search_for_pattern(substring_pattern=...) text, but scoped\n"
+            f"Run the same Read again and it will go through."
+        )
 
     return refuse(
         f"Read of {path} ({lines} lines) was not run — the whole file would enter the context to "
