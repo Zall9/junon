@@ -395,6 +395,52 @@ refusals in the transcript, not as an absence of reads.
 **To remove it:** delete `~/.config/opencode/plugin/junon-first.ts`, and the `junon-first-gate` entry
 from `~/.claude/settings.json`. Both take effect on the next start of the host, for the same reason.
 
+### "I get Serena's dashboard, not JUNON's"
+
+Run this on the machine with the problem; it changes nothing and prints its evidence, so the output
+can be pasted into a message:
+
+```bash
+scripts/diagnose-dashboard.sh
+```
+
+Three causes account for nearly all of it, and **only the first is visible in a config file**:
+
+| Cause | How it looks | Fix |
+| --- | --- | --- |
+| The host launches `serena` instead of `junon` | no `ide_*` tools anywhere | correct the MCP entry, then restart the host |
+| The host was fixed but never restarted | the config reads `junon`, the running process is `serena` | restart the host **application**, not the session — MCP servers are launched at start-up and keep the command they started with |
+| It *is* JUNON | tools named `serena_ide_read_symbol` and the like | nothing is wrong: the prefix is the MCP server's name, and `ide_*` tools exist only under JUNON |
+
+Two checks settle it between them. From a shell, `/junon/ide-bridge/status` answers `200` on a JUNON
+dashboard and `404` on Serena's — a page can be cached, a route cannot be faked. From inside the
+session, call `get_current_config`: active tools containing `ide_*` mean JUNON, and the
+`Serena version:` line it prints exposes a stale process when it disagrees with what pipx has
+installed.
+
+The second cause is the one that wastes an afternoon, because nothing is wrong with the file you keep
+re-reading. Measured on this machine: a Claude Code MCP server started on 11 August was still serving
+Serena 1.5.3 while `~/.claude.json` had said `junon` for a fortnight and pipx had moved to 1.7.0.
+
+### The tray icon, and which instance you are looking at
+
+Serena's `web_dashboard_interface` decides this, and the default (empty) is the right choice for a
+JUNON setup:
+
+- **`app`** gives a native window with a tray icon per process. Serena's own configuration file warns
+  that on macOS this "may result in too many icons being displayed when using multi-agent setups", and
+  that is not theoretical: measured here, **nine** MCP servers were alive at once — five from
+  `opencode serve`, two from `opencode acp`, one from Claude Code, one from launchd. Nine tray icons.
+- **`tray_manager`** collects every instance behind one icon, which is what a multi-agent setup wants,
+  but Serena documents it as experimental and tested on Windows only.
+- **Empty or `browser`** is what JUNON is set up against: reach the dashboard by URL, from the
+  JetBrains panel link, or by asking the agent to open it.
+
+Nothing about JUNON needs a tray icon, and a tray icon proves nothing about what is running: it opens
+whatever *that* instance serves, which is JUNON's page when the composition applied and Serena's when
+it did not. Ports climb with instances — 24282, 24283, 24284 — so the icon or URL you have may belong
+to a process from yesterday. `scripts/diagnose-dashboard.sh` names the pid behind each port.
+
 ## 8. Keep Serena current without losing the composition
 
 JUNON is composed onto an **unmodified** Serena, installed by pipx with JUNON injected into the same
@@ -506,6 +552,8 @@ module it imported at start-up.
 | Serena dies at start-up, `KeyError: 'languages'` | The project config was written by Serena 1.7, the installed Serena is older. `pipx upgrade serena-agent`. Not a JUNON failure — plain `serena` fails identically, which is the control worth running before blaming the composition |
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open. The refusal names the language-server tool that answers without an IDE — see §4 |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
+| Serena's dashboard is served, not JUNON's | `scripts/diagnose-dashboard.sh` — usually a host that was never restarted after its config was corrected |
+| Tools are named `serena_*` and it looks like plain Serena | That is the MCP server's name. If `serena_ide_*` tools exist, it is JUNON |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
 | A source change has no effect anywhere | Nothing was redeployed. Step 9 — the plugin is a built jar, and the editable install may point at a different checkout |
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |

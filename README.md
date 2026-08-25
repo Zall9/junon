@@ -156,6 +156,11 @@ cannot reach it is told *could not ask* rather than *up to date*. It is the only
 this product; [docs/SECURITY.md](docs/SECURITY.md) §5a states the terms.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
+If someone follows the setup and lands on **Serena's** dashboard rather than JUNON's,
+`scripts/diagnose-dashboard.sh` says why: it names the process behind every dashboard port, what each
+host config asks for, and whether the composition applies. The usual answer is a host that was never
+restarted after its config was corrected — the file reads right and the running process is old.
+
 ### Setting it up with a coding agent
 
 If an agent is doing the setup — Claude Code, Cursor, or anything else that can run commands — point
