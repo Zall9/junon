@@ -22,7 +22,9 @@ tells the agent — and through it, you.
   repository's suite runs against the Serena _checkout_ and says nothing about the pipx venv that
   actually serves JUNON: it starts the real binary, proves via `lsof` that the port answering belongs
   to the process it started, and requires the `ide_*` tools to be registered. An installation that is
-  already broken is refused rather than upgraded.
+  already broken is refused rather than upgraded. Proved end to end against an isolated pipx home:
+  1.7.0 -> 1.5.3 -> failure detected -> rolled back to 1.7.0 -> verified, with real pipx and the
+  release that historically broke this composition.
 - **The dashboard's release check covers Serena**, in the same click as the plugin repository.
 
 - **A closed IDE is no longer a dead end.** Every `ide_*` refusal that means "there is no IDE to ask"

@@ -429,6 +429,31 @@ What the script does, in order:
 Exit codes: `0` fine · `1` the upgrade did not hold and was undone · `2` the rollback did not restore
 a working installation, which needs a human immediately.
 
+**Proved, not asserted.** Run against an isolated pipx home (`PIPX_HOME=/tmp/pipx-probe`) so the live
+installation was never touched, with real pipx and real releases:
+
+```
+before: 1.7.0
+ok    composition       10 ide_* tools registered
+ok    install           installed 1.5.3
+FAIL  composition       the dashboard did not report its tools
+rolling back
+ok    reinject          .../integrations/serena
+ok    rollback          restored 1.7.0
+ok    after rollback    10 ide_* tools registered
+```
+
+1.5.3 is the release that broke this composition historically, and it still does — the failure above is
+the real one, not a simulated one. Two defects were found by running it rather than reasoning about
+it:
+
+- **`pipx install --force` installed nothing.** pipx builds venvs with uv, and uv refuses to replace a
+  directory it did not create in the current session: *"A virtual environment already exists at: ."*
+  `--force` is pipx's flag and never reaches uv's refusal. Every install and every rollback now carries
+  `UV_VENV_CLEAR=1`.
+- **The rollback would have removed `~/.local/bin/junon`.** pipx records `include_apps` separately from
+  `pip_args`; re-injecting without it restores a working library with no binary to run.
+
 **The check is behavioural on purpose.** The repository's own suite runs against the Serena *checkout*
 in `serena-upstream/`, not against the pipx venv that actually serves JUNON — a green suite says
 nothing about the installation being changed. The smoke test starts the binary, waits for its

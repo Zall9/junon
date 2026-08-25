@@ -35,10 +35,14 @@ class Recorder:
 
     def __init__(self, failing: set[str] | None = None) -> None:
         self.commands: list[list[str]] = []
+        self.forced: list[bool] = []
         self.failing = failing or set()
 
-    def __call__(self, command: list[str], timeout: int = 900) -> tuple[int, str]:
+    def __call__(
+        self, command: list[str], timeout: int = 900, force: bool = False
+    ) -> tuple[int, str]:
         self.commands.append(command)
+        self.forced.append(force)
         joined = " ".join(command)
         if any(bad in joined for bad in self.failing):
             return 1, "pipx said no"
@@ -217,3 +221,20 @@ class TestTheInjectionSpec:
 
         assert upgrade.injected_specs() == [["helper"]]
 
+
+class TestReplacingTheVenv:
+    def test_both_installs_ask_uv_to_clear_the_venv(self, machine: Recorder, monkeypatch) -> None:
+        """Without it, `pipx install --force` fails at "A virtual environment already exists" and
+        installs nothing — measured, in an isolated pipx home. The rollback is the one that must not
+        hit this, since it runs when something is already broken."""
+        monkeypatch.setattr(upgrade, "smoke", smoke_returning(True, False, True))
+
+        upgrade.run(PROJECT)
+
+        installs = [
+            forced
+            for command, forced in zip(machine.commands, machine.forced)
+            if command[:2] == ["pipx", "install"]
+        ]
+        assert installs == [True, True], "the upgrade and the rollback"
+        assert upgrade.FORCE_ENVIRONMENT == {"UV_VENV_CLEAR": "1"}

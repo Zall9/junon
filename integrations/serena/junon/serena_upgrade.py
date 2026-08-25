@@ -30,6 +30,7 @@ guessed.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -86,9 +87,21 @@ class Outcome:
         return step
 
 
-def _run(command: list[str], timeout: int = 900) -> tuple[int, str]:
+#: What makes a forced reinstall actually replace the venv.
+#:
+#: pipx builds venvs with uv, and uv refuses to replace a directory it did not create in this session:
+#: `pipx install --force` fails with "A virtual environment already exists at: ." and installs
+#: nothing. `--force` is pipx's flag and never reaches uv's refusal. Measured in an isolated pipx home
+#: on 2026-08-25, so it is the tool's behaviour rather than this machine's.
+FORCE_ENVIRONMENT = {"UV_VENV_CLEAR": "1"}
+
+
+def _run(command: list[str], timeout: int = 900, force: bool = False) -> tuple[int, str]:
+    environment = {**os.environ, **FORCE_ENVIRONMENT} if force else None
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        done = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout, env=environment
+        )
     except (OSError, subprocess.SubprocessError) as error:
         return 1, str(error)
     return done.returncode, (done.stdout + done.stderr).strip()
@@ -253,7 +266,7 @@ def run(project: Path, target: str = "", dry_run: bool = False) -> Outcome:
         return outcome
     outcome.steps[-1] = Step("baseline", True, outcome.steps[-1].detail)
 
-    code, output = _run(["pipx", "install", f"serena-agent=={wanted}", "--force"])
+    code, output = _run(["pipx", "install", f"serena-agent=={wanted}", "--force"], force=True)
     if code != 0:
         outcome.add(Step("install", False, output.splitlines()[-1] if output else "pipx failed"))
         return outcome
@@ -268,7 +281,7 @@ def run(project: Path, target: str = "", dry_run: bool = False) -> Outcome:
     # It broke. Put back exactly what was there, and prove *that* too — a rollback nobody checked is
     # the same promise this script exists to stop making.
     print("  rolling back", flush=True)
-    code, output = _run(["pipx", "install", f"serena-agent=={previous}", "--force"])
+    code, output = _run(["pipx", "install", f"serena-agent=={previous}", "--force"], force=True)
     _reinject(outcome)
     restored = installed_version()
     outcome.rolled_back_to = restored
