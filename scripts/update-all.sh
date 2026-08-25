@@ -51,7 +51,7 @@ fi
 
 step "1. the source"
 if [[ $PULL -eq 1 ]]; then
-  run "git pull --ff-only" || bad "git pull failed — resolve it by hand"
+  run "LC_ALL=C git pull --ff-only" || bad "git pull failed — resolve it by hand"
 else
   note "skipped (--no-pull)"
 fi
@@ -98,14 +98,18 @@ step "4. the plugins — one copy per IDE, and a running IDE cannot be written t
 if [[ $DRY_RUN -eq 1 ]]; then
   note "would install the built plugin into every IDE that is closed"
 else
-  python3 - <<'PY'
+  # The marker on the last line is how the findings reach the shell: without it, a failure printed
+  # here was invisible to the exit status, and the summary below contradicted its own output.
+  PLUGIN_REPORT=$(python3 - <<'PY'
 import sys
 sys.path.insert(0, "integrations/serena")
 try:
     from junon.update_action import install
 except Exception as error:  # noqa: BLE001 - report rather than crash the script
     print(f"  FAIL could not import the installer: {error}")
+    print("JUNON_FAILURES=1")
     raise SystemExit(0)
+
 outcome = install()
 for name in outcome.installed:
     print(f"  ok   {name}: installed")
@@ -113,9 +117,20 @@ for name in outcome.unchanged:
     print(f"  ok   {name}: already current")
 for name in outcome.running:
     print(f"       {name}: skipped, it is running — quit it and run this again")
-for name in outcome.failed:
-    print(f"  FAIL {name}: {outcome.next_step}")
+
+# `failed` carries the running IDEs as well as genuine failures; `ok` excludes them and the tuple
+# does not. Printing it raw reported each running IDE twice, once correctly and once as a failure.
+genuine = [name for name in outcome.failed if name not in outcome.running]
+for name in genuine:
+    print(f"  FAIL {name}: could not be written to")
+if genuine:
+    print(f"       {outcome.next_step}")
+print(f"JUNON_FAILURES={len(genuine)}")
 PY
+)
+  print '%s\n' "${PLUGIN_REPORT%JUNON_FAILURES=*}"
+  PLUGIN_FAILURES="${PLUGIN_REPORT##*JUNON_FAILURES=}"
+  [[ "${PLUGIN_FAILURES:-0}" =~ ^[0-9]+$ ]] && FAILURES=$((FAILURES + PLUGIN_FAILURES))
 fi
 
 step "5. what no script can do for you"
