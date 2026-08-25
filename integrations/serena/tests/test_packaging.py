@@ -7,13 +7,20 @@ and the consequence is not an import error. `serve_junon_index` falls back to Se
 assets are missing, so a wheel-installed JUNON runs, answers, registers its tools, and serves the
 other dashboard.
 
-So this test builds the artefact and looks inside it. Slower than an assertion about `pyproject.toml`,
-and it is the only version that would have caught the bug: the declaration can be right in a dozen
-ways that still produce an empty wheel.
+So this test builds the artefact and looks inside it, which is the only form that can be trusted: a
+declaration in `pyproject.toml` can be right in a dozen ways that still produce an empty wheel.
+
+What it does **not** prove is that the declaration is what puts the files there. Measured on
+2026-08-25 across four builds — declaration present and absent, isolated and not — all four carried
+the resources under setuptools 84, while the first build of that evening carried none. The variable is
+the setuptools doing the work. The declaration is what stops the outcome depending on whichever one a
+user's pip fetches, and the banner in `test_missing_build.py` is what catches the case where the files
+are absent anyway.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import zipfile
@@ -34,6 +41,16 @@ REQUIRED = (
 
 @pytest.fixture(scope="module")
 def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Builds the artefact, or fails.
+
+    It may only skip where there is no build backend at all — a machine that cannot build a wheel
+    cannot be asked about one. Everywhere else a build failure is a failure, because the first version
+    of this fixture skipped on *any* non-zero exit and therefore sat green through the mutation that
+    deleted the packaging declaration it exists to protect.
+    """
+    if importlib.util.find_spec("setuptools") is None:
+        pytest.skip("no setuptools in this environment; nothing here can build a wheel")
+
     destination = tmp_path_factory.mktemp("wheel")
     done = subprocess.run(
         [sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation",
@@ -42,11 +59,9 @@ def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
         text=True,
         timeout=600,
     )
-    if done.returncode != 0:
-        pytest.skip(f"the wheel could not be built here: {done.stderr.strip().splitlines()[-1:]}")
+    assert done.returncode == 0, f"the wheel did not build:\n{done.stdout[-2000:]}{done.stderr[-2000:]}"
     built = sorted(destination.glob("ide_bridge-*.whl"))
-    if not built:
-        pytest.skip("pip produced no wheel for this package")
+    assert built, "pip reported success and produced no wheel"
     return built[0]
 
 

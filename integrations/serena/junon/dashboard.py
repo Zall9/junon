@@ -42,6 +42,45 @@ _REPLACED_ENDPOINTS = {
 }
 
 
+#: Said on the page itself, because that is the surface where the failure is observed.
+MISSING_BUILD_BANNER = (
+    '<div style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#7a2d2d;color:#fff;'
+    'padding:10px 16px;font:14px/1.5 system-ui,sans-serif">'
+    "<strong>This is Serena's dashboard, not JUNON's.</strong> JUNON is running, but its dashboard "
+    "files are missing from {directory} — an install that did not carry its resources, or a checkout "
+    "without them. The <code>ide_*</code> tools are unaffected. "
+    "Run <code>scripts/diagnose-dashboard.sh</code>."
+    "</div>"
+)
+
+
+def _serena_index_explaining_why() -> Response:
+    """Serena's page, carrying the reason it is the one being served.
+
+    Falls back to the plain page if anything about this fails: a banner is worth a great deal less
+    than a working dashboard, and the state this runs in is already degraded.
+    """
+    from flask import Response as FlaskResponse
+
+    try:
+        html = (Path(SERENA_DASHBOARD_DIR) / "index.html").read_text(encoding="utf-8")
+    except OSError:
+        return send_from_directory(SERENA_DASHBOARD_DIR, "index.html")
+
+    banner = MISSING_BUILD_BANNER.format(directory=JUNON_DASHBOARD_DIR)
+    lowered = html.lower()
+    marker = lowered.find("<body")
+    if marker >= 0:
+        end = html.find(">", marker)
+        if end >= 0:
+            html = html[: end + 1] + banner + html[end + 1 :]
+        else:
+            html = banner + html
+    else:
+        html = banner + html
+    return FlaskResponse(html, mimetype="text/html")
+
+
 class JunonDashboardAPI(SerenaDashboardAPI):
     """Serena's dashboard with the JUNON front end and IDE Bridge routes."""
 
@@ -116,7 +155,11 @@ class JunonDashboardAPI(SerenaDashboardAPI):
                     "No JUNON dashboard build at %s; serving Serena's dashboard instead.",
                     JUNON_DASHBOARD_DIR,
                 )
-                return send_from_directory(SERENA_DASHBOARD_DIR, "index.html")
+                # The log line is not enough: an agent host swallows stderr, so the only thing the
+                # person sees is the wrong dashboard, from which the reasonable conclusion is that
+                # JUNON is not installed. Reported by someone who followed AGENT_SETUP and spent the
+                # afternoon on it. The page now says which page it is and why.
+                return _serena_index_explaining_why()
             return send_from_directory(JUNON_DASHBOARD_DIR, "index.html")
 
         def serve_junon_asset(filename: str) -> Response:

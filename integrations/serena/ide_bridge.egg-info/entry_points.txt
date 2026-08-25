@@ -1,2 +1,0 @@
-[console_scripts]
-junon = junon.__main__:main

@@ -42,3 +42,8 @@ serena-upstream/
 # build directory called dist/ stays ignored, which is why the negation is anchored.
 !/dist/
 !/dist/*
+
+# Build metadata rewritten by every wheel build and every editable install. Tracked until
+# 2026-08-25, when it turned out to dirty the tree on every build — which is exactly what
+# scripts/update-all.sh refuses to pull onto.
+*.egg-info/

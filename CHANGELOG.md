@@ -17,6 +17,17 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
+- **The dashboard resources are packaged, and a JUNON without them says so.** A wheel built from
+  `integrations/serena` carried every module and no `index.html`, which does not fail — the index view
+  falls back to Serena's page. Someone following AGENT_SETUP hit exactly that and spent an afternoon on
+  it. Three layers now: the `package-data` declaration, a test that builds the artefact and looks
+  inside, and a banner on the served page naming the empty directory and the diagnostic to run.
+- **`scripts/update-all.sh`** brings all three halves up in one command — pull, build, restart the
+  daemon, install into every IDE that is closed — verifying each by reading the version back from the
+  thing that changed, and listing what only a human can do.
+- `*.egg-info/` is no longer tracked: it is rewritten by every build, so it dirtied the tree that the
+  updater refuses to pull onto.
+
 - **A JUNON older than its daemon is no longer reported as agreement.** The version check asked
   whether the daemon was older than this JUNON and never the reverse, so a long-lived agent session —
   which holds the JUNON it imported at start-up — showed "daemon and every adapter at 0.2.5" while

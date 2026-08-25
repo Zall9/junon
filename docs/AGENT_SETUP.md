@@ -509,6 +509,19 @@ already running would otherwise answer for it, cheerfully, about the wrong proce
 
 ## 9. Redeploy after you change the source
 
+```bash
+scripts/update-all.sh          # --dry-run first, if you prefer
+```
+
+Three halves, three mechanisms, which is why doing this by hand goes wrong: the dashboard's Install
+button copies the plugin into each IDE and touches nothing else; the daemon runs a build from this
+checkout and keeps the code it started with until the process is restarted; JUNON is imported by each
+agent host at start-up. The script pulls, builds, restarts the daemon, installs into every IDE that is
+closed, and **reads each version back from the thing that changed** rather than from what it asked for.
+It refuses to run on a dirty checkout, and it ends by naming what no script can do: restarting the
+editor you are typing in, and the agent hosts whose sessions hold the JUNON they imported.
+
+
 Editing a file changes nothing that is running, and neither half of this tells you so. Do the half
 you touched — or both, if you changed something they share, such as the format of a file one writes
 and the other reads.

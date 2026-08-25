@@ -56,6 +56,13 @@ where = ["."]
 include = ["ide_bridge*", "junon*"]
 exclude = ["tests*"]
 
+# The dashboard is data, not code, and setuptools packages only code unless told otherwise. Without
+# this a wheel holds every module and no `index.html`, and JUNON then serves *Serena's* dashboard —
+# it does not fail, it renders the wrong page. That survived every release up to 0.2.5 because the
+# editable install AGENT_SETUP prescribes reads the checkout directly and never exercises packaging.
+[tool.setuptools.package-data]
+junon = ["resources/**/*"]
+
 # --- pytest config ---
 
 [tool.pytest.ini_options]
