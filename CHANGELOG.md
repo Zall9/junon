@@ -15,6 +15,14 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## Unreleased
+
+- **A JUNON older than its daemon is no longer reported as agreement.** The version check asked
+  whether the daemon was older than this JUNON and never the reverse, so a long-lived agent session —
+  which holds the JUNON it imported at start-up — showed "daemon and every adapter at 0.2.5" while
+  being 0.2.4 itself. Found on a live dashboard. The remedy names the actual action: restart the
+  agent host, since nothing installs a JUNON that is already the checkout.
+
 ## 0.2.5
 
 - **Serena upgrades are now checked and reversible.** `scripts/upgrade-serena.sh` runs

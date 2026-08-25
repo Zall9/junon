@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: ide_bridge
-Version: 0.2.4
+Version: 0.2.5
 Summary: JUNON — IDE Bridge integration for Serena, applied without editing Serena
 Author: IDE Bridge Contributors
 License: Apache-2.0

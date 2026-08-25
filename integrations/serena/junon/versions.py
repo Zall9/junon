@@ -59,6 +59,15 @@ DAEMON_REMEDY = (
 )
 
 
+#: What to do when JUNON is the stale half. Not a reinstall: an editable JUNON already *is* the
+#: checkout, and the process is simply holding the modules it imported at start-up.
+CONSUMER_REMEDY = (
+    "This JUNON is older than the daemon it is talking to. It was imported when this agent host "
+    "started, so nothing you install changes it — restart the host (opencode, Claude Code) and the "
+    "session will pick up the current one."
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Skew:
     """The verdict, in the shape every surface needs.
@@ -83,8 +92,23 @@ class Skew:
         return bool(self.consumer) and release_order(self.daemon, self.consumer) < 0
 
     @property
+    def consumer_is_stale(self) -> bool:
+        """Whether this JUNON is older than the daemon — the half that used to go unreported.
+
+        A daemon is restarted by whoever rebuilt it; a JUNON lives as long as the agent host that
+        imported it, and hosts run for days. This is now the likelier of the two, and it was the one
+        the check could not see.
+        """
+        return bool(self.consumer) and release_order(self.consumer, self.daemon) < 0
+
+    @property
     def agrees(self) -> bool:
-        return not self.older and not self.newer and not self.daemon_is_stale
+        return (
+            not self.older
+            and not self.newer
+            and not self.daemon_is_stale
+            and not self.consumer_is_stale
+        )
 
     @property
     def summary(self) -> str:
@@ -93,6 +117,8 @@ class Skew:
         parts: list[str] = []
         if self.daemon_is_stale:
             parts.append(f"the daemon ({self.daemon}) is older than this JUNON ({self.consumer})")
+        if self.consumer_is_stale:
+            parts.append(f"this JUNON ({self.consumer}) is older than the daemon ({self.daemon})")
         if self.older:
             parts.append(
                 f"plugin(s) older than the daemon ({self.daemon}): {', '.join(self.older)}"
@@ -110,6 +136,8 @@ class Skew:
         # skew in place, and the person would be back here.
         if self.daemon_is_stale or self.newer:
             parts.append(DAEMON_REMEDY)
+        if self.consumer_is_stale:
+            parts.append(CONSUMER_REMEDY)
         if self.older:
             parts.append(REMEDY)
         return " ".join(parts)
@@ -121,6 +149,7 @@ class Skew:
             "older": list(self.older),
             "newer": list(self.newer),
             "daemonStale": self.daemon_is_stale,
+            "consumerStale": self.consumer_is_stale,
             "agrees": self.agrees,
             "summary": self.summary,
             "remedy": self.remedy,

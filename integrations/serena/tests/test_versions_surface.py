@@ -61,7 +61,10 @@ class TestTheComparison:
         payload = compare("0.2.1", [adapter("0.2.0")]).as_dict()
 
         assert set(payload) == {
-            "daemon", "consumer", "older", "newer", "daemonStale", "agrees", "summary", "remedy",
+            # `consumerStale` was added the day a JUNON older than its daemon was found rendering as
+            # agreement on a live dashboard. Both directions of that comparison now travel.
+            "daemon", "consumer", "older", "newer", "daemonStale", "consumerStale", "agrees",
+            "summary", "remedy",
         }
         assert payload["agrees"] is False
 
