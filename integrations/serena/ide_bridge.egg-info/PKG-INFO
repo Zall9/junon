@@ -1,10 +1,10 @@
 Metadata-Version: 2.4
 Name: ide_bridge
-Version: 0.0.0
+Version: 0.2.4
 Summary: JUNON — IDE Bridge integration for Serena, applied without editing Serena
 Author: IDE Bridge Contributors
 License: Apache-2.0
-Project-URL: Repository, https://github.com/example/ide-bridge
+Project-URL: Repository, https://github.com/Zall9/junon
 Keywords: serena,ide-bridge,idebp,mcp
 Classifier: Development Status :: 1 - Planning
 Classifier: Intended Audience :: Developers
@@ -87,8 +87,9 @@ working perfectly and the customisation absent:
 junon tools list | grep '^ \* `ide_'
 ```
 
-Nine tools should be listed — `ide_status`, `ide_diagnostics`, `ide_find_symbol`, `ide_read_symbol`,
-`ide_read_document`, `ide_symbols_overview`, `ide_hierarchy`, `ide_apply_fix`, `ide_todos`. Measured
+Ten tools should be listed — `ide_status`, `ide_diagnostics`, `ide_find_symbol`, `ide_read_symbol`,
+`ide_read_document`, `ide_symbols_overview`, `ide_hierarchy`, `ide_refactor`, `ide_apply_fix`,
+`ide_todos`. Measured
 on Serena 1.5.3 with all four seams present and `Composition(tools_package_added=True,
 dashboard_rebound=True)`. In the same environment, plain `serena` reports **zero** `ide_*` tools and
 keeps `SerenaDashboardAPI` — the separation is real, not a claim.
@@ -150,6 +151,20 @@ and 1.7.1.dev0.
 
 An incomplete composition is logged and **not** fatal: a JUNON that could not attach is a Serena that
 still works, and refusing to start would turn a cosmetic failure into an outage.
+
+## Updating it
+
+If you injected a local checkout, JUNON updates when the checkout does — an editable install is a
+pointer, and a `git pull` is the update. A copy taken from a path never updates. To get one that
+does, install from the git URL instead, and `pipx upgrade` will re-fetch:
+
+```bash
+pipx install "git+https://github.com/Zall9/junon@main#subdirectory=integrations/serena" --include-apps
+```
+
+Whichever way, the halves can end up in different releases — `pipx` knows nothing about the plugin
+in your IDE. `ide-bridge doctor` compares them and names the one that is behind; see
+[../../docs/RELEASING.md](../../docs/RELEASING.md).
 
 ## Removing it
 

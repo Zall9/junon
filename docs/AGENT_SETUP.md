@@ -395,7 +395,48 @@ refusals in the transcript, not as an absence of reads.
 **To remove it:** delete `~/.config/opencode/plugin/junon-first.ts`, and the `junon-first-gate` entry
 from `~/.claude/settings.json`. Both take effect on the next start of the host, for the same reason.
 
-## 8. Redeploy after you change the source
+## 8. Keep Serena current without losing the composition
+
+JUNON is composed onto an **unmodified** Serena, installed by pipx with JUNON injected into the same
+venv as an editable package. Serena's releases therefore arrive from a channel that knows nothing
+about JUNON, and that door has broken this machine twice: 1.5.3 changed the signature of
+`run_in_thread` and JUNON's override killed the agent at start-up; a config schema change made 26 of
+27 projects unloadable. Neither was visible in a version number.
+
+```bash
+scripts/upgrade-serena.sh --check      # what is installed, what is published
+scripts/upgrade-serena.sh --dry-run    # what it would do
+scripts/upgrade-serena.sh              # do it, with the rollback armed
+scripts/upgrade-serena.sh --to 1.6.1   # a specific version, including going back
+```
+
+The same answer appears on the dashboard's **Check for a new release** button, which now reports both
+halves — the plugin repository and the package index — in one click. The *upgrade* is deliberately not
+a button: it takes minutes and its output has to be read.
+
+What the script does, in order:
+
+1. **Baseline.** Starts the real `junon` binary against your project and asks it which tools it
+   registered. An installation that is already broken is **not** upgraded — the rollback would restore
+   the same break and the run would report success.
+2. **Install** the target version, then **re-inject** JUNON from the spec pipx recorded, including
+   `--include-apps`. Without that flag the entry points stay inside the venv and `~/.local/bin/junon`
+   disappears: a rollback that restores a working library and leaves nothing to run.
+3. **Check again.** Same behavioural test.
+4. **Roll back** to the version that was there if the check fails — and **check the rollback**, because
+   a rollback nobody verified is the same unverified promise this script exists to stop.
+
+Exit codes: `0` fine · `1` the upgrade did not hold and was undone · `2` the rollback did not restore
+a working installation, which needs a human immediately.
+
+**The check is behavioural on purpose.** The repository's own suite runs against the Serena *checkout*
+in `serena-upstream/`, not against the pipx venv that actually serves JUNON — a green suite says
+nothing about the installation being changed. The smoke test starts the binary, waits for its
+dashboard, proves with `lsof` that the port answering belongs to the process it just started (a JUNON
+already running would otherwise answer for it, cheerfully, about the wrong process), and requires the
+`ide_*` tools to be registered.
+
+## 9. Redeploy after you change the source
 
 Editing a file changes nothing that is running, and neither half of this tells you so. Do the half
 you touched — or both, if you changed something they share, such as the format of a file one writes
@@ -441,7 +482,7 @@ module it imported at start-up.
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open. The refusal names the language-server tool that answers without an IDE — see §4 |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
-| A source change has no effect anywhere | Nothing was redeployed. Step 7 — the plugin is a built jar, and the editable install may point at a different checkout |
+| A source change has no effect anywhere | Nothing was redeployed. Step 9 — the plugin is a built jar, and the editable install may point at a different checkout |
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |
 | A file changed on disk is not visible to reads | Up to ~15 s: an unfocused IDE only refreshes when asked, and the adapter asks on a timer |
 | A `read` or `grep` came back refused, naming a `serena_*` call | The gate, working. Make the call it names, or repeat yours — the second attempt always runs. §7 |

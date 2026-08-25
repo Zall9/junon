@@ -17,6 +17,14 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
+- **Serena upgrades are now checked and reversible.** `scripts/upgrade-serena.sh` runs
+  baseline → install → prove → roll back and prove again. The check is behavioural, because the
+  repository's suite runs against the Serena _checkout_ and says nothing about the pipx venv that
+  actually serves JUNON: it starts the real binary, proves via `lsof` that the port answering belongs
+  to the process it started, and requires the `ide_*` tools to be registered. An installation that is
+  already broken is refused rather than upgraded.
+- **The dashboard's release check covers Serena**, in the same click as the plugin repository.
+
 - **A closed IDE is no longer a dead end.** Every `ide_*` refusal that means "there is no IDE to ask"
   now names the language-server tool that answers the same question — `find_symbol`,
   `find_referencing_symbols`, `get_diagnostics_for_file` — and the two that have no equivalent

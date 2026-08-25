@@ -547,10 +547,18 @@
           });
           const result = await response.json();
           const remedy = result.remedy ? ` ${result.remedy}` : "";
-          upstreamNote = (result.summary || result.reason || "No answer.") + remedy;
+          // Serena is the other half of this installation, from another index. Upgrading it is a
+          // terminal job — it runs a real check and can roll back — so this reports and does not offer
+          // a button that would spin for minutes.
+          const serena = result.serena && result.serena.summary
+            ? ` ${result.serena.summary}${result.serena.behind
+                ? " Upgrade with: python -m junon.serena_upgrade (it checks the result and rolls back if it broke)."
+                : ""}`
+            : "";
+          upstreamNote = (result.summary || result.reason || "No answer.") + remedy + serena;
           // `asked` and not `upToDate`: a check that could not reach the repository must not be
           // drawn in the same calm grey as one that came back current.
-          upstreamTone = result.upToDate ? "muted" : "warn";
+          upstreamTone = result.upToDate && !(result.serena && result.serena.behind) ? "muted" : "warn";
         } catch (error) {
           upstreamNote = `Could not ask the plugin repository: ${error}`;
           upstreamTone = "warn";

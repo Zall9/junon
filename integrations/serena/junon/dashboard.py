@@ -221,13 +221,27 @@ class JunonDashboardAPI(SerenaDashboardAPI):
             from flask import jsonify, request
 
             from junon.published import check
+            from junon.serena_release import check as check_serena
             from junon.update_action import SESSION_TOKEN
 
             if request.headers.get("X-JUNON-Token") != SESSION_TOKEN:
                 log.warning("[JUNON] refused a release check without this session's token")
                 return jsonify({"ok": False, "reason": "This request did not carry the session token."}), 403
 
-            return jsonify({"ok": True, **check().as_dict()})
+            # Both halves in one click. Serena arrives from a different index and has broken this
+            # composition twice; a check that only ever looked at JUNON would have said "up to date"
+            # through both of them.
+            serena = check_serena()
+            return jsonify({
+                "ok": True,
+                **check().as_dict(),
+                "serena": {
+                    "installed": serena.installed,
+                    "latest": serena.latest,
+                    "behind": serena.behind,
+                    "summary": serena.summary,
+                },
+            })
 
         @self._app.route("/junon/ide-bridge/status", methods=["GET"])
         def get_ide_bridge_status() -> dict[str, Any]:

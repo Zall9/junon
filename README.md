@@ -137,6 +137,11 @@ asking: `ide-bridge doctor`, whose `versions` check compares the daemon against 
 plugin — and against the CLI it shipped with, so a daemon left running across an update is named even
 with every IDE closed.
 
+Serena itself is the other half, and it arrives from a different index — one that knows nothing about
+JUNON, and which has broken this composition twice. `scripts/upgrade-serena.sh` takes a Serena release
+only if the installation still works afterwards: it starts the real binary, checks the `ide_*` tools
+are registered, and puts the previous version back — then checks *that* — if they are not.
+
 That comparison is between things already on this machine, which is why it cannot see a release
 nobody here has fetched: a daemon, a CLI and three plugins all at 0.2.1 agree with each other however
 long 0.2.4 has been out. Two places ask the repository itself, and only when you ask them to:
