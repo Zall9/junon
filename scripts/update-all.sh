@@ -128,7 +128,9 @@ if genuine:
 print(f"JUNON_FAILURES={len(genuine)}")
 PY
 )
-  print '%s\n' "${PLUGIN_REPORT%JUNON_FAILURES=*}"
+  # `printf`, not `print`: this file is bash, `print` is a zsh builtin, and the whole plugin report
+  # silently disappeared behind "print: command not found" the first time this ran.
+  printf '%s\n' "${PLUGIN_REPORT%JUNON_FAILURES=*}"
   PLUGIN_FAILURES="${PLUGIN_REPORT##*JUNON_FAILURES=}"
   [[ "${PLUGIN_FAILURES:-0}" =~ ^[0-9]+$ ]] && FAILURES=$((FAILURES + PLUGIN_FAILURES))
 fi
