@@ -15,7 +15,7 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
-## Unreleased
+## 0.2.5
 
 - **Serena upgrades are now checked and reversible.** `scripts/upgrade-serena.sh` runs
   baseline → install → prove → roll back and prove again. The check is behavioural, because the
