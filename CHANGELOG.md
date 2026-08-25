@@ -15,7 +15,7 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
-## Unreleased
+## 0.2.6
 
 - **The dashboard resources are packaged, and a JUNON without them says so.** A wheel built from
   `integrations/serena` carried every module and no `index.html`, which does not fail — the index view

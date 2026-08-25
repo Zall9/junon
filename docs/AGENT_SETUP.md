@@ -412,6 +412,12 @@ Three causes account for nearly all of it, and **only the first is visible in a 
 | The host was fixed but never restarted | the config reads `junon`, the running process is `serena` | restart the host **application**, not the session — MCP servers are launched at start-up and keep the command they started with |
 | It *is* JUNON | tools named `serena_ide_read_symbol` and the like | nothing is wrong: the prefix is the MCP server's name, and `ide_*` tools exist only under JUNON |
 
+**Since 0.2.6 the page tells you itself.** When JUNON runs but its dashboard files are missing — an
+install that did not carry its resources, a checkout without the front end — the served page carries a
+banner saying it is Serena's, naming the directory that is empty, and stating that the `ide_*` tools
+are unaffected. Before that, the only signal was a warning in a log the agent host swallows, which is
+why this failure cost someone an afternoon.
+
 Two checks settle it between them. From a shell, `/junon/ide-bridge/status` answers `200` on a JUNON
 dashboard and `404` on Serena's — a page can be cached, a route cannot be faked. From inside the
 session, call `get_current_config`: active tools containing `ide_*` mean JUNON, and the
@@ -565,7 +571,7 @@ module it imported at start-up.
 | Serena dies at start-up, `KeyError: 'languages'` | The project config was written by Serena 1.7, the installed Serena is older. `pipx upgrade serena-agent`. Not a JUNON failure — plain `serena` fails identically, which is the control worth running before blaming the composition |
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open. The refusal names the language-server tool that answers without an IDE — see §4 |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
-| Serena's dashboard is served, not JUNON's | `scripts/diagnose-dashboard.sh` — usually a host that was never restarted after its config was corrected |
+| Serena's dashboard is served, not JUNON's | Read the banner at the top of that page if there is one — it names the missing directory. Otherwise `scripts/diagnose-dashboard.sh`: usually a host never restarted after its config was corrected |
 | Tools are named `serena_*` and it looks like plain Serena | That is the MCP server's name. If `serena_ide_*` tools exist, it is JUNON |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
 | A source change has no effect anywhere | Nothing was redeployed. Step 9 — the plugin is a built jar, and the editable install may point at a different checkout |
