@@ -106,6 +106,7 @@ class IdeBridgeTool(Tool, ABC):
             return (
                 "No IDE Bridge daemon is reachable. This is normal when no IDE is open: start your "
                 f"IDE with the IDE Bridge plugin installed and try again. ({error})"
+                f"{self._fallback()}"
             )
         if isinstance(error, RequestFailedError):
             again = " This one is worth retrying." if error.retryable else ""
@@ -114,10 +115,26 @@ class IdeBridgeTool(Tool, ABC):
             # — three copies of one word, and no help. Say the code once and let the subclass add
             # what it knows about its own route.
             detail = str(error).replace(f"{error.code}: ", "", 1).strip()
+            # A missing workspace is not the IDE refusing — it is there being no IDE to ask, which
+            # is exactly when the tool that needs none is worth naming.
+            elsewhere = self._fallback() if error.code == "WORKSPACE_NOT_FOUND" else ""
             if detail in {error.code, ""}:
-                return f"The IDE refused: [{error.code}].{again}{self._advice(error)}"
-            return f"The IDE refused: [{error.code}] {detail}{again}{self._advice(error)}"
+                return f"The IDE refused: [{error.code}].{again}{self._advice(error)}{elsewhere}"
+            return f"The IDE refused: [{error.code}] {detail}{again}{self._advice(error)}{elsewhere}"
         return f"The IDE Bridge could not answer: {error}"
+
+    #: What answers this tool's question when no IDE is running. Empty when nothing does.
+    #:
+    #: Not a general "use Serena instead": that is the kind of advice that gets read and skipped,
+    #: whereas a named call with its parameter gets made. Set per tool, because the honest answer
+    #: differs — a symbol lookup has an exact equivalent, a quick-fix has none.
+    without_an_ide: str = ""
+
+    def _fallback(self) -> str:
+        """The alternative, appended to refusals that mean "there is no IDE to ask"."""
+        if not self.without_an_ide:
+            return ""
+        return f" Without an IDE, this question is answered by {self.without_an_ide}"
 
     def _advice(self, error: RequestFailedError) -> str:
         """What this particular route can add about a refusal. Nothing, by default.
@@ -161,7 +178,11 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
             # with nothing open", so neither does this — claiming either would be a guess.
             return (
                 "The IDE Bridge daemon is running, but reports no open workspace. Either no IDE is "
-                "connected to it, or the connected IDE has no project open."
+                "connected to it, or the connected IDE has no project open. The tools that need no "
+                "IDE still work: find_symbol, get_symbols_overview, find_referencing_symbols, "
+                "find_implementations and get_diagnostics_for_file are answered by language servers. "
+                "Only unsaved buffers, the IDE's own inspections and its refactoring engines require "
+                "one to be running."
             )
 
         lines = [f"An IDE is connected with {len(workspaces)} workspace(s) open:"]
@@ -258,6 +279,10 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
 class IdeReadDocumentTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """A file as the IDE currently holds it, unsaved edits included."""
 
+    without_an_ide = (
+        "`read_file`, which reads the same file from disk — the difference is unsaved edits, which only the IDE has."
+    )
+
     def apply(self, relative_path: str, max_answer_chars: int = -1) -> str:
         """
         Read a file through the IDE rather than from disk.
@@ -289,6 +314,10 @@ class IdeReadDocumentTool(IdeBridgeTool, ToolMarkerSymbolicRead):
 
 class IdeReadSymbolTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """One declaration's source, cut to the range the IDE gives for it."""
+
+    without_an_ide = (
+        "`find_symbol(name_path_pattern=..., include_body=True)`, from the language server rather than the IDE."
+    )
 
     def apply(self, name: str, relative_path: str = "", max_answer_chars: int = -1) -> str:
         """
@@ -405,6 +434,10 @@ def _flatten(symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class IdeSymbolsOverviewTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """Top-level symbols of a file, as the IDE's own engine reports them."""
 
+    without_an_ide = (
+        "`get_symbols_overview(relative_path=...)`."
+    )
+
     def _advice(self, error: RequestFailedError) -> str:
         """The refusal that means "wrong IDE for this file", said as such.
 
@@ -462,6 +495,10 @@ class IdeSymbolsOverviewTool(IdeBridgeTool, ToolMarkerSymbolicRead):
 
 class IdeFindSymbolTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """Searches the IDE's own symbol index, optionally narrowed by kind."""
+
+    without_an_ide = (
+        "`find_symbol(name_path_pattern=...)`."
+    )
 
     def apply(
         self,
@@ -538,6 +575,10 @@ class IdeFindSymbolTool(IdeBridgeTool, ToolMarkerSymbolicRead):
 
 class IdeDiagnosticsTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """The IDE's own inspections, with the fixes it offers for them."""
+
+    without_an_ide = (
+        "`get_diagnostics_for_file(relative_path=...)`, which is the language server's view rather than the IDE's inspections — narrower, and real."
+    )
 
     def _advice(self, error: RequestFailedError) -> str:
         """Turns this route's one confusing refusal into a next step.
@@ -633,6 +674,10 @@ class IdeDiagnosticsTool(IdeBridgeTool, ToolMarkerSymbolicRead):
 class IdeTodosTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """TODO markers as the IDE recognises them, not as a text search guesses at them."""
 
+    without_an_ide = (
+        "`search_for_pattern(substring_pattern=TODO|FIXME)`, which finds the text without the IDE notion of a TODO."
+    )
+
     def apply(self, relative_path: str = "", limit: int = 100, max_answer_chars: int = -1) -> str:
         """
         List the TODO markers the IDE knows about.
@@ -674,6 +719,10 @@ class IdeHierarchyTool(IdeBridgeTool, ToolMarkerSymbolicRead):
     """Callers, callees, supertypes and subtypes, from the IDE's own hierarchy engines."""
 
     RELATIONS = ("callers", "callees", "supertypes", "subtypes")
+
+    without_an_ide = (
+        "`find_referencing_symbols(...)` for callers, and `find_implementations(...)` for subtypes."
+    )
 
     def apply(self, name: str, relation: str, max_answer_chars: int = -1) -> str:
         """
@@ -905,6 +954,10 @@ class IdeRefactorTool(IdeBridgeTool, ToolMarkerCanEdit):
 
     #: Refused by name by both adapters. Named so the answer can say why rather than pass it on.
     STRUCTURAL = ("extractMethod", "inline", "move", "changeSignature")
+
+    without_an_ide = (
+        "`rename_symbol(...)`, which renames through the language server. Reformatting and import optimisation have no equivalent — they are the IDE's own engines."
+    )
 
     def _advice(self, error: RequestFailedError) -> str:
         """The refusals that mean "this plan no longer describes the code"."""

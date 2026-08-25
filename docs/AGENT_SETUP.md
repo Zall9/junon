@@ -181,6 +181,46 @@ node packages/cli/dist/bin.js workspaces
 `adapters` is empty, the IDE is looking at a different discovery file — go back to step 2 rather than
 restarting things at random.
 
+### Why nothing here starts an IDE for you
+
+A closed IDE is the ordinary case, and the obvious idea is to start one on `activate_project`. It was
+measured rather than argued about, because JetBrains does ship a headless backend on macOS:
+
+```bash
+PyCharm.app/Contents/bin/remote-dev-server.sh run /path/to/project
+```
+
+It works. The plugin loads, and an adapter registered with the daemon **ten seconds** after launch,
+with no window. It was rejected anyway, on what the same run showed:
+
+- **2.1 GB resident** for one backend. A polyglot repository would invite one per language, which is
+  six gigabytes to answer a question about a symbol.
+- **It opens a Code With Me listener** (`tcp://127.0.0.1:5990`) and prints a join link carrying a
+  token, plus Gateway links carrying the machine's hostname. Loopback, but it is a remote-access
+  surface appearing as a side effect of activating a project — and a log line not to paste into an
+  issue.
+- **`REMOTE_DEV_TRUST_PROJECTS` is not an option.** It skips the trust prompt *and* runs build
+  scripts with it. Workspace trust is not something this project disables silently.
+- **A registered adapter is not a ready one.** Ten seconds to appear; indexing is separate, so the
+  first calls after an automatic start would refuse as not-ready anyway.
+
+So the IDE is worth its memory when you already have it open — for unsaved buffers, its inspections
+and its refactoring engines — and when it is closed the answer is not to resurrect it. Every `ide_*`
+refusal that means "there is no IDE to ask" now names the tool that answers the same question through
+a language server:
+
+| Closed-IDE refusal from | Names |
+| --- | --- |
+| `ide_find_symbol` | `find_symbol(name_path_pattern=...)` |
+| `ide_hierarchy` | `find_referencing_symbols(...)`, `find_implementations(...)` |
+| `ide_symbols_overview` | `get_symbols_overview(relative_path=...)` |
+| `ide_read_symbol` | `find_symbol(..., include_body=True)` |
+| `ide_read_document` | `read_file` — with the difference stated: the disk has no unsaved edits |
+| `ide_diagnostics` | `get_diagnostics_for_file(relative_path=...)` |
+| `ide_todos` | `search_for_pattern(...)` |
+| `ide_refactor` | `rename_symbol(...)`; reformat and optimiseImports have none, and it says so |
+| `ide_apply_fix` | nothing, and it offers nothing — a quick fix is the IDE's inspection or it is not that fix |
+
 ## 5. Connect Serena (JUNON)
 
 JUNON composes onto an **unmodified** Serena, so it must be installed into Serena's own environment:
@@ -398,7 +438,7 @@ module it imported at start-up.
 | Everything passes but answers look stale or wrong | A daemon from an earlier session. `doctor`, and read `pid` and `uptimeSeconds` |
 | Agent has no `ide_*` tools | The host is running `serena`, not `junon` |
 | Serena dies at start-up, `KeyError: 'languages'` | The project config was written by Serena 1.7, the installed Serena is older. `pipx upgrade serena-agent`. Not a JUNON failure — plain `serena` fails identically, which is the control worth running before blaming the composition |
-| `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open |
+| `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open. The refusal names the language-server tool that answers without an IDE — see §4 |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
 | A source change has no effect anywhere | Nothing was redeployed. Step 7 — the plugin is a built jar, and the editable install may point at a different checkout |

@@ -17,6 +17,16 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
+- **A closed IDE is no longer a dead end.** Every `ide_*` refusal that means "there is no IDE to ask"
+  now names the language-server tool that answers the same question — `find_symbol`,
+  `find_referencing_symbols`, `get_diagnostics_for_file` — and the two that have no equivalent
+  (`ide_apply_fix`, and reformatting in `ide_refactor`) say nothing rather than sending someone to a
+  tool that cannot do it.
+- **Auto-starting a headless IDE was measured and rejected**, and AGENT_SETUP §4 records why: it
+  works — an adapter registered ten seconds after `remote-dev-server.sh run`, with no window — but it
+  costs 2.1 GB per backend, opens a Code With Me listener with a join token as a side effect of
+  activating a project, and the flag that skips the trust prompt also runs build scripts.
+
 - **A gate that makes the agents use the tools, since telling them did not.** `scripts/install-agent-gate.sh`
   installs an opencode plugin and a Claude Code hook that refuse a bare-identifier `grep` and a
   ranged-less `read` of a code file over 300 lines — once per target, naming the symbolic call that
