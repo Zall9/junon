@@ -294,7 +294,7 @@ behind it looks like.
 scripts/install-agent-gate.sh          # --dry-run first, if you prefer
 ```
 
-An opencode plugin and a Claude Code hook, refusing exactly two calls, **once per target**:
+An opencode plugin and a Claude Code hook, refusing three things, **once per target**:
 
 | Refused | Why | To proceed anyway |
 | --- | --- | --- |
@@ -314,6 +314,15 @@ of the calls that actually happened each setting would have refused:
 
 Five rather than three because `orchestrator` already reads by range 484 times a fortnight, and a
 rule that starts punishing the agent doing it right is a rule that gets deleted.
+
+**What it never touches**, so the boundary is a fact rather than a discovery: `glob`, `list`, `bash`
+— including `bash grep` and `bash cat` — every `read` that carries `offset`/`limit`, every file that
+is not source (markdown, JSON, lock files, logs), every source file under 300 lines while the budget
+holds, every `grep` whose pattern is a real regex or shorter than three characters, and every path
+that cannot be read. Three of those are deliberate holes rather than oversights: `bash` is where a
+determined agent goes when a tool is refused, `glob` is cheap and answers a question the symbol index
+does not, and a ranged read is already the careful call. Closing the `bash` hole would mean parsing
+shell, which is how a gate becomes something that breaks builds at three in the morning.
 
 The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
 `ide_read_document`. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
@@ -341,8 +350,10 @@ Installed here at 10:01 and still not firing at 12:16, because the opencode serv
 running since 23:40 two nights before: 39 tool calls in between, twelve of them `read`, and **zero**
 refusals. Nothing was broken and nothing said so — the check is
 `python3 integrations/agent-hosts/junon-usage.py --days 1`, and a gate that is working shows up as
-refusals in the transcript, not as an absence of reads. To remove the gate: delete the plugin file, and the `junon-first-gate` entry from
-`settings.json`.
+refusals in the transcript, not as an absence of reads.
+
+**To remove it:** delete `~/.config/opencode/plugin/junon-first.ts`, and the `junon-first-gate` entry
+from `~/.claude/settings.json`. Both take effect on the next start of the host, for the same reason.
 
 ## 8. Redeploy after you change the source
 
@@ -393,6 +404,9 @@ module it imported at start-up.
 | A source change has no effect anywhere | Nothing was redeployed. Step 7 — the plugin is a built jar, and the editable install may point at a different checkout |
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |
 | A file changed on disk is not visible to reads | Up to ~15 s: an unfocused IDE only refreshes when asked, and the adapter asks on a timer |
+| A `read` or `grep` came back refused, naming a `serena_*` call | The gate, working. Make the call it names, or repeat yours — the second attempt always runs. §7 |
+| The gate never refuses anything | The host has not been restarted since it was installed; plugins and hooks are read at start-up. `python3 integrations/agent-hosts/junon-usage.py --days 1` |
+| A refusal names a tool the agent does not have | That agent's `mcps` list excludes `serena`. Repeat the call to proceed, then add it — the gate assumes what §7 installs |
 | Answers look right but behave oddly | The halves may be different releases. `doctor` names the `versions` check; see [RELEASING.md](RELEASING.md) |
 | Everything agrees, and everything is old | Local checks compare this machine against itself, so they cannot see a release nobody fetched. `node packages/cli/dist/bin.js doctor --check-updates` asks the repository — one `GET`, only when you type it |
 
