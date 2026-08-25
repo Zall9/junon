@@ -15,6 +15,17 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.2.7
+
+- **`scripts/update-all.sh` no longer contradicts itself.** Running it for real — the first time,
+  against the 0.2.6 it had just built — it printed each running IDE twice, once as skipped and once as
+  `FAIL`, and then declared every step verified. `InstallOutcome.failed` carries the running IDEs as
+  well as genuine failures, and the Python block's findings never reached the shell's exit status.
+  Running IDEs are now subtracted from the failures and real ones are counted.
+- **The plugin report printed nothing at all** in the first fixed version: the file is bash and
+  `print` is a zsh builtin. Two defects, both found by running the script rather than reading it,
+  which is why 0.2.6 is superseded rather than amended.
+
 ## 0.2.6
 
 - **The dashboard resources are packaged, and a JUNON without them says so.** A wheel built from
