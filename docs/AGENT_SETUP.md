@@ -284,6 +284,14 @@ Two things follow, both measured on this machine rather than imagined:
   (`pipx upgrade serena-agent`), not to rewrite the configs back.
 - The dashboard start-up call also changed shape between those versions. JUNON accepts both, and
   `tests/test_dashboard_start_shapes.py` is what keeps it that way.
+- **`.serena/project.yml` is not the last word.** `.serena/project.local.yml` overrides it, is not
+  versioned, and on a machine set up before 1.7 still carries the old `languages:` key — which Serena
+  honours by renaming it on load, so it silently wins over anything you write in `language_servers`.
+  It cost three attempts here to find that. And the list matters more than it looks: **one language
+  server that fails to start takes every symbolic tool down with it** — Serena reports it as the
+  *manager* failing — so a server that needs a Gradle build to answer can leave a whole project with
+  nothing but `read` and `grep`. Pin the list to what the LSP is actually good at, and leave the rest
+  to the IDE, which is what `ide_find_symbol` is for.
 
 This is the one step with no error message when you get it wrong. `serena` still starts plain Serena
 — deliberately, so that installing JUNON cannot change a machine's behaviour silently — which means a
@@ -358,7 +366,8 @@ behind it looks like.
 scripts/install-agent-gate.sh          # --dry-run first, if you prefer
 ```
 
-An opencode plugin and a Claude Code hook, refusing three things, **once per target**:
+An opencode plugin and a Claude Code hook, refusing what follows, **once per target** — the table
+is the list, and carries no count beside it, because that count has already gone stale twice:
 
 | Refused | Why | To proceed anyway |
 | --- | --- | --- |
