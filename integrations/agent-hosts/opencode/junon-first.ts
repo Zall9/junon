@@ -51,6 +51,28 @@ const alreadyNudged = new Set<string>()
  */
 const WHOLE_FILE_BUDGET = 5
 
+/**
+ * The same budget for a session that has never reached for a symbolic tool. Lower on purpose: five
+ * whole files is a generous allowance for someone who has shown they know the other route, and too
+ * generous for someone who has not.
+ */
+const WHOLE_FILE_BUDGET_UNPROVEN = 3
+
+/** Which budget applies to this session. */
+function budgetFor(session: string): number {
+  return usesSymbolicTools.has(session) ? WHOLE_FILE_BUDGET : WHOLE_FILE_BUDGET_UNPROVEN
+}
+
+/**
+ * Sessions already told once that a short source file has a symbolic route.
+ *
+ * A project made of small files let a session read all of it without ever touching the index: every
+ * read was under the line threshold and the budget was never spent. One nudge per session covers
+ * that, and only for a session that has never used a symbolic tool — there is nothing to teach the
+ * one that has.
+ */
+const nudgedAboutSmallFiles = new Set<string>()
+
 /** Whole-file code reads seen this session. Per process, which is per opencode run. */
 const spent = new Map<string, number>()
 
@@ -72,7 +94,7 @@ const unheeded = new Map<string, number>()
  * the gate stops. Two, because the cost of being wrong is a wasted round-trip each time and the
  * evidence after two is already clear.
  */
-const GIVE_UP_AFTER = 2
+const GIVE_UP_AFTER = 3
 
 /** Whether nudging this session is still worth a round-trip. */
 function worthNudging(session: string): boolean {
@@ -230,8 +252,24 @@ export const JunonFirstPlugin: Plugin = async () => {
       const lines = lineCount(path)
       const used = (spent.get(session) ?? 0) + 1
       spent.set(session, used)
-      const overBudget = used > WHOLE_FILE_BUDGET
-      if (lines < WHOLE_FILE_IS_FINE && !overBudget) return
+      const overBudget = used > budgetFor(session)
+
+      if (lines < WHOLE_FILE_IS_FINE && !overBudget) {
+        // A project of small files was a way to read everything without ever being asked: each read
+        // is under the threshold and the budget is never spent. One nudge per session closes it, and
+        // only where there is something to teach.
+        if (usesSymbolicTools.has(session) || nudgedAboutSmallFiles.has(session)) return
+        nudgedAboutSmallFiles.add(session)
+        unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+        throw new Error(
+          `read of ${path} was not run — this session has not asked the index anything yet, and a ` +
+            `short file is still a file read whole:\n` +
+            `  serena_ide_read_symbol({ ... })    one declaration, from the running IDE\n` +
+            `  serena_find_symbol({ name_path_pattern: "…", include_body: true })\n` +
+            `Said once per session. Run the same read again and it will go through, as will every ` +
+            `short file after it.`,
+        )
+      }
 
       const key = `${session}:read:${path}`
       if (alreadyNudged.has(key)) return

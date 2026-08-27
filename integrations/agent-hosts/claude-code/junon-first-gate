@@ -48,6 +48,11 @@ WHOLE_FILE_IS_FINE = 300
 #: 7.4%. A rule that punishes the one doing it right is a rule that gets deleted.
 WHOLE_FILE_BUDGET = 5
 
+#: The same budget for a session that has never reached for a symbolic tool. Five whole files is a
+#: generous allowance for someone who has shown they know the other route, and too generous for
+#: someone who has not.
+WHOLE_FILE_BUDGET_UNPROVEN = 3
+
 MARKERS = Path("/tmp")
 
 #: Commands that answer a question the index answers better. Matched on the first word of each
@@ -64,7 +69,7 @@ READ_COMMANDS = {"cat", "bat"}
 #: tool it could not call. Which agent is asking is not in the hook's input, but what the session has
 #: done is: a session that has never used a symbolic tool and has now ignored two refusals is one the
 #: gate cannot help.
-GIVE_UP_AFTER = 2
+GIVE_UP_AFTER = 3
 
 
 def already_nudged(session: str, kind: str, target: str) -> bool:
@@ -90,6 +95,30 @@ def spend(session: str) -> int:
         return ledger.stat().st_size
     except OSError:
         return 0
+
+
+def budget_for(session: str) -> int:
+    """Five for a session that has used the index, three for one that has not."""
+    return WHOLE_FILE_BUDGET if uses_symbolic_tools(session) else WHOLE_FILE_BUDGET_UNPROVEN
+
+
+def small_file_nudge_owed(session: str) -> bool:
+    """Whether this session still has its one short-file nudge coming.
+
+    A project made of small files was a way to read all of it without ever being asked: every read
+    under the threshold, the budget never spent. Once per session, and only where there is something
+    to teach — a session that has used a symbolic tool is left alone.
+    """
+    if uses_symbolic_tools(session):
+        return False
+    marker = _session_file(session, "smallnudge")
+    if marker.exists():
+        return False
+    try:
+        marker.touch()
+    except OSError:
+        return False
+    return True
 
 
 def prune() -> None:
@@ -263,9 +292,19 @@ def main() -> int:
     except OSError:
         return 0
     used = spend(session)
-    over_budget = used > WHOLE_FILE_BUDGET
+    over_budget = used > budget_for(session)
     if lines < WHOLE_FILE_IS_FINE and not over_budget:
-        return 0
+        if not small_file_nudge_owed(session):
+            return 0
+        unheeded_count(session, increment=True)
+        return refuse(
+            f"Read of {path} was not run — this session has not asked the index anything yet, and a "
+            f"short file is still a file read whole:\n"
+            f"  mcp__serena__ide_read_symbol(...)    one declaration, from the running IDE\n"
+            f"  mcp__serena__find_symbol(name_path_pattern=..., include_body=True)\n"
+            f"Said once per session. Run the same Read again and it will go through, as will every "
+            f"short file after it."
+        )
     if already_nudged(session, "read", path):
         return 0
     unheeded_count(session, increment=True)

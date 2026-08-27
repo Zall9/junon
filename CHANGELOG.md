@@ -17,6 +17,12 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
+- **The gate treats a session that uses the index differently from one that never has.** The
+  whole-file budget is five for the first and three for the second; the second also gets one nudge on
+  its first short source file, closing the case where a project of small files could be read entirely
+  without the budget ever being spent. Giving up moves from two ignored refusals to three. `glob` was
+  considered and deliberately left alone.
+
 - **The gate's shell rule judges what a command is aimed at.** Two corrections, both found by using
   it: judging the verb alone refused `cat` on a YAML config, and judging the whole line then let
   `cd /tmp && grep -rn thing .` through while refusing `grep ERROR /var/log/x.log`. It is now scoped

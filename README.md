@@ -191,9 +191,10 @@ scripts/install-agent-gate.sh
 ```
 
 It installs an opencode plugin and a Claude Code hook that refuse four things — `grep` for a bare
-identifier, `read` of a code file over 300 lines with no range, the sixth whole-file code read in one
-session, and the same searches run through `bash` — **once per target**, naming the symbolic call that
-answers the same question better. Watched running, it converted nobody at first: an agent simply ran
+identifier, `read` of a code file over 300 lines with no range, a whole-file code read past the session's
+budget, and the same searches run through `bash` — **once per target**, naming the symbolic call that
+answers the same question better. The budget adapts: five whole files for a session that has used the
+index, three for one that has not, which also gets a single nudge on its first short source file. Watched running, it converted nobody at first: an agent simply ran
 `bash grep` instead, which is why that door is now shut. Where an agent has no symbolic tools at all,
 the gate notices after two ignored refusals and goes quiet.
 Repeating the call runs it, so nothing is ever unreachable. Restart the host afterwards: both read

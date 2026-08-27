@@ -420,7 +420,8 @@ is the list, and carries no count beside it, because that count has already gone
 | --- | --- | --- |
 | `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
 | `read` of a code file over 300 lines with no range | the whole file enters the context to answer a question about part of it | repeat it, or pass offset/limit |
-| the **sixth** whole-file code read in one session | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
+| a whole-file code read past the session's budget — the **sixth** where the index has been used, the **fourth** where it has not | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
+| the **first** short source file, in a session that has never used a symbolic tool | a project of small files was a way to read all of it without ever being asked: every read under the threshold, the budget never spent | repeat it — this is said once per session and never again |
 | `bash grep`/`rg` for a bare identifier, `cat` of a source file | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or point the command at something that is not source |
 
 Both numbers were swept over a fortnight of recorded calls rather than chosen by taste — what share
@@ -435,6 +436,15 @@ of the calls that actually happened each setting would have refused:
 
 Five rather than three because `orchestrator` already reads by range 484 times a fortnight, and a
 rule that starts punishing the agent doing it right is a rule that gets deleted.
+
+**The budget is now two numbers, not one.** Five stays for a session that has reached for a symbolic
+tool at least once; a session that has not gets three. Five whole files is a generous allowance for
+someone who has shown they know the other route, and too generous for someone who has not — and the
+gate can tell the two apart, because it sees every call the session makes.
+
+`glob` was considered for the same treatment and deliberately left out. It is cheap, it answers a
+question the symbol index does not, and refusing `**/*.ts` would have been the first rule here to
+judge a call on suspicion rather than on what it is asking.
 
 ### What it did on the first day, and what changed because of it
 
@@ -458,13 +468,15 @@ morning.
 **Some agents cannot comply.** `gitlab-review-orchestrator` has no serena in its `mcps`, so a refusal
 named a tool it could not call; three of the five were that. Neither host tells a hook which agent is
 asking, so instead of mining configuration the gate watches the session: one that has never used a
-symbolic tool and has now ignored **two** refusals is one it cannot help, and it goes quiet there. A
-single symbolic call in that session clears the count and the nudges resume. The waste is bounded at
-two round-trips, and no configuration decides it.
+symbolic tool and has now ignored **three** refusals is one it cannot help, and it goes quiet there. A
+single symbolic call in that session clears the count and the nudges resume. Three rather than two,
+which was reached before an agent had really had the chance to change course. The waste is bounded,
+and no configuration decides it.
 
 **What it never touches**, so the boundary is a fact rather than a discovery: `glob`, `list`, every
 `read` that carries `offset`/`limit`, every file that is not source (markdown, JSON, lock files,
-logs), every source file under 300 lines while the budget holds, every `grep` whose pattern is a real
+logs), every source file under 300 lines while the budget holds — except the first one in a session
+that has never used the index, said once — every `grep` whose pattern is a real
 regex or shorter than three characters, every path that cannot be read, every command that is not a
 search or a `cat` — `git`, `pnpm`, `tail`, `ls` — and every `serena_*` call, which it observes rather
 than judges.
