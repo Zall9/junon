@@ -365,7 +365,7 @@ An opencode plugin and a Claude Code hook, refusing three things, **once per tar
 | `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
 | `read` of a code file over 300 lines with no range | the whole file enters the context to answer a question about part of it | repeat it, or pass offset/limit |
 | the **sixth** whole-file code read in one session | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
-| `bash grep` / `rg` / `cat` of the same kind | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or use a command that is genuinely about text |
+| `bash grep`/`rg` for a bare identifier, `cat` of a source file | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or point the command at something that is not source |
 
 Both numbers were swept over a fortnight of recorded calls rather than chosen by taste — what share
 of the calls that actually happened each setting would have refused:
@@ -412,6 +412,14 @@ logs), every source file under 300 lines while the budget holds, every `grep` wh
 regex or shorter than three characters, every path that cannot be read, every command that is not a
 search or a `cat` — `git`, `pnpm`, `tail`, `ls` — and every `serena_*` call, which it observes rather
 than judges.
+
+The shell rule looks at **what a command is aimed at**, not only what it is, and it took two
+corrections to get there. Judging the verb alone refused `cat .serena/project.yml` — a config file the
+rule's own message promises to let through. Judging the whole command line then let
+`cd /tmp && grep -rn thing .` past, because the token after `cd` is `&&`, while refusing
+`grep ERROR /var/log/system.log`, which is a log question wearing an identifier's clothes. It is now
+scoped to the segment holding the command and asks *where* as well as *what*: a bare identifier
+searched across a tree is a symbol question; the same pattern pointed at a `.log` is not.
 
 The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
 `ide_read_document`. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
@@ -621,6 +629,7 @@ module it imported at start-up.
 | `adapterCount: 0` with an IDE running | The IDE and your shell are using different discovery files |
 | Everything passes but answers look stale or wrong | A daemon from an earlier session. `doctor`, and read `pid` and `uptimeSeconds` |
 | Agent has no `ide_*` tools | The host is running `serena`, not `junon` |
+| `find_symbol` says *the language server manager is not initialized* | One server failed and took the rest with it. Pin `language_servers` to what you need — and check `.serena/project.local.yml`, which overrides `project.yml` and may still use the pre-1.7 key `languages:` |
 | Serena dies at start-up, `KeyError: 'languages'` | The project config was written by Serena 1.7, the installed Serena is older. `pipx upgrade serena-agent`. Not a JUNON failure — plain `serena` fails identically, which is the control worth running before blaming the composition |
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open. The refusal names the language-server tool that answers without an IDE — see §4 |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |

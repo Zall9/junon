@@ -110,6 +110,47 @@ function lineCount(path: string): number {
   }
 }
 
+
+/** A file that is plainly not source: a log, a config, a lock file, data. */
+const NOT_SOURCE = /\.(log|ya?ml|json|toml|ini|conf|cfg|lock|txt|csv|md|env)$/i
+
+/**
+ * Whether one shell segment asks a question the symbol index answers.
+ *
+ * Scoped to the segment holding the command, because judging the whole line let
+ * `cd /tmp && grep -rn publishedCheck .` through: the token after `cd` is `&&`, which is not an
+ * identifier. And it asks *where* as well as *what*, because `grep ERROR /var/log/system.log` is a
+ * log question wearing an identifier's clothes.
+ *
+ * Conservative by design: it must positively recognise a symbol question, and lets everything else
+ * pass. A missed nudge costs nothing anybody notices; a refusal with no business happening is how a
+ * gate gets deleted.
+ */
+function segmentAsksAboutSymbols(segment: string, searching: boolean): boolean {
+  const tokens = segment.split(/\s+/).filter(Boolean)
+  const rest = tokens.slice(1).filter((token) => !token.startsWith("-"))
+  const bare = (token: string) => token.replace(/^["']|["']$/g, "")
+
+  if (searching) {
+    const pattern = rest.length > 0 ? bare(rest[0]!) : ""
+    if (!IDENTIFIER.test(pattern)) return false
+    // Where it is being searched decides what kind of question it is.
+    const targets = rest.slice(1).map(bare)
+    if (targets.some((target) => NOT_SOURCE.test(target))) return false
+    return true
+  }
+  return rest.map(bare).some((token) => CODE.test(token))
+}
+
+/** The segment whose first word is one of `commands`, if any. */
+function segmentFor(command: string, commands: Set<string>): string {
+  for (const segment of command.split(/&&|\|\||;|\|/)) {
+    const first = segment.trim().split(/\s+/)[0] ?? ""
+    if (commands.has(first)) return segment.trim()
+  }
+  return ""
+}
+
 export const JunonFirstPlugin: Plugin = async () => {
   return {
     "tool.execute.before": async (input: any, output: any) => {
@@ -132,6 +173,11 @@ export const JunonFirstPlugin: Plugin = async () => {
         const searching = words.find((word) => SEARCH_COMMANDS.has(word))
         const reading = words.find((word) => READ_COMMANDS.has(word))
         if (!searching && !reading) return
+        // What it is aimed at, not just what it is. Judging the verb alone refused
+        // `cat .serena/project.yml` during a diagnosis — a config file, which this rule's own message
+        // promises to let through. The tool-level rules were always careful here; this one was not.
+        const segment = segmentFor(command, searching ? SEARCH_COMMANDS : READ_COMMANDS)
+        if (!segment || !segmentAsksAboutSymbols(segment, Boolean(searching))) return
 
         const key = `${session}:bash:${command.slice(0, 120)}`
         if (alreadyNudged.has(key)) return

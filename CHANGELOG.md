@@ -17,6 +17,10 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
+- **The gate's shell rule judges what a command is aimed at.** Two corrections, both found by using
+  it: judging the verb alone refused `cat` on a YAML config, and judging the whole line then let
+  `cd /tmp && grep -rn thing .` through while refusing `grep ERROR /var/log/x.log`. It is now scoped
+  to the segment holding the command and asks where as well as what.
 - **The file-tool gate stops being walked around, and stops nagging agents it cannot help.** Watched
   running for the first time, it fired five times and converted nobody: one agent ran `bash grep`
   instead, one repeated its call, and three belonged to an agent with no serena at all. `bash` searches

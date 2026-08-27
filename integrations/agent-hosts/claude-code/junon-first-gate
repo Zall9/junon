@@ -148,6 +148,36 @@ def first_words(command: str) -> list[str]:
     return words
 
 
+#: A file that is plainly not source: a log, a config, a lock file, data.
+NOT_SOURCE = re.compile(r"\.(log|ya?ml|json|toml|ini|conf|cfg|lock|txt|csv|md|env)$", re.IGNORECASE)
+
+
+def segment_for(command: str, commands: set[str]) -> str:
+    """The `&&`-separated segment whose first word is one of `commands`."""
+    for segment in re.split(r"&&|\|\||;|\|", command):
+        parts = segment.strip().split()
+        if parts and parts[0] in commands:
+            return segment.strip()
+    return ""
+
+
+def asks_about_symbols(segment: str, searching: bool) -> bool:
+    """Whether one shell segment asks something the index answers.
+
+    Scoped to the segment, because judging the whole line let `cd /tmp && grep -rn thing .` through —
+    the token after `cd` is `&&`. And it asks *where* as well as *what*: `grep ERROR /var/log/x.log`
+    is a log question wearing an identifier's clothes.
+    """
+    tokens = segment.split()
+    rest = [token for token in tokens[1:] if not token.startswith("-")]
+    bare = [token.strip("\"'") for token in rest]
+    if searching:
+        if not bare or not IDENTIFIER.match(bare[0]):
+            return False
+        return not any(NOT_SOURCE.search(target) for target in bare[1:])
+    return any(CODE.search(token) for token in bare)
+
+
 def refuse(reason: str) -> int:
     print(reason, file=sys.stderr)
     return 2
@@ -179,6 +209,11 @@ def main() -> int:
         searching = next((word for word in words if word in SEARCH_COMMANDS), "")
         reading = next((word for word in words if word in READ_COMMANDS), "")
         if not searching and not reading:
+            return 0
+        # What it is aimed at, not just what it is: judging the verb alone refused
+        # `cat .serena/project.yml`, a config file this rule's own message promises to let through.
+        segment = segment_for(command, SEARCH_COMMANDS if searching else READ_COMMANDS)
+        if not segment or not asks_about_symbols(segment, bool(searching)):
             return 0
         if already_nudged(session, "bash", command[:120]):
             return 0

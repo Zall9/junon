@@ -133,7 +133,13 @@ ls_additional_workspace_folders: []
 # When using multiple language servers, the first language server that supports a given file will be used for that file.
 # The first language server is the default language and the respective language server will be used as a fallback.
 # Note that when using the JetBrains backend, language servers are not used and this list is correspondingly ignored.
-language_servers: []
+# Pinned rather than auto-detected, and the reason is worth keeping: auto-detection starts Kotlin for
+# `jetbrains-plugin/**.kt`, that server has to resolve a Gradle build before it can answer, and its
+# `initialize` was cancelled on a timeout on 2026-08-27. Serena reports that as the *manager* failing,
+# so TypeScript and Python stop answering too and every agent falls back to read and grep. Kotlin is
+# the language this repository least needs an LSP for — the IDE holding jetbrains-plugin open answers
+# it through ide_find_symbol and ide_read_symbol, with its analyser behind it.
+language_servers: [typescript, python]
 
 # list of workspace folder paths (LSP backend only).
 # These folders will be used to build up Serena's symbol index.
