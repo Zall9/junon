@@ -156,6 +156,10 @@ cannot reach it is told *could not ask* rather than *up to date*. It is the only
 this product; [docs/SECURITY.md](docs/SECURITY.md) §5a states the terms.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
+Claude Code, opencode and Cursor each configure MCP servers differently — `~/.claude.json`,
+`~/.config/opencode/opencode.json` and `~/.cursor/mcp.json`, and opencode's schema is not the others'.
+[docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) §5 gives all three in full.
+
 JUNON installs into Serena's own environment, from the remote:
 
 ```bash

@@ -262,15 +262,62 @@ junon tools list | grep '^ \* `ide_'
 
 Ten tools — the tenth is `ide_refactor`, the IDE's own rename. Zero means plain Serena answered.
 
-Then configure your MCP host to run **`junon`**, never `serena`:
+Then configure your MCP host to run **`junon`**, never `serena`. The three hosts do not share a
+schema, so each is given in full rather than as a shape to adapt.
+
+**Claude Code** — `~/.claude.json`, under `mcpServers`:
 
 ```json
 {
-  "type": "stdio",
-  "command": "junon",
-  "args": ["start-mcp-server", "--project-from-cwd", "--transport", "stdio"]
+  "serena": {
+    "type": "stdio",
+    "command": "junon",
+    "args": ["start-mcp-server", "--project-from-cwd", "--transport", "stdio"]
+  }
 }
 ```
+
+**opencode** — `~/.config/opencode/opencode.json`, under `mcp`. Note the difference: `type` is
+`local`, and `command` is an **array** that carries the arguments. The Claude Code block above does
+not work here:
+
+```json
+{
+  "serena": {
+    "type": "local",
+    "command": ["junon", "start-mcp-server", "--project-from-cwd", "--transport", "stdio"],
+    "cwd": ".",
+    "enabled": true,
+    "timeout": 60000
+  }
+}
+```
+
+**Cursor** — `~/.cursor/mcp.json` globally, or `.cursor/mcp.json` in a project, under `mcpServers`;
+the shape is Claude Code's:
+
+```json
+{
+  "serena": {
+    "command": "junon",
+    "args": ["start-mcp-server", "--project-from-cwd", "--transport", "stdio"]
+  }
+}
+```
+
+The first two are copied from what is running on the machine this was written on. **The Cursor one is
+not**: Cursor is not installed here, so it comes from Cursor's own documentation and has not been
+watched working. Check it with `get_current_config` — `ide_*` tools in the active list mean JUNON
+answered — before believing it.
+
+**Keeping the server named `serena` is deliberate**, in all three. The tools take the server's name,
+so `serena_find_symbol` and `serena_ide_read_symbol` are what an agent sees, and every prompt, memory
+and habit that already says `serena_*` keeps working. A server renamed `junon` would rename all of
+them.
+
+The file-tool gate (§7) covers **opencode and Claude Code only**: one is a plugin, the other a hook,
+and Cursor has neither. JUNON itself works identically in all three — it is an MCP server, and
+nothing about the gate is required to use it.
 
 **Check the Serena you are composing onto, not just the one this repository pins.** JUNON is
 developed against the `serena-upstream` checkout here, and a machine's own Serena is usually older.
