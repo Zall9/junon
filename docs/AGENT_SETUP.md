@@ -223,12 +223,36 @@ a language server:
 
 ## 5. Connect Serena (JUNON)
 
-JUNON composes onto an **unmodified** Serena, so it must be installed into Serena's own environment:
+JUNON composes onto an **unmodified** Serena, so it must be installed into Serena's own environment.
+There are two ways, and the difference is not cosmetic.
+
+**To use it — install from the remote.** This is the one you want unless you are changing JUNON
+itself:
 
 ```bash
-pipx inject serena-agent integrations/serena --include-apps     # if Serena came from pipx
-uv tool install serena-agent --with integrations/serena          # if it came from uv tool
+pipx inject serena-agent \
+  "git+https://github.com/Zall9/junon@v0.2.7#subdirectory=integrations/serena" --include-apps
 ```
+
+Verified over that exact URL on 2026-08-27: version 0.2.7, the code in the venv rather than in any
+checkout, `title: JUNON`, `/junon/ide-bridge/status` 200, ten `ide_*` tools, and no fallback banner —
+which is the part that did not work before 0.2.7, because the wheel carried no dashboard and JUNON
+served Serena's page instead.
+
+**To develop it — install the checkout, editable:**
+
+```bash
+pipx inject serena-agent -e /path/to/junon/integrations/serena --include-apps
+uv tool install serena-agent --with /path/to/junon/integrations/serena   # if Serena came from uv
+```
+
+`-e` means the installed package **is** the checkout: `import junon` resolves to your working tree, so
+an edit reaches every agent host on the machine at its next restart. That is the point when you are
+developing, and a liability when you are not — switching branches changes what your agents run, and a
+half-finished edit breaks every session at once. Pin a tag instead unless you need the loop.
+
+Whichever you choose, `--include-apps` is not optional: without it the entry points stay inside the
+venv and `~/.local/bin/junon` never appears, so every host falls back to plain `serena`.
 
 **Check:**
 

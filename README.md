@@ -156,6 +156,16 @@ cannot reach it is told *could not ask* rather than *up to date*. It is the only
 this product; [docs/SECURITY.md](docs/SECURITY.md) §5a states the terms.
 [docs/DEMO.md](docs/DEMO.md) is the step-by-step version, with the measured output of each step.
 
+JUNON installs into Serena's own environment, from the remote:
+
+```bash
+pipx inject serena-agent \
+  "git+https://github.com/Zall9/junon@v0.2.7#subdirectory=integrations/serena" --include-apps
+```
+
+Install the checkout with `-e` instead only if you are changing JUNON: an editable install *is* the
+working tree, so a branch switch changes what every agent on the machine runs.
+
 If someone follows the setup and lands on **Serena's** dashboard rather than JUNON's,
 `scripts/diagnose-dashboard.sh` says why: it names the process behind every dashboard port, what each
 host config asks for, and whether the composition applies. The usual answer is a host that was never
