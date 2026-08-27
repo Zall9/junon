@@ -15,6 +15,14 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## Unreleased
+
+- **The file-tool gate stops being walked around, and stops nagging agents it cannot help.** Watched
+  running for the first time, it fired five times and converted nobody: one agent ran `bash grep`
+  instead, one repeated its call, and three belonged to an agent with no serena at all. `bash` searches
+  and `cat`s are now refused on the first word of each `&&` segment, and a session that has never used
+  a symbolic tool and has ignored two refusals is left alone until it does.
+
 ## 0.2.7
 
 - **`scripts/update-all.sh` no longer contradicts itself.** Running it for real — the first time,

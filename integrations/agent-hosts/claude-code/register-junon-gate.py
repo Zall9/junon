@@ -21,7 +21,7 @@ from pathlib import Path
 
 SETTINGS = Path.home() / ".claude/settings.json"
 COMMAND = "~/.claude/hooks/junon-first-gate"
-MATCHER = "Grep|Glob|Read|Search"
+MATCHER = "Bash|Grep|Glob|Read|Search|mcp__serena__.*"
 
 
 def main() -> None:

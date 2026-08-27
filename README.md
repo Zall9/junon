@@ -186,9 +186,12 @@ read and not followed is not a rule, so there is one that does not rely on being
 scripts/install-agent-gate.sh
 ```
 
-It installs an opencode plugin and a Claude Code hook that refuse three things — `grep` for a bare
-identifier, `read` of a code file over 300 lines with no range, and the sixth whole-file code read in
-one session — **once per target**, naming the symbolic call that answers the same question better.
+It installs an opencode plugin and a Claude Code hook that refuse four things — `grep` for a bare
+identifier, `read` of a code file over 300 lines with no range, the sixth whole-file code read in one
+session, and the same searches run through `bash` — **once per target**, naming the symbolic call that
+answers the same question better. Watched running, it converted nobody at first: an agent simply ran
+`bash grep` instead, which is why that door is now shut. Where an agent has no symbolic tools at all,
+the gate notices after two ignored refusals and goes quiet.
 Repeating the call runs it, so nothing is ever unreachable. Restart the host afterwards: both read
 their plugins once, at start-up, and a gate nothing has loaded is indistinguishable from one that
 does not work. [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) §7 has the measurements and the way out.

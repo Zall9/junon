@@ -365,6 +365,7 @@ An opencode plugin and a Claude Code hook, refusing three things, **once per tar
 | `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
 | `read` of a code file over 300 lines with no range | the whole file enters the context to answer a question about part of it | repeat it, or pass offset/limit |
 | the **sixth** whole-file code read in one session | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
+| `bash grep` / `rg` / `cat` of the same kind | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or use a command that is genuinely about text |
 
 Both numbers were swept over a fortnight of recorded calls rather than chosen by taste — what share
 of the calls that actually happened each setting would have refused:
@@ -379,14 +380,38 @@ of the calls that actually happened each setting would have refused:
 Five rather than three because `orchestrator` already reads by range 484 times a fortnight, and a
 rule that starts punishing the agent doing it right is a rule that gets deleted.
 
-**What it never touches**, so the boundary is a fact rather than a discovery: `glob`, `list`, `bash`
-— including `bash grep` and `bash cat` — every `read` that carries `offset`/`limit`, every file that
-is not source (markdown, JSON, lock files, logs), every source file under 300 lines while the budget
-holds, every `grep` whose pattern is a real regex or shorter than three characters, and every path
-that cannot be read. Three of those are deliberate holes rather than oversights: `bash` is where a
-determined agent goes when a tool is refused, `glob` is cheap and answers a question the symbol index
-does not, and a ranged read is already the careful call. Closing the `bash` hole would mean parsing
-shell, which is how a gate becomes something that breaks builds at three in the morning.
+### What it did on the first day, and what changed because of it
+
+The gate was watched running before this section was rewritten, and it converted nobody:
+
+```
+grep "authentication"  refused -> the agent ran bash          (routed around it)
+grep *.php             refused -> it repeated the same grep   (used the escape hatch)
+read x3                refused -> nothing followed            (an agent with no serena at all)
+```
+
+Five refusals, zero symbolic calls. Both causes are in those three lines, and both are now closed.
+
+**bash was an open door.** This section used to call that a deliberate hole, on the grounds that
+closing it means parsing shell. It does not: reading the first word of each `&&`-separated segment
+catches `cd /somewhere && grep -rn thing .`, which is the shape that was actually used. What remains
+open is stated as a limit rather than a principle — quoting, subshells, aliases and anything cleverer
+go through, because a gate that tries to understand shell is one that breaks a build at three in the
+morning.
+
+**Some agents cannot comply.** `gitlab-review-orchestrator` has no serena in its `mcps`, so a refusal
+named a tool it could not call; three of the five were that. Neither host tells a hook which agent is
+asking, so instead of mining configuration the gate watches the session: one that has never used a
+symbolic tool and has now ignored **two** refusals is one it cannot help, and it goes quiet there. A
+single symbolic call in that session clears the count and the nudges resume. The waste is bounded at
+two round-trips, and no configuration decides it.
+
+**What it never touches**, so the boundary is a fact rather than a discovery: `glob`, `list`, every
+`read` that carries `offset`/`limit`, every file that is not source (markdown, JSON, lock files,
+logs), every source file under 300 lines while the budget holds, every `grep` whose pattern is a real
+regex or shorter than three characters, every path that cannot be read, every command that is not a
+search or a `cat` — `git`, `pnpm`, `tail`, `ls` — and every `serena_*` call, which it observes rather
+than judges.
 
 The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
 `ide_read_document`. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
@@ -405,6 +430,10 @@ it for you:
 ```bash
 python3 ~/.claude/hooks/register-junon-gate.py
 ```
+
+It registers the hook for `Bash|Grep|Glob|Read|Search|mcp__serena__.*`. The last of those is not
+refused — it is *observed*: each hook call is its own process, so noticing that a session uses the
+index is the only way the give-up rule above can know anything.
 
 Claude Code refuses to let an agent edit its own hook configuration — correctly, since a tool that
 can install its own hooks can install any hook.

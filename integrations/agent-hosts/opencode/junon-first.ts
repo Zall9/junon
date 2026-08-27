@@ -54,6 +54,50 @@ const WHOLE_FILE_BUDGET = 5
 /** Whole-file code reads seen this session. Per process, which is per opencode run. */
 const spent = new Map<string, number>()
 
+/**
+ * Sessions that have used a symbolic tool at least once — proof the agent has them at all.
+ *
+ * Not every agent does: `gitlab-review-orchestrator` has no serena in its `mcps`, and three of the
+ * first five refusals went to it, naming a tool it could not call. The hook is given only
+ * `{tool, sessionID, callID}`, so which agent is asking is not knowable here — but what the session
+ * has *done* is, and that answers the same question without reading anyone's configuration.
+ */
+const usesSymbolicTools = new Set<string>()
+
+/** Refusals a session has ignored in a row. Reset the moment it makes a symbolic call. */
+const unheeded = new Map<string, number>()
+
+/**
+ * After this many refusals that changed nothing, in a session that has never used a symbolic tool,
+ * the gate stops. Two, because the cost of being wrong is a wasted round-trip each time and the
+ * evidence after two is already clear.
+ */
+const GIVE_UP_AFTER = 2
+
+/** Whether nudging this session is still worth a round-trip. */
+function worthNudging(session: string): boolean {
+  if (usesSymbolicTools.has(session)) return true
+  return (unheeded.get(session) ?? 0) < GIVE_UP_AFTER
+}
+
+/** Commands that answer a question the symbol index answers better. */
+const SEARCH_COMMANDS = new Set(["grep", "rg", "ag", "ack"])
+const READ_COMMANDS = new Set(["cat", "bat"])
+
+/**
+ * The first word of each `&&`, `;` or `|` separated segment.
+ *
+ * Not a shell parser and not trying to be: it misses quoting, subshells and aliases. It catches
+ * `cd /somewhere && grep -rn thing .`, which is the form the orchestrator actually used to walk
+ * around this gate on the first day it ran.
+ */
+function firstWords(command: string): string[] {
+  return command
+    .split(/&&|\|\||;|\|/)
+    .map((segment) => segment.trim().split(/\s+/)[0] ?? "")
+    .filter(Boolean)
+}
+
 function lineCount(path: string): number {
   try {
     let lines = 0
@@ -70,10 +114,44 @@ export const JunonFirstPlugin: Plugin = async () => {
   return {
     "tool.execute.before": async (input: any, output: any) => {
       const tool = String(input?.tool ?? "").toLowerCase()
-      if (tool !== "read" && tool !== "grep") return
-
       const args = (output?.args ?? {}) as Record<string, unknown>
       const session = String(input?.sessionID ?? "no-session")
+
+      // Every call passes through here, which is what makes the session's own behaviour readable
+      // without asking anyone: a session that reaches for a symbolic tool has them.
+      if (tool.startsWith("serena")) {
+        usesSymbolicTools.add(session)
+        unheeded.set(session, 0)
+        return
+      }
+
+      if (tool === "bash") {
+        if (!worthNudging(session)) return
+        const command = String(args.command ?? "")
+        const words = firstWords(command)
+        const searching = words.find((word) => SEARCH_COMMANDS.has(word))
+        const reading = words.find((word) => READ_COMMANDS.has(word))
+        if (!searching && !reading) return
+
+        const key = `${session}:bash:${command.slice(0, 120)}`
+        if (alreadyNudged.has(key)) return
+        alreadyNudged.add(key)
+        unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+
+        throw new Error(
+          `That command was not run: it uses \`${searching ?? reading}\` to answer a question the ` +
+            `symbol index answers better, and running it through bash reaches the same dead end as ` +
+            `the tool would.\n` +
+            `  serena_find_symbol({ name_path_pattern: "…" })          where something is defined\n` +
+            `  serena_find_referencing_symbols(...)                    who uses it\n` +
+            `  serena_ide_read_symbol / serena_ide_read_document       from the running IDE\n` +
+            `If the command is really about text or files — a log, a config, a build output — run it ` +
+            `again and it will go through.`,
+        )
+      }
+
+      if (tool !== "read" && tool !== "grep") return
+      if (!worthNudging(session)) return
 
       if (tool === "grep") {
         const pattern = String(args.pattern ?? "")
@@ -85,6 +163,7 @@ export const JunonFirstPlugin: Plugin = async () => {
         const key = `${session}:grep:${pattern}`
         if (alreadyNudged.has(key)) return
         alreadyNudged.add(key)
+      unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
 
         throw new Error(
           `grep "${pattern}" was not run. Ask the index instead — it resolves what a text search ` +
@@ -111,6 +190,7 @@ export const JunonFirstPlugin: Plugin = async () => {
       const key = `${session}:read:${path}`
       if (alreadyNudged.has(key)) return
       alreadyNudged.add(key)
+      unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
 
       if (overBudget && lines < WHOLE_FILE_IS_FINE) {
         throw new Error(

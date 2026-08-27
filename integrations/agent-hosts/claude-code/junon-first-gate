@@ -50,6 +50,22 @@ WHOLE_FILE_BUDGET = 5
 
 MARKERS = Path("/tmp")
 
+#: Commands that answer a question the index answers better. Matched on the first word of each
+#: `&&`/`;`/`|` segment — not a shell parser, and not trying to be. It catches
+#: `cd /somewhere && grep -rn thing .`, which is the shape an agent used to walk around this gate on
+#: the first day it ran; it misses quoting, subshells and aliases, deliberately, because a gate that
+#: tries to understand shell is a gate that breaks builds at night.
+SEARCH_COMMANDS = {"grep", "rg", "ag", "ack"}
+READ_COMMANDS = {"cat", "bat"}
+
+#: Refusals a session may ignore before the gate stops spending round-trips on it.
+#:
+#: Some agents have no serena at all — three of the first five refusals went to one of them, naming a
+#: tool it could not call. Which agent is asking is not in the hook's input, but what the session has
+#: done is: a session that has never used a symbolic tool and has now ignored two refusals is one the
+#: gate cannot help.
+GIVE_UP_AFTER = 2
+
 
 def already_nudged(session: str, kind: str, target: str) -> bool:
     """One refusal per session and target. The second attempt is the agent's call, and it stands."""
@@ -86,6 +102,52 @@ def prune() -> None:
             pass
 
 
+def _session_file(session: str, suffix: str) -> Path:
+    return MARKERS / f"junon-first-gate-{session}.{suffix}"
+
+
+def uses_symbolic_tools(session: str) -> bool:
+    """Whether this session has ever called an `mcp__serena__*` tool.
+
+    Recorded by the hook itself, which is why it must be registered for those tools as well: it
+    returns 0 for them immediately, and the file is the only memory a per-call process has.
+    """
+    return _session_file(session, "symbolic").exists()
+
+
+def note_symbolic_call(session: str) -> None:
+    try:
+        _session_file(session, "symbolic").touch()
+        _session_file(session, "unheeded").unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def unheeded_count(session: str, increment: bool = False) -> int:
+    ledger = _session_file(session, "unheeded")
+    try:
+        if increment:
+            with open(ledger, "a", encoding="utf-8") as handle:
+                handle.write("1")
+        return ledger.stat().st_size if ledger.exists() else 0
+    except OSError:
+        return 0
+
+
+def worth_nudging(session: str) -> bool:
+    return uses_symbolic_tools(session) or unheeded_count(session) < GIVE_UP_AFTER
+
+
+def first_words(command: str) -> list[str]:
+    """The first word of each `&&`, `;` or `|` separated segment."""
+    words = []
+    for segment in re.split(r"&&|\|\||;|\|", command):
+        parts = segment.strip().split()
+        if parts:
+            words.append(parts[0])
+    return words
+
+
 def refuse(reason: str) -> int:
     print(reason, file=sys.stderr)
     return 2
@@ -102,6 +164,36 @@ def main() -> int:
     session = str(event.get("session_id") or os.getppid())
     prune()
 
+    # Never refused — observed. This is the only way a per-call process can learn that the session
+    # has the symbolic tools at all, and it decides whether further refusals are worth anything.
+    if tool.startswith("mcp__serena__"):
+        note_symbolic_call(session)
+        return 0
+
+    if not worth_nudging(session):
+        return 0
+
+    if tool == "Bash":
+        command = str(arguments.get("command") or "")
+        words = first_words(command)
+        searching = next((word for word in words if word in SEARCH_COMMANDS), "")
+        reading = next((word for word in words if word in READ_COMMANDS), "")
+        if not searching and not reading:
+            return 0
+        if already_nudged(session, "bash", command[:120]):
+            return 0
+        unheeded_count(session, increment=True)
+        return refuse(
+            f"That command was not run: it uses `{searching or reading}` to answer a question the "
+            f"index answers better, and going through Bash reaches the same dead end as the tool "
+            f"would.\n"
+            f"  mcp__serena__find_symbol(name_path_pattern=...)        where it is defined\n"
+            f"  mcp__serena__find_referencing_symbols(...)             who uses it\n"
+            f"  mcp__serena__ide_read_symbol / ide_read_document       from the running IDE\n"
+            f"If it is really about text or files — a log, a config, a build output — run it again "
+            f"and it will go through."
+        )
+
     if tool == "Grep":
         pattern = str(arguments.get("pattern") or "")
         # A regex is a text search and this has no opinion about it. A bare identifier is a question
@@ -110,6 +202,7 @@ def main() -> int:
             return 0
         if already_nudged(session, "grep", pattern):
             return 0
+        unheeded_count(session, increment=True)
         return refuse(
             f'Grep "{pattern}" was not run. Ask the index, which resolves what a text search cannot:\n'
             f'  mcp__serena__find_symbol(name_path_pattern="{pattern}")   the declaration\n'
@@ -140,6 +233,7 @@ def main() -> int:
         return 0
     if already_nudged(session, "read", path):
         return 0
+    unheeded_count(session, increment=True)
 
     if over_budget and lines < WHOLE_FILE_IS_FINE:
         return refuse(
