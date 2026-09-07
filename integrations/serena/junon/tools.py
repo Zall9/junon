@@ -640,13 +640,76 @@ class IdeDiagnosticsTool(IdeBridgeTool, ToolMarkerSymbolicRead):
         # false statement at the last step before the caller.
         if result.get("truncated"):
             answer["incomplete_note"] = (
-                "This snapshot is incomplete: the IDE said so. Nothing is listed, which does not "
-                "mean the file is clean. Two states look identical here, and only one is worth "
-                "waiting for: the IDE is still analysing a file it has open — ask again in a few "
-                "seconds — or no editor holds this file at all, in which case nothing will ever "
-                "analyse it and waiting achieves nothing. The daemon analyses open editors: open the "
-                "file in the IDE and ask again."
-            ):
+                "This snapshot is incomplete: the IDE said so. "
+                + (
+                    "Nothing is listed, which does not mean the file is clean. Two situations look "
+                    "identical here and only one is worth waiting for: the IDE is still analysing a "
+                    "file it has open — ask again in a few seconds — or no editor holds this file, "
+                    "in which case nothing will ever analyse it. The daemon analyses open editors, "
+                    "so open the file in the IDE and ask again."
+                    if reported == 0
+                    else "Some problems the IDE holds are not in this list; ask for a single file to "
+                    "see all of its problems."
+                )
+            )
+        elif reported == 0:
+            # The other half of the same distinction, and the only case where silence is a finding.
+            answer["clean_note"] = (
+                "The IDE finished analysing and reported no problems. This is a complete answer, "
+                "not an empty one."
+            )
+
+        offered = sum(
+            len(diagnostic.get("availableFixes", []))
+            for document in documents
+            for diagnostic in document.get("diagnostics", [])
+        )
+        if offered:
+            answer["fixes_note"] = (
+                f"{offered} fix(es) are offered across these problems, listed as 'availableFixes' "
+                "with a fixId and a title. They are the IDE's own quick fixes; nothing here has "
+                "applied any of them."
+            )
+        return self._limit_length(json.dumps(answer), max_answer_chars)
+
+
+class IdeTodosTool(IdeBridgeTool, ToolMarkerSymbolicRead):
+    """TODO markers as the IDE recognises them, not as a text search guesses at them."""
+
+    without_an_ide = (
+        "`search_for_pattern(substring_pattern=TODO|FIXME)`, which finds the text without the IDE notion of a TODO."
+    )
+
+    def apply(self, relative_path: str = "", limit: int = 100, max_answer_chars: int = -1) -> str:
+        """
+        List the TODO markers the IDE knows about.
+
+        This uses the IDE's own TODO patterns, which the user can configure and which languages
+        extend — so it finds markers in the comment syntax of each language and honours custom
+        patterns a plain text search would miss, while not matching the word inside a string
+        literal.
+
+        :param relative_path: a file to search, relative to the project root. Omit for the whole
+            project.
+        :param limit: how many markers at most.
+        :param max_answer_chars: if the answer is longer than this, it is not returned.
+            -1 uses the configured default.
+        :return: a JSON object of the markers found, and whether the IDE had more.
+        """
+        try:
+            client = self._client()
+            params: dict[str, Any] = {
+                "workspaceId": self._workspace_id(client),
+                "limit": limit,
+            }
+            if relative_path:
+                params["uri"] = (Path(self.get_project_root()) / relative_path).resolve().as_uri()
+            result = client.call("workspace/searchTodos", params)
+        except IdeBridgeError as error:
+            return self._explain(error)
+
+        answer: dict[str, Any] = {"items": result.get("items", [])}
+        if result.get("truncated"):
             answer["truncation_note"] = (
                 f"The IDE held more than the limit of {limit}. This is not every marker in the "
                 "project."
