@@ -17,6 +17,13 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
+- **Every diagnostics snapshot came back incomplete, forever.** Two causes, both in the plugin's
+  analysis tracker: a cancelled daemon pass cleared _every_ document's finished state rather than the
+  cancelled one — and the platform cancels on every keystroke, so COMPLETED was unreachable in a
+  working IDE — and a file no editor holds is never analysed at all, which the tool reported as
+  "still analysing, ask again in a few seconds". The blanket clear is gone, `NOT_OPEN` is a state of
+  its own, and the note now names both cases and what each needs.
+
 - **The gate treats a session that uses the index differently from one that never has.** The
   whole-file budget is five for the first and three for the second; the second also gets one nudge on
   its first short source file, closing the case where a project of small files could be read entirely

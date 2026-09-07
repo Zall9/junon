@@ -68,6 +68,26 @@ class DaemonAnalysisTrackerTest : BasePlatformTestCase() {
         assertFalse("and it carries the real error", after.diagnostics.isEmpty())
     }
 
+    fun `test a cancelled pass does not forget a document that had finished`() {
+        // Reported from a real session: every snapshot came back incomplete. The platform cancels
+        // constantly — a keystroke anywhere, a focus change, an indexing pass — and the handler used
+        // to clear every document's state, so COMPLETED was almost unreachable in a working IDE.
+        val file = configure()
+        val document = myFixture.getDocument(file)
+        myFixture.doHighlighting()
+        assertEquals(DiagnosticMapping.Analysis.COMPLETED, tracker.state(file, document))
+
+        project.messageBus
+            .syncPublisher(com.intellij.codeInsight.daemon.DaemonCodeAnalyzer.DAEMON_EVENT_TOPIC)
+            .daemonCancelEventOccurred("something else restarted the daemon")
+
+        assertEquals(
+            "a cancel elsewhere must not un-analyse this document",
+            DiagnosticMapping.Analysis.COMPLETED,
+            tracker.state(file, document),
+        )
+    }
+
     fun `test invalidating a document makes the next answer incomplete again`() {
         val file = configure()
         val document = myFixture.getDocument(file)

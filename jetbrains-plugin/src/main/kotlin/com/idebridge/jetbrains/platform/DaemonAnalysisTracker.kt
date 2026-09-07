@@ -5,6 +5,7 @@ import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import java.util.Collections
@@ -34,10 +35,21 @@ public class DaemonAnalysisTracker(private val project: Project) : Disposable {
                     }
                 }
 
-                // A cancelled run leaves the document in whatever state it reached, which is not a
-                // finished analysis; forgetting it keeps the answer honest rather than optimistic.
+                /**
+                 * Deliberately does nothing, after this cleared the whole set and made COMPLETED
+                 * almost unreachable.
+                 *
+                 * The platform cancels constantly — a keystroke anywhere in the project, a focus
+                 * change, an indexing pass — and the event names no document, so the only clear
+                 * available was a total one. A file that had genuinely finished therefore went back
+                 * to PENDING seconds later, and every snapshot answered "incomplete" forever. That
+                 * was reported from a real session before this changed.
+                 *
+                 * What it defended against is covered elsewhere: an edit calls [invalidate], and a
+                 * cancel does not empty the markup model, so the highlights read after one are the
+                 * previous pass's rather than nothing.
+                 */
                 override fun daemonCancelEventOccurred(reason: String) {
-                    analysed.clear()
                 }
             },
         )
@@ -54,7 +66,13 @@ public class DaemonAnalysisTracker(private val project: Project) : Disposable {
         // rather than something to keep waiting for.
         if (!analyzer.isHighlightingAvailable(file)) return DiagnosticMapping.Analysis.UNAVAILABLE
 
-        val uri = FileDocumentManager.getInstance().getFile(document)?.url
+        val virtualFile = FileDocumentManager.getInstance().getFile(document)
+        // A file no editor holds is never analysed: `daemonFinished` reports file *editors*. Saying
+        // PENDING there tells the caller to wait for something that will not happen.
+        if (virtualFile != null && !FileEditorManager.getInstance(project).isFileOpen(virtualFile)) {
+            return DiagnosticMapping.Analysis.NOT_OPEN
+        }
+        val uri = virtualFile?.url
         // Deliberately not consulted: `DaemonCodeAnalyzer.isRunning()` would say whether a pass is
         // in flight, but the Plugin Verifier reports it as internal API. It is not needed — a
         // document is complete only after a finish event, and [invalidate] takes it back to pending
