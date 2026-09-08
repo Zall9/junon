@@ -15,7 +15,7 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
-## Unreleased
+## 0.2.8
 
 - **Every diagnostics snapshot came back incomplete.** A cancelled daemon pass cleared _every_
   document's finished state rather than the cancelled one — the platform names no document when it
