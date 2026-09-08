@@ -17,12 +17,16 @@ tells the agent — and through it, you.
 
 ## Unreleased
 
-- **Every diagnostics snapshot came back incomplete, forever.** Two causes, both in the plugin's
-  analysis tracker: a cancelled daemon pass cleared _every_ document's finished state rather than the
-  cancelled one — and the platform cancels on every keystroke, so COMPLETED was unreachable in a
-  working IDE — and a file no editor holds is never analysed at all, which the tool reported as
-  "still analysing, ask again in a few seconds". The blanket clear is gone, `NOT_OPEN` is a state of
-  its own, and the note now names both cases and what each needs.
+- **Every diagnostics snapshot came back incomplete.** A cancelled daemon pass cleared _every_
+  document's finished state rather than the cancelled one — the platform names no document when it
+  cancels, and it cancels constantly — so a document that had genuinely finished went back to pending
+  seconds later, and `COMPLETED` was close to unreachable in a working IDE. The handler no longer
+  clears anything: an edit already takes a document back to pending, and a cancel does not empty the
+  markup model.
+- The note on an empty, incomplete snapshot told the caller to open the file in the IDE. The adapter
+  opens it itself before analysing, so the only correct advice was to ask again in a few seconds —
+  and an agent cannot open an editor anyway. The wording, and the fact about the adapter it rests on,
+  are both under test now.
 
 - **The gate treats a session that uses the index differently from one that never has.** The
   whole-file budget is five for the first and three for the second; the second also gets one nudge on

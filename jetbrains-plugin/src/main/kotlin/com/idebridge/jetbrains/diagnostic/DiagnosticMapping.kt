@@ -77,15 +77,6 @@ public object DiagnosticMapping {
 
         /** The IDE does not highlight this document at all, so there is nothing to wait for. */
         UNAVAILABLE,
-
-        /**
-         * No editor holds this document, so the daemon will never analyse it.
-         *
-         * The platform analyses open editors: `daemonFinished` reports file *editors*, and a file
-         * nobody opened is never among them. Reported apart from [PENDING] because the advice
-         * differs — waiting achieves nothing here, and the caller has to open the file.
-         */
-        NOT_OPEN,
     }
 
     /**
@@ -105,9 +96,7 @@ public object DiagnosticMapping {
         // A document the IDE has not finished analysing is reported as incomplete whatever it
         // currently holds. Answering `truncated = false` there would assert that these are all the
         // problems, which is precisely what is not known.
-        // Both states mean "these are not known to be all the problems". They differ in what the
-        // caller should do about it, not in whether the answer is complete.
-        var truncated = analysis == Analysis.PENDING || analysis == Analysis.NOT_OPEN
+        var truncated = analysis == Analysis.PENDING
 
         for (highlight in highlights) {
             if (diagnostics.size >= MAX_DIAGNOSTICS_PER_DOCUMENT) {

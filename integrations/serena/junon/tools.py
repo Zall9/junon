@@ -642,11 +642,12 @@ class IdeDiagnosticsTool(IdeBridgeTool, ToolMarkerSymbolicRead):
             answer["incomplete_note"] = (
                 "This snapshot is incomplete: the IDE said so. "
                 + (
-                    "Nothing is listed, which does not mean the file is clean. Two situations look "
-                    "identical here and only one is worth waiting for: the IDE is still analysing a "
-                    "file it has open — ask again in a few seconds — or no editor holds this file, "
-                    "in which case nothing will ever analyse it. The daemon analyses open editors, "
-                    "so open the file in the IDE and ask again."
+                    "Nothing is listed, which does not mean the file is clean: the IDE has not "
+                    "reported this file as analysed. Asking opens it there and starts a pass, and "
+                    "the first answer for a file the IDE had not looked at arrives before that pass "
+                    "finishes — so ask again in a few seconds rather than opening anything "
+                    "yourself. A file that stays empty and incomplete across several tries is a "
+                    "different problem: the IDE is indexing, or cannot analyse this file at all."
                     if reported == 0
                     else "Some problems the IDE holds are not in this list; ask for a single file to "
                     "see all of its problems."
