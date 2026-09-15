@@ -21,9 +21,12 @@ which is why the answer says what to do next rather than claiming success.
 from __future__ import annotations
 
 import secrets
+import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 PLUGIN_ID = "com.idebridge.jetbrains"
 
@@ -135,6 +138,143 @@ class InstallOutcome:
             "plugin, that IDE has not been restarted."
         )
         return " ".join(parts)
+
+
+def record_daemon_command() -> Path | None:
+    """Writes down how to start the daemon, when this machine has one to start.
+
+    Done by the installer because the installer is the only party that knows: it runs from a
+    checkout, where the daemon has been built. The dashboard and the IDE plugin then have something
+    to read instead of a path to guess (`docs/SELF_HEALING_PLAN.md` §3).
+    """
+    from junon import daemon_command
+
+    root = Path(__file__).resolve().parents[3]
+    binary = root / "packages" / "cli" / "dist" / "bin.js"
+    node = shutil.which("node")
+    if node is None or not binary.is_file():
+        return None
+    version = None
+    try:
+        version = (root / "VERSION").read_text(encoding="utf-8").strip() or None
+    except OSError:
+        pass
+    return daemon_command.record([node, str(binary), "daemon"], root, version)
+
+
+def verify() -> dict[str, Any]:
+    """Checks the end state rather than describing the steps that were taken.
+
+    "I did four things, good luck" is what this button used to say. What a person wants to know is
+    whether it worked, and the answer is available: what each IDE holds on disk, what the daemon
+    reports, and whether an adapter is attached. Asked here, after the work, so the sentence is a
+    measurement and not a hope.
+    """
+    from junon.ide_bridge_status import read_status
+
+    wanted = artefact_version(artefact())
+    on_disk = {name: installed_version(name) for name, _ in installed_ides()}
+    behind = [name for name, version in on_disk.items() if wanted is not None and version != wanted]
+
+    status = read_status()
+    versions = status.get("versions") or {}
+    daemon_version = status.get("daemonVersion")
+
+    if behind:
+        sentence = f"Not done: {', '.join(behind)} still has an older plugin on disk."
+        agrees = False
+    elif status.get("status") == "connected" and versions.get("agrees"):
+        sentence = f"Verified: {versions.get('summary')}, with an IDE attached. Nothing left to do."
+        agrees = True
+    elif status.get("status") == "connected":
+        sentence = f"Not done: {versions.get('summary')}."
+        agrees = False
+    elif status.get("status") in {"no-adapter", "daemon-unreachable", "no-daemon"}:
+        # The ordinary state a moment after a click that quit the IDEs: both halves on disk are
+        # current, the daemon answers, and nothing is attached because nothing is open yet.
+        sentence = (
+            f"The plugin and the daemon are both at {wanted or 'the installed version'}"
+            f"{'' if daemon_version in (None, wanted) else f' (the daemon reports {daemon_version})'}. "
+            "Reopen your IDEs and they will attach on their own; there is nothing else to do."
+        )
+        agrees = daemon_version in (None, wanted)
+    else:
+        sentence = f"Could not verify: {status.get('reason') or status.get('status')}."
+        agrees = False
+
+    return {
+        "agrees": agrees,
+        "sentence": sentence,
+        "wanted": wanted,
+        "onDisk": on_disk,
+        "daemonVersion": daemon_version,
+    }
+
+
+def apply_release(
+    quit_running: bool = False,
+    restart_daemon: Callable[[], Any] | None = None,
+    check: Callable[[], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Everything a click should do, in one place, and what came of each part.
+
+    The two routes used to each assemble their own answer from an `InstallOutcome`, which is how the
+    plugin came to be the only half a click reached: adding a step meant remembering to add it
+    twice. There is one sequence now, and both routes return it.
+
+    The last two steps are parameters because they act on the machine: the first version of this
+    was called by unit tests that then stopped and restarted the developer's own daemon, which took
+    a 0.4 s test to 33 s and would have taken somebody's working IDE down with it.
+    """
+    from junon import daemon_control
+
+    restart_daemon = restart_daemon or daemon_control.restart
+    check = check or verify
+
+    outcome = install(quit_running=quit_running)
+    record_daemon_command()
+    stopped = refresh_instances()
+    daemon = restart_daemon()
+
+    told = outcome.next_step
+    if stopped:
+        told += (
+            f" Also stopped {len(stopped)} shared JUNON instance(s) — "
+            f"{', '.join(stopped)} — so every open session moves to this release at its next call, "
+            "with nothing to restart."
+        )
+    told += f" {daemon.reason}"
+    checked = check()
+    told += f" {checked['sentence']}"
+    return {
+        "ok": outcome.ok and daemon.state != "refused" and checked["agrees"],
+        "verified": checked,
+        "title": outcome.title,
+        "installed": list(outcome.installed),
+        "unchanged": list(outcome.unchanged),
+        "failed": list(outcome.failed),
+        "running": list(outcome.running),
+        "instancesStopped": list(stopped),
+        "daemon": daemon.as_dict(),
+        "next": told,
+    }
+
+
+def refresh_instances() -> tuple[str, ...]:
+    """Stops every shared JUNON instance, so live sessions land on the code just installed.
+
+    Installing changes files; a running process keeps what it imported. Every session on this
+    machine would otherwise go on using the previous release until its instance idled out — which is
+    the whole of "why did the update not take", asked three times in one day.
+
+    Stopping a busy instance became reasonable in 0.3.7: a relay follows its instance and reconnects
+    on its next call. Before that this would have ended those sessions, which is why the button did
+    not do it.
+    """
+    from junon import instances
+
+    stopped, _ = instances.stop_free(including_busy=True)
+    return tuple(instance.root for instance in stopped)
 
 
 def installed_ides() -> list[tuple[str, Path]]:

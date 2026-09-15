@@ -1,6 +1,7 @@
 package com.idebridge.jetbrains.service
 
 import com.idebridge.jetbrains.connection.AdapterRouter
+import com.idebridge.jetbrains.connection.DaemonStarter
 import com.idebridge.jetbrains.connection.DiscoveryReader
 import com.idebridge.jetbrains.connection.HandshakeClient
 import com.idebridge.jetbrains.connection.RpcClient
@@ -111,6 +112,16 @@ class BridgeDaemonConnectionService(
      * untested — which is exactly what happened.
      */
     private val daemonWatchIntervalMs: Long = DAEMON_WATCH_INTERVAL_MS,
+    /**
+     * How a missing daemon is started, so a test can say whether one may be.
+     *
+     * A parameter for the same reason as the path above: every other test in this file asserts what
+     * happens when there is *no* daemon, and a real starter would go looking for a recorded command
+     * on the machine running the suite and might well find one — turning "refused, no daemon" into
+     * "linked to whatever was lying around", which is the failure the path parameter exists to
+     * prevent.
+     */
+    private val daemonStarter: (Path) -> Boolean = { DaemonStarter.start(it) },
 ) {
 
     private val logger = logger<BridgeDaemonConnectionService>()
@@ -278,7 +289,13 @@ class BridgeDaemonConnectionService(
         links[project]?.let { return Outcome.AlreadyLinked(it.workspaceId) }
 
         val path = discoveryPath()
-        val discovery = DiscoveryReader.read(path)
+        var discovery = DiscoveryReader.read(path)
+        if (discovery !is DiscoveryReader.Outcome.Ready && daemonStarter(path)) {
+            // No daemon, and one is recorded: starting it is this plugin's job now. Nothing else on
+            // the machine will — an IDE used to sit beside a dead daemon indefinitely, both halves
+            // working and unable to meet (docs/SELF_HEALING_PLAN.md §2).
+            discovery = DiscoveryReader.read(path)
+        }
         if (discovery !is DiscoveryReader.Outcome.Ready) {
             logger.info("[IDE Bridge] no usable discovery file at $path: $discovery")
             return refuse(project, Outcome.Refusal.NO_DAEMON)

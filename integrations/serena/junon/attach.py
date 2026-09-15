@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import atexit
+import errno
 import fcntl
 import hashlib
 import logging
@@ -199,33 +200,97 @@ class UpstreamGone(RuntimeError):
     """The instance's connection ended — it was killed, or its port stopped answering."""
 
 
-class Upstream:
-    """The connection to the instance, held in its own task so its death is a fact, not a crash.
+def never_delivered(error: BaseException | None) -> bool:
+    """Whether this failure means the request never reached the instance.
 
-    The HTTP transport runs a task group; when the instance dies that group raises, and an
-    exception there must not take the stdio server down with it — the host would see a closed pipe
-    and nothing else. Here it marks the connection dead, and every request from then on is answered
-    with words. A request in flight is raced against that mark, because a response that will never
-    arrive would otherwise be waited for indefinitely.
+    A connection that was refused carries no bytes: the instance was already gone when the socket
+    was attempted, so the call can be sent again to a fresh one without any chance of applying it
+    twice. Every other failure — a connection that opened and then ended, a response that never
+    came — leaves the question open, and an open question is not a licence to retry a write.
+
+    Walks causes and exception groups because the transport raises through several layers: an
+    `httpx.ConnectError` arrives wrapped in a task group's `ExceptionGroup`, inside an
+    `ExceptionGroup` of the session's own.
+    """
+    seen: set[int] = set()
+
+    def walk(item: BaseException | None) -> bool:
+        if item is None or id(item) in seen:
+            return False
+        seen.add(id(item))
+        if isinstance(item, ConnectionRefusedError):
+            return True
+        if type(item).__name__ in {"ConnectError", "ConnectTimeout"}:
+            return True
+        if isinstance(item, OSError) and item.errno == errno.ECONNREFUSED:
+            return True
+        for nested in getattr(item, "exceptions", ()) or ():
+            if walk(nested):
+                return True
+        return walk(item.__cause__) or walk(item.__context__)
+
+    return walk(error)
+
+
+class UpstreamRestarted(RuntimeError):
+    """The instance died **while a request was in flight**, and that request will not be retried.
+
+    Distinct from [UpstreamGone] because the two need opposite answers. A connection already known
+    to be dead has sent nothing, so reconnecting and sending is free of consequence. A request that
+    was in flight may have run — `replace_content` writes the file before it answers — and sending
+    it again would apply it twice. So the connection is rebuilt for everything that follows, and
+    this one call is reported as what it is: a request whose fate nobody can know.
     """
 
-    def __init__(self, url: str, on_notification: Callable[[Any], Any]) -> None:
-        self.url = url
+
+class Upstream:
+    """The connection to the instance, held in its own task, and **rebuilt when the instance goes**.
+
+    The HTTP transport runs a task group; when the instance dies that group raises, and an exception
+    there must not take the stdio server down with it — the host would see a closed pipe and nothing
+    else. So the connection lives in its own task, and its death is a fact this class can act on.
+
+    **Acting on it means reconnecting.** Until 0.3.7 it meant reporting: every call from then on
+    answered "the shared JUNON stopped answering", and the session was finished until its host was
+    restarted. That is what made a shared instance impossible to replace — `junon instances --stop`
+    had to refuse any instance with a session on it, which is every instance anyone cares about, so
+    an upgrade could not be applied without closing the editor someone was working in. A relay that
+    reconnects turns that into an event nobody notices: the instance goes, the next call finds a
+    fresh one — on the installed JUNON, since a superseded instance is no longer offered — and the
+    session carries on.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        on_notification: Callable[[Any], Any],
+        idle_minutes: float = DEFAULT_IDLE_MINUTES,
+        passthrough: list[str] | None = None,
+        find: Callable[..., Instance] = find_or_start,
+        on_reconnect: Callable[[], Any] | None = None,
+    ) -> None:
+        self.root = root
         self._on_notification = on_notification
+        self._idle_minutes = idle_minutes
+        self._passthrough = passthrough or []
+        self._find = find
+        self._on_reconnect = on_reconnect
+        self.instance: Instance | None = None
         self.session: Any = None
         self.init: Any = None
         self.error: Exception | None = None
+        self.reconnections = 0
         self._ready = asyncio.Event()
         self._dead = asyncio.Event()
         self._release = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
-    async def _hold(self) -> None:
+    async def _hold(self, url: str) -> None:
         from mcp import ClientSession
         from mcp.client.streamable_http import streamable_http_client
 
         try:
-            async with streamable_http_client(self.url) as (read, write, _):
+            async with streamable_http_client(url) as (read, write, _):
                 async with ClientSession(read, write, message_handler=self._on_notification) as session:
                     self.init = await session.initialize()
                     self.session = session
@@ -238,13 +303,54 @@ class Upstream:
             self._dead.set()
             self._ready.set()
 
-    async def open(self) -> None:
-        self._task = asyncio.create_task(self._hold(), name="junon-upstream")
+    async def _attach_to(self, instance: Instance) -> None:
+        self.instance = instance
+        self.error = None
+        self._ready = asyncio.Event()
+        self._dead = asyncio.Event()
+        self._release = asyncio.Event()
+        self._task = asyncio.create_task(self._hold(instance.url), name="junon-upstream")
         await self._ready.wait()
         if self.session is None:
             raise UpstreamGone(str(self.error))
+        # The session belongs to *this* instance now. Without re-announcing it the fresh instance
+        # sees nobody attached and leaves at its next tick — superseded-and-free exits at once since
+        # 0.3.4 — and the relay would spend its life starting instances that immediately give up.
+        instances.publish_client(self.root, instance.pid)
 
-    async def close(self) -> None:
+    async def open(self) -> None:
+        # In a thread, like every other call to it here: `find_or_start` probes the instance with
+        # `asyncio.run`, which raises inside a running loop — and this one runs inside the relay's.
+        await self._attach_to(
+            await asyncio.to_thread(
+                self._find, self.root, self._idle_minutes, DEFAULT_START_TIMEOUT_SECONDS, self._passthrough
+            )
+        )
+
+    async def _reconnect(self) -> bool:
+        """Finds or starts an instance and binds to it. False when even that fails."""
+        previous = self.instance.pid if self.instance else None
+        await self._stop_task()
+        try:
+            instance = await asyncio.to_thread(
+                self._find, self.root, self._idle_minutes, DEFAULT_START_TIMEOUT_SECONDS, self._passthrough
+            )
+            await self._attach_to(instance)
+        except Exception as error:  # noqa: BLE001 - reported to the model, not raised at it
+            self.error = error
+            return False
+        self.reconnections += 1
+        log.warning(
+            "the shared JUNON for %s changed (pid %s -> %s); this session reattached",
+            self.root,
+            previous,
+            instance.pid,
+        )
+        if self._on_reconnect is not None:
+            await self._on_reconnect()
+        return True
+
+    async def _stop_task(self) -> None:
         self._release.set()
         if self._task is not None:
             self._task.cancel()
@@ -252,24 +358,79 @@ class Upstream:
                 await self._task
             except (asyncio.CancelledError, Exception):  # noqa: BLE001 - closing; nothing to report
                 pass
+            self._task = None
 
-    async def call(self, method: Callable[..., Any], *args: Any) -> Any:
-        """`method` on the live session, or `UpstreamGone` the moment the connection is known dead."""
-        session = self.session
-        if session is None:
+    async def close(self) -> None:
+        await self._stop_task()
+
+    async def call(self, method: Callable[..., Any], *args: Any, _retried: bool = False) -> Any:
+        """`method` on the live session, reconnecting and retrying when nothing was delivered.
+
+        **A dead instance is discovered by sending, not before.** The transport is streamable HTTP:
+        there is no socket sitting open to break, so killing the instance leaves this side believing
+        it has a session until the next request fails. Measured on 2026-09-16 while building this —
+        the first design assumed an idle connection would notice, and every call after a kill came
+        back "in flight when it died", which was both wrong and useless.
+
+        So the question is not *when* we learned, it is *whether the request was delivered*. A
+        refused connection delivered nothing, and retrying it on a fresh instance is free of
+        consequence. Anything else — a request that went out and whose answer never came — may have
+        run, and a write must not be applied twice.
+        """
+        if self.session is None and not await self._reconnect():
             raise UpstreamGone(str(self.error) if self.error else "connection closed")
-        request = asyncio.ensure_future(method(session, *args))
+
+        request = asyncio.ensure_future(method(self.session, *args))
         dead = asyncio.ensure_future(self._dead.wait())
-        done, _ = await asyncio.wait({request, dead}, return_when=asyncio.FIRST_COMPLETED)
+        vanished = asyncio.ensure_future(self._instance_vanished())
+        done, _ = await asyncio.wait(
+            {request, dead, vanished}, return_when=asyncio.FIRST_COMPLETED
+        )
+        for pending in (dead, vanished):
+            if pending not in done:
+                pending.cancel()
+
         if request in done:
-            dead.cancel()
-            return request.result()
+            try:
+                return request.result()
+            except Exception as error:  # noqa: BLE001 - classified below, not swallowed
+                if _retried or not never_delivered(error) or not await self._reconnect():
+                    raise
+                return await self.call(method, *args, _retried=True)
+
+        # The instance ended while this was outstanding. The raced request is abandoned and the
+        # connection torn down, so the next call rebuilds rather than talking to a dead session.
         request.cancel()
-        raise UpstreamGone(str(self.error) if self.error else "connection closed")
+        await self._stop_task()
+        self.session = None
+        if not _retried and never_delivered(self.error) and await self._reconnect():
+            return await self.call(method, *args, _retried=True)
+        raise UpstreamRestarted(str(self.error) if self.error else "the instance stopped")
+
+    async def _instance_vanished(self, interval: float = 0.5) -> None:
+        """Returns once the instance's process is gone. The only warning this transport gives.
+
+        Streamable HTTP keeps no socket open between calls, so a killed instance is invisible until
+        something is sent — and a request that was *already* outstanding when it died is never
+        answered and never fails either. Measured on 2026-09-16: a call hung for the full sixty
+        seconds of a test timeout with nothing raised anywhere. The pid is the fact that settles it,
+        and this class already knows it.
+        """
+        import psutil
+
+        pid = self.instance.pid if self.instance else None
+        if pid is None:
+            await asyncio.Event().wait()  # nothing to watch; never wins the race
+        while psutil.pid_exists(pid):
+            await asyncio.sleep(interval)
 
 
-async def relay(instance: Instance, root: str) -> None:
-    """Serves MCP on stdio, answering every request from the instance."""
+async def relay(
+    root: str,
+    idle_minutes: float = DEFAULT_IDLE_MINUTES,
+    passthrough: list[str] | None = None,
+) -> None:
+    """Serves MCP on stdio, answering from the shared instance and following it when it is replaced."""
     from mcp import ClientSession, types
     from mcp.server import NotificationOptions, Server
     from mcp.server.stdio import stdio_server
@@ -286,13 +447,34 @@ async def relay(instance: Instance, root: str) -> None:
                 await session.send_tool_list_changed()
 
     def gone(error: Exception) -> str:
+        if isinstance(error, UpstreamRestarted):
+            return (
+                f"The shared JUNON for {root} was replaced while this call was in flight, so its "
+                "result is unknown — it may have run, or not. Nothing was retried, because a call "
+                "that writes must not be applied twice. Check whatever it was meant to change, then "
+                "ask again: this session is already reattached to the new instance."
+            )
         return (
-            f"The shared JUNON for {root} stopped answering ({type(error).__name__}: {error}). "
-            "A session started now gets a fresh instance; this one cannot continue."
+            f"The shared JUNON for {root} could not be reached, and starting a new one failed "
+            f"({type(error).__name__}: {error})."
         )
 
-    upstream = Upstream(instance.url, on_upstream_message)
+    async def tools_may_have_changed() -> None:
+        # A different instance can expose a different toolset — a new JUNON release, say. The host
+        # is told to ask again rather than being left with the list the old one published.
+        session = downstream.get("session")
+        if session is not None:
+            await session.send_tool_list_changed()
+
+    upstream = Upstream(
+        root,
+        on_upstream_message,
+        idle_minutes=idle_minutes,
+        passthrough=passthrough,
+        on_reconnect=tools_may_have_changed,
+    )
     await upstream.open()
+    instance = upstream.instance
     try:
         init = upstream.init
         server: Server = Server("junon", instructions=init.instructions)
@@ -362,13 +544,15 @@ def run(argv: list[str]) -> int:
         print(f"junon attach: {root} is not a directory", file=sys.stderr)
         return 2
 
+    # The first attach is checked here so a project that can never be served fails at start-up with
+    # a sentence on stderr, rather than as an error inside the first tool call. Afterwards the relay
+    # owns the connection, including finding an instance again whenever the one it had is replaced.
     try:
-        instance = find_or_start(root, options.idle_minutes, options.start_timeout, passthrough)
+        find_or_start(root, options.idle_minutes, options.start_timeout, passthrough)
     except StartFailed as error:
         print(f"junon attach: {error}", file=sys.stderr)
         return 1
 
-    instances.publish_client(root, instance.pid)
     atexit.register(instances.unpublish_client)
-    asyncio.run(relay(instance, root))
+    asyncio.run(relay(root, options.idle_minutes, passthrough))
     return 0

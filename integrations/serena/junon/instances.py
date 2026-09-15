@@ -200,17 +200,21 @@ def instance_for(root: str | Path) -> Instance | None:
 
 def stop_free(
     kill: Callable[[int, int], None] | None = None,
+    including_busy: bool = False,
 ) -> tuple[list[Instance], list[Instance]]:
-    """Stops every instance no session is attached to. Returns what was stopped, and what was kept.
+    """Stops instances. Returns what was stopped, and what was left running.
 
     The answer to "how do I get everything onto the current code". Quitting the agent host does not
     do it: a host's stdio children die with it — measured, one second after the pipe closes — but a
     shared instance is re-parented to launchd on purpose, so that it can outlive the session that
     started it. Nothing was left to end one on demand except waiting out its idle period.
 
-    An instance with a session attached is left alone, and named rather than silently skipped: that
-    session is using it, and the rule everywhere else in this file is that a session outranks a
-    version. Nothing is started here — the next session in that project starts what it needs.
+    `including_busy` stops the ones with sessions on them too, which became a reasonable thing to
+    offer in 0.3.7: a relay now follows its instance when it is replaced, so those sessions
+    reconnect to a fresh one on their next call instead of being finished. It is not the default,
+    because a call *in flight* at that moment is reported as unknown rather than retried — a write
+    must not be applied twice — so this trades a possible interrupted call for an immediate
+    upgrade, and that is the caller's trade to make, not this function's.
     """
     import signal
 
@@ -218,7 +222,7 @@ def stop_free(
     stopped: list[Instance] = []
     kept: list[Instance] = []
     for instance in live_instances():
-        if live_clients(instance_pid=instance.pid):
+        if live_clients(instance_pid=instance.pid) and not including_busy:
             kept.append(instance)
             continue
         try:
@@ -242,12 +246,16 @@ def stop_report(stopped: list[Instance], kept: list[Instance]) -> str:
             lines.append(f"  - {i.root}  pid {i.pid}, JUNON {i.version or 'unknown'}")
         lines.append("  The next session in those projects starts a fresh one on the installed JUNON.")
     if kept:
-        lines.append(f"Left running, because a session is attached — ending it would take that work away:")
+        lines.append("Left running, because a session is attached:")
         for i in kept:
             lines.append(
                 f"  - {i.root}  pid {i.pid}, {len(live_clients(instance_pid=i.pid))} session(s)"
             )
-        lines.append("  Close those sessions and run this again, or let them exit when idle.")
+        lines.append(
+            "  Add --all to stop these too: since 0.3.7 their sessions reattach to a fresh instance "
+            "on their next call. A call in flight at that moment is reported as unknown rather than "
+            "retried, which is the only cost."
+        )
     return "\n".join(lines)
 
 

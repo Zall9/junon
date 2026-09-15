@@ -68,6 +68,31 @@ if [ "$DRY" = "1" ]; then
   echo "would then run scripts/ensure-plugin-repository.sh"
 else
   zsh "$HERE/ensure-plugin-repository.sh"
+
+  # How to start a daemon, written down for the two parties that cannot work it out themselves: the
+  # dashboard's install button, and the plugin when it opens a project and finds no daemon running.
+  # Only an installer knows, because only an installer is running from a checkout where the daemon
+  # has been built (docs/SELF_HEALING_PLAN.md §3). 0600, because it names a program that gets run.
+  NODE="$(command -v node || true)"
+  DAEMON_JS="$REPO/packages/cli/dist/bin.js"
+  if [ -n "$NODE" ] && [ -f "$DAEMON_JS" ]; then
+    python3 - "$NODE" "$DAEMON_JS" "$REPO" "$VERSION" <<'PY'
+import json, os, sys, pathlib
+node, binary, root, version = sys.argv[1:5]
+target = pathlib.Path.home() / ".ide-bridge" / "daemon.json"
+target.parent.mkdir(parents=True, exist_ok=True)
+temporary = target.with_suffix(".json.tmp")
+descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+    json.dump({"argv": [node, binary, "daemon"], "directory": root, "version": version}, handle)
+temporary.replace(target)
+print(f"daemon     : recorded in {target}, so an IDE with no daemon can start one")
+PY
+  else
+    echo "daemon     : not recorded — no node on PATH, or packages/cli/dist/bin.js is missing"
+    echo "             (run pnpm -r build; an IDE will not be able to start a daemon by itself)"
+  fi
+
   echo
   echo "Restart each IDE once. The plugin is read at start-up, and so is the repository URL — an IDE"
   echo "running now has neither."

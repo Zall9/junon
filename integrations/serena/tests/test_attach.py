@@ -325,34 +325,121 @@ class TestTwoSessions:
                 if proc.pid not in before:
                     proc.send_signal(signal.SIGTERM)
 
-    def test_an_instance_that_dies_is_reported_and_the_next_session_gets_a_fresh_one(self, tmp_path: Path) -> None:
+    def test_a_session_follows_its_instance_when_it_is_replaced(self, tmp_path: Path) -> None:
+        """The relay reconnects, so replacing an instance is not the end of the sessions on it.
+
+        This test asserted the opposite until 0.3.7 — that a dead instance was reported and the
+        session finished. That was a deliberate decision, and it is what made a shared instance
+        impossible to replace: `--stop` had to refuse every instance anyone was using, so an upgrade
+        could not be applied without closing the editor someone was working in. Overturned on
+        purpose; the sentence it used to assert now belongs only to a call that was in flight.
+        """
         before = {p.pid for p in _serve_processes()}
         try:
 
-            async def scenario() -> tuple[str, int, int]:
+            async def scenario() -> tuple[int, int, str, list[int]]:
                 async with _session(_attach_params(tmp_path, REPO_ROOT)) as (session, _):
                     assert "compose" in await _find_compose(session)
-                    first_pid = instances.instance_for(REPO_ROOT).pid
-                    os.kill(first_pid, signal.SIGKILL)
-                    for _ in range(40):
-                        if not psutil.pid_exists(first_pid):
+                    first = instances.instance_for(REPO_ROOT).pid
+
+                    # Killed while the session is idle, which is when a restart would happen.
+                    os.kill(first, signal.SIGKILL)
+                    for _ in range(60):
+                        if not psutil.pid_exists(first):
                             break
                         await asyncio.sleep(0.25)
+                    await asyncio.sleep(1.0)  # let the relay notice its connection has gone
 
-                    # The session is told, in words, rather than handed a stack trace or a hang.
-                    result = await asyncio.wait_for(session.call_tool("get_current_config", {}), 30)
-                    assert result.isError, _text(result)
+                    text = await _find_compose(session)
+                    second = instances.instance_for(REPO_ROOT).pid
+                    # Read while the session is still up: its client entry is removed when the
+                    # relay exits, so asking afterwards would always find an empty registry and
+                    # this assertion would pass for the wrong reason.
+                    attached = [c.instance_pid for c in instances.live_clients()]
+                    return first, second, text, attached
+
+            first, second, text, attached = asyncio.run(scenario())
+
+            assert "compose" in text, "the call after the instance died must be answered, not refused"
+            assert second != first, "it must have been answered by a new instance"
+            # And the new instance must know it has a session, or it leaves at its next tick.
+            assert attached == [second]
+        finally:
+            for proc in _serve_processes():
+                if proc.pid not in before:
+                    proc.send_signal(signal.SIGTERM)
+
+    def test_stopping_every_instance_leaves_the_sessions_working(self, tmp_path: Path) -> None:
+        """What the dashboard button needs to be honest: `--all` with a session attached."""
+        before = {p.pid for p in _serve_processes()}
+        try:
+
+            async def scenario() -> tuple[int, int, list[str], str]:
+                async with _session(_attach_params(tmp_path, REPO_ROOT)) as (session, _):
+                    assert "compose" in await _find_compose(session)
+                    first = instances.instance_for(REPO_ROOT).pid
+
+                    stopped, kept = instances.stop_free(including_busy=True)
+                    for _ in range(60):
+                        if not psutil.pid_exists(first):
+                            break
+                        await asyncio.sleep(0.25)
+                    await asyncio.sleep(1.0)
+
+                    text = await _find_compose(session)
+                    return first, instances.instance_for(REPO_ROOT).pid, [i.root for i in kept], text
+
+            first, second, kept, text = asyncio.run(scenario())
+
+            assert kept == [], "--all keeps nothing back"
+            assert second != first
+            assert "compose" in text, "the session must survive its instance being stopped"
+        finally:
+            for proc in _serve_processes():
+                if proc.pid not in before:
+                    proc.send_signal(signal.SIGTERM)
+
+    def test_a_call_in_flight_when_the_instance_dies_is_reported_and_never_retried(
+        self, tmp_path: Path
+    ) -> None:
+        """The one case reconnecting must not paper over.
+
+        A request that was in flight may have run — `replace_content` writes the file before it
+        answers — so sending it again could apply an edit twice. The relay rebuilds the connection
+        for everything that follows and reports this one as what it is: a call whose fate nobody
+        can know. The words matter as much as the behaviour; an agent reading "it may have run"
+        checks, where "failed" would make it try again.
+        """
+        before = {p.pid for p in _serve_processes()}
+        try:
+
+            async def scenario() -> tuple[str, bool]:
+                async with _session(_attach_params(tmp_path, REPO_ROOT)) as (session, _):
+                    assert "compose" in await _find_compose(session)
+                    pid = instances.instance_for(REPO_ROOT).pid
+
+                    # Killed *while* a call is out. A shell `sleep` is the only way to be sure it
+                    # still is: the first version of this test used a repository-wide search, which
+                    # finished before the kill landed and returned its results — a test that passed
+                    # or failed on how fast the disk was that second.
+                    call = asyncio.ensure_future(
+                        session.call_tool("execute_shell_command", {"command": "sleep 8"})
+                    )
+                    await asyncio.sleep(1.5)
+                    os.kill(pid, signal.SIGKILL)
+                    result = await asyncio.wait_for(call, 60)
                     said = _text(result)
 
-                async with _session(_attach_params(tmp_path, REPO_ROOT)) as (fresh, _):
-                    assert "compose" in await _find_compose(fresh)
-                    second_pid = instances.instance_for(REPO_ROOT).pid
-                return said, first_pid, second_pid
+                    # And the session is not finished: the next call is answered by a new instance.
+                    await asyncio.sleep(1.0)
+                    recovered = "compose" in await _find_compose(session)
+                    return said, recovered
 
-            said, first_pid, second_pid = asyncio.run(scenario())
+            said, recovered = asyncio.run(scenario())
 
-            assert "stopped answering" in said and str(REPO_ROOT) in said
-            assert second_pid != first_pid
+            assert "may have run" in said, said
+            assert "not retried" in said or "Nothing was retried" in said, said
+            assert recovered, "the session must carry on after the interrupted call"
         finally:
             for proc in _serve_processes():
                 if proc.pid not in before:

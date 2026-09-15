@@ -201,22 +201,13 @@ class JunonDashboardAPI(SerenaDashboardAPI):
             """
             from flask import jsonify, request
 
-            from junon.update_action import SESSION_TOKEN, install
+            from junon.update_action import SESSION_TOKEN, apply_release
 
             if request.headers.get("X-JUNON-Token") != SESSION_TOKEN:
                 log.warning("[JUNON] refused a quit-and-install without this session's token")
                 return jsonify({"ok": False, "reason": "This request did not carry the session token."}), 403
 
-            outcome = install(quit_running=True)
-            return jsonify({
-                "ok": outcome.ok,
-                "title": outcome.title,
-                "installed": list(outcome.installed),
-                "unchanged": list(outcome.unchanged),
-                "failed": list(outcome.failed),
-                "running": list(outcome.running),
-                "next": outcome.next_step,
-            })
+            return jsonify(apply_release(quit_running=True))
 
         @self._app.route("/junon/ide-bridge/install", methods=["POST"])
         def junon_install_plugin() -> Any:
@@ -229,7 +220,7 @@ class JunonDashboardAPI(SerenaDashboardAPI):
             """
             from flask import jsonify, request
 
-            from junon.update_action import SESSION_TOKEN, install
+            from junon.update_action import SESSION_TOKEN, apply_release
 
             if request.headers.get("X-JUNON-Token") != SESSION_TOKEN:
                 log.warning("[JUNON] refused an install request without this session's token")
@@ -242,16 +233,7 @@ class JunonDashboardAPI(SerenaDashboardAPI):
                 log.warning("[JUNON] refused an install request from %s", origin)
                 return jsonify({"ok": False, "reason": f"Refused a request from {origin}."}), 403
 
-            outcome = install()
-            return jsonify({
-                "ok": outcome.ok,
-                "title": outcome.title,
-                "installed": list(outcome.installed),
-                "unchanged": list(outcome.unchanged),
-                "failed": list(outcome.failed),
-                "running": list(outcome.running),
-                "next": outcome.next_step,
-            })
+            return jsonify(apply_release())
 
         @self._app.route("/junon/ide-bridge/check-upstream", methods=["POST"])
         def junon_check_upstream() -> Any:

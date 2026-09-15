@@ -96,15 +96,41 @@ class TestWhatItSays:
         assert str(tmp_path.resolve()) in report
         assert "starts a fresh one on the installed JUNON" in report
 
-    def test_it_names_what_it_refused_to_stop_and_why(self, tmp_path: Path) -> None:
+    def test_it_names_what_it_refused_to_stop_and_offers_the_way_through(self, tmp_path: Path) -> None:
         instances.publish_instance(tmp_path, 4242)
         instances.publish_client(tmp_path, instance_pid=os.getpid())
 
         report = instances.stop_report(*instances.stop_free(kill=Killer()))
 
         assert "a session is attached" in report
-        assert "would take that work away" in report
         assert "1 session(s)" in report
+        # Since 0.3.7 those sessions survive it, so the report says so rather than only refusing.
+        assert "--all" in report
+        assert "reattach to a fresh instance" in report
+
+
+class TestStoppingEverything:
+    def test_all_stops_the_busy_ones_too(self, tmp_path: Path) -> None:
+        """Only reasonable because a relay follows its instance now: the sessions on it reconnect
+        on their next call instead of being finished."""
+        instances.publish_instance(tmp_path, 4242)
+        instances.publish_client(tmp_path, instance_pid=os.getpid())
+        killer = Killer()
+
+        stopped, kept = instances.stop_free(kill=killer, including_busy=True)
+
+        assert [i.port for i in stopped] == [4242]
+        assert kept == []
+        assert killer.sent == [(os.getpid(), 15)]
+
+    def test_it_is_not_the_default(self, tmp_path: Path) -> None:
+        """The cost is a call in flight reported as unknown; whether to pay it is the caller's."""
+        instances.publish_instance(tmp_path, 4242)
+        instances.publish_client(tmp_path, instance_pid=os.getpid())
+
+        stopped, kept = instances.stop_free(kill=Killer())
+
+        assert stopped == [] and [i.port for i in kept] == [4242]
 
 
 class TestTheRealThing:

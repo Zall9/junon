@@ -76,7 +76,7 @@ def _instances(argv: list[str]) -> int:
     from junon import instances
 
     if "--stop" in argv:
-        stopped, kept = instances.stop_free()
+        stopped, kept = instances.stop_free(including_busy="--all" in argv)
         print(instances.stop_report(stopped, kept))
         return 0
 
