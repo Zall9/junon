@@ -27,6 +27,22 @@ def outcome(installed=(), unchanged=(), failed=(), running=()) -> InstallOutcome
     return InstallOutcome(tuple(installed), tuple(unchanged), tuple(failed), tuple(running))
 
 
+class _FakeArchive:
+    """Stands in for the zip, so the unpack changes what the next read sees and nothing else."""
+
+    def __init__(self, on_extract) -> None:  # noqa: ANN001
+        self._on_extract = on_extract
+
+    def __enter__(self) -> _FakeArchive:
+        return self
+
+    def __exit__(self, *exception: object) -> None:
+        return None
+
+    def extractall(self, *args: object, **kwargs: object) -> None:
+        self._on_extract()
+
+
 class TestTheHeadline:
     @pytest.mark.parametrize(
         "case,expected",
@@ -101,6 +117,47 @@ class TestARunningIdeThatNeedsNothing:
         assert result.running == ("PhpStorm",) and result.failed == ("PhpStorm",)
         assert result.ok is False
         assert "quit it and press this again" in result.next_step
+
+    def test_an_ide_that_is_quit_and_then_installed_reports_installed(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The path a click takes, and the one whose answer was wrong on a live machine.
+
+        Pressed on 2026-09-16 with PhpStorm open on 0.3.6: the jar on disk was replaced during that
+        very click — its timestamp says so — and the card still headed the answer *Already current*.
+        The end state was right and the sentence was not, which is the kind of thing that teaches a
+        reader to stop believing the sentence.
+        """
+        quit_calls: list[str] = []
+        running = {"PhpStorm": True}
+
+        def ask_to_quit(ide: str, timeout: float = 45.0) -> bool:
+            quit_calls.append(ide)
+            running[ide] = False
+            return True
+
+        versions = {"PhpStorm": "0.3.6"}
+        directory = tmp_path / "plugins"
+        directory.mkdir()
+
+        def unpack(*args: Any, **kwargs: Any) -> None:
+            versions["PhpStorm"] = "0.3.7"
+
+        monkeypatch.setattr(update_action, "installed_ides", lambda: [("PhpStorm", tmp_path / "launcher")])
+        monkeypatch.setattr(update_action, "installed_version", lambda ide: versions[ide])
+        monkeypatch.setattr(update_action, "is_running", lambda ide: running[ide])
+        monkeypatch.setattr(update_action, "ask_to_quit", ask_to_quit)
+        monkeypatch.setattr(update_action, "artefact", lambda: tmp_path / "plugin.zip")
+        monkeypatch.setattr(update_action, "artefact_version", lambda path: "0.3.7")
+        monkeypatch.setattr(update_action, "plugins_directory", lambda ide: directory)
+        monkeypatch.setattr("zipfile.ZipFile", lambda *a, **k: _FakeArchive(unpack))
+
+        result = install(quit_running=True)
+
+        assert quit_calls == ["PhpStorm"], "it must ask the running IDE to quit"
+        assert result.installed == ("PhpStorm",), f"got installed={result.installed} unchanged={result.unchanged}"
+        assert result.title == "Installed"
+        assert result.ok is True
 
     def test_an_ide_with_no_plugin_at_all_is_not_called_current(self, machine) -> None:
         machine(on_disk=None, running=True)

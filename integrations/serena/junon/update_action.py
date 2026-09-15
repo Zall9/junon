@@ -20,6 +20,7 @@ which is why the answer says what to do next rather than claiming success.
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import shutil
@@ -28,6 +29,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 PLUGIN_ID = "com.idebridge.jetbrains"
 
@@ -251,6 +254,23 @@ def apply_release(
     told += f" {daemon.reason}"
     checked = check()
     told += f" {checked['sentence']}"
+
+    # Written down, because the one time this answer was wrong there was no way to find out why: the
+    # dashboard's requests are not logged anywhere, so "it said Already current while it was
+    # installing PhpStorm" could only be argued about. A line per click, in the instance's own log.
+    log.info(
+        "[JUNON] release applied: installed=%s unchanged=%s failed=%s running=%s "
+        "on_disk=%s wanted=%s daemon=%s instances_stopped=%s title=%r",
+        list(outcome.installed),
+        list(outcome.unchanged),
+        list(outcome.failed),
+        list(outcome.running),
+        checked.get("onDisk"),
+        checked.get("wanted"),
+        daemon.state,
+        list(stopped),
+        outcome.title,
+    )
     return {
         "ok": outcome.ok and daemon.state != "refused" and checked["agrees"],
         "verified": checked,
