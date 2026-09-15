@@ -168,6 +168,45 @@ class TestIdleWatchdog:
         clock.now += 1
         assert dog.tick() is True and ended == [True]
 
+    def test_a_free_instance_whose_code_is_superseded_goes_at_once(self) -> None:
+        """Why an upgrade looked as if it had not taken: nobody was using this process, nobody ever
+        would — a new session will not attach to superseded code — and it still sat there for the
+        whole idle period."""
+        clock = Clock()
+        ended: list[bool] = []
+        dog = IdleWatchdog(
+            idle_seconds=1800, clients=lambda: 0, on_idle=lambda: ended.append(True),
+            clock=clock, superseded=lambda: True,
+        )
+
+        assert dog.tick() is True and ended == [True], "it must not wait out the idle period"
+
+    def test_a_session_outranks_a_version(self) -> None:
+        """The trade that must not be made: cutting someone's live connection to install a number."""
+        clock = Clock()
+        ended: list[bool] = []
+        dog = IdleWatchdog(
+            idle_seconds=60, clients=lambda: 1, on_idle=lambda: ended.append(True),
+            clock=clock, superseded=lambda: True,
+        )
+
+        clock.now += 10_000
+        assert dog.tick() is False and ended == []
+
+    def test_a_current_instance_still_gets_its_full_idle_period(self) -> None:
+        """The rule this must not have quietly replaced."""
+        clock = Clock()
+        ended: list[bool] = []
+        dog = IdleWatchdog(
+            idle_seconds=60, clients=lambda: 0, on_idle=lambda: ended.append(True),
+            clock=clock, superseded=lambda: False,
+        )
+
+        clock.now += 59
+        assert dog.tick() is False and ended == []
+        clock.now += 1
+        assert dog.tick() is True
+
     def test_the_check_interval_follows_the_idle_period_within_bounds(self) -> None:
         assert IdleWatchdog(600, lambda: 0, lambda: None).interval_seconds == 60
         assert IdleWatchdog(3, lambda: 0, lambda: None).interval_seconds == 0.5

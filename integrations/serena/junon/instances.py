@@ -129,6 +129,22 @@ def running_version() -> str:
     return JUNON_VERSION
 
 
+def version_on_disk() -> str:
+    """What the files say **now**, re-read rather than remembered.
+
+    [running_version] is decided once, when the module is imported, and a long-lived process keeps
+    that answer for its whole life — which is the whole reason an upgrade leaves instances running
+    the previous release. This asks the question again, so a process can notice that it has been
+    superseded instead of being told by someone reading a dashboard.
+
+    For an install that is not a checkout the two are always equal: the version comes from metadata
+    written at install time, and nothing on disk moves under it.
+    """
+    from junon.client import _junon_version
+
+    return _junon_version()
+
+
 def publish_instance(root: str | Path, port: int, pid: int | None = None, version: str | None = None) -> Path:
     process_id = os.getpid() if pid is None else pid
     return _write(

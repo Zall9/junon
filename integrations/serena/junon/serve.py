@@ -105,10 +105,12 @@ class IdleWatchdog:
         on_idle: Callable[[], None],
         clock: Callable[[], float] = time.monotonic,
         interval_seconds: float | None = None,
+        superseded: Callable[[], bool] = lambda: False,
     ) -> None:
         self.idle_seconds = idle_seconds
         self._clients = clients
         self._on_idle = on_idle
+        self._superseded = superseded
         self._clock = clock
         # Ten checks per idle period, and never slower than once a minute or faster than twice a
         # second: precise enough that an instance is gone soon after its time, cheap enough to run.
@@ -119,11 +121,24 @@ class IdleWatchdog:
         self._stopped = threading.Event()
 
     def tick(self) -> bool:
-        """One check. Returns whether the instance should go, and calls `on_idle` if so."""
+        """One check. Returns whether the instance should go, and calls `on_idle` if so.
+
+        **A session always outranks a version.** An instance running superseded code is still doing
+        real work for whoever is attached to it, and cutting their connection to install a number is
+        not a trade worth making — so it waits until they are gone, however long that takes.
+
+        Free and superseded is the other case, and it does not wait out the idle period: nobody is
+        using it and nobody ever will, since a new session will not attach to it. Leaving it there
+        for thirty minutes is how an upgrade appears not to have taken — the question a user asked
+        on 2026-09-15, having watched exactly that.
+        """
         now = self._clock()
         if self._clients() > 0:
             self._last_busy = now
             return False
+        if self._superseded():
+            self._on_idle()
+            return True
         if now - self._last_busy < self.idle_seconds:
             return False
         self._on_idle()
@@ -209,10 +224,14 @@ def run(argv: list[str]) -> int:
     atexit.register(instances.unpublish_instance)
 
     me = os.getpid()
+    mine = instances.running_version()
     IdleWatchdog(
         idle_seconds=options.idle_minutes * 60.0,
         clients=lambda: len(instances.live_clients(instance_pid=me)),
         on_idle=_exit_by_signal,
+        # Asked of the disk on every tick, not remembered: this process's own version was decided
+        # when it imported, and an upgrade is exactly the event it cannot otherwise hear about.
+        superseded=lambda: instances.version_on_disk() != mine,
     ).start()
 
     sys.argv = serena_argv(options, port, passthrough)

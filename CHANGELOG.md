@@ -15,6 +15,16 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.4
+
+- **A shared instance left behind by an upgrade now goes as soon as it is free**, instead of sitting
+  out its thirty idle minutes. Nobody is using it and nobody will — a new session does not attach to
+  superseded code since 0.3.2 — so the wait achieved nothing except making an upgrade look as though
+  it had not taken. A session still outranks a version: an instance with anyone attached keeps
+  running, however old its code, because cutting a live connection to install a number is not a trade
+  worth making. The check re-reads the version from disk on every tick, since a process decides its
+  own version once, when it imports, and an upgrade is precisely the event it cannot otherwise hear.
+
 ## 0.3.3
 
 - **The install button stops sending you to quit an IDE for nothing.** It asked whether an IDE was

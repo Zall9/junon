@@ -139,6 +139,22 @@ class TestItIsSaidOutLoud:
         assert "superseded" not in instances.describe_text()
 
 
+class TestVersionOnDisk:
+    def test_it_is_re_read_rather_than_remembered(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`running_version()` is frozen at import — which is the whole reason a long-lived instance
+        cannot notice an upgrade. This one has to ask the files again, every time."""
+        answers = iter(["0.3.3", "0.3.4"])
+        monkeypatch.setattr("junon.client._junon_version", lambda: next(answers))
+
+        assert instances.version_on_disk() == "0.3.3"
+        assert instances.version_on_disk() == "0.3.4"
+
+    def test_it_agrees_with_the_running_one_in_an_unchanged_checkout(self) -> None:
+        """The control: if these disagreed on a tree nobody has upgraded, every instance would
+        declare itself superseded the moment it started."""
+        assert instances.version_on_disk() == instances.running_version()
+
+
 class TestTheAdviceIsTrueAgain:
     def test_the_card_tells_the_reader_the_old_instance_will_not_be_reused(self) -> None:
         """The words and the behaviour have to be changed together — the words alone are what made
