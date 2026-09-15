@@ -286,6 +286,19 @@ class JunonDashboardAPI(SerenaDashboardAPI):
                 },
             })
 
+        @self._app.route("/junon/instances", methods=["GET"])
+        def get_instances() -> Any:
+            """The shared JUNON instances on this machine and the sessions on each.
+
+            The same reader as `ide_status` and `junon instances`, so the three never disagree about
+            what is alive. Reading prunes the entries of processes that are gone.
+            """
+            from flask import jsonify
+
+            from junon import instances
+
+            return jsonify({"instances": instances.describe()})
+
         @self._app.route("/junon/ide-bridge/status", methods=["GET"])
         def get_ide_bridge_status() -> dict[str, Any]:
             """What the IDE Bridge panel shows: which adapter is connected, and whether it answers.

@@ -231,15 +231,27 @@ the instance's death turned into an answer rather than a closed pipe.
 
 ### Phase 3 — Cross-project and visibility
 
-**Status:** pending (after Phase 2)
+**Status:** done 2026-09-15 — `instances.describe()`, `junon instances`, a section in
+`ide_status`, `/junon/instances` on the dashboard; `tests/test_instances_visibility.py` and one
+more case in `tests/test_attach.py`.
 
-**Deliverables:** `attach --project` documented as the cross-project route with a config example;
-`doctor` lists live instances with their roots, ports and client counts; the dashboard shows the
-same; orphaned entries reaped on read.
+**Deliverables:** `attach --project` documented as the cross-project route with a config example
+(AGENT_SETUP §5); one reader, `instances.describe()`, behind three surfaces — `junon instances`
+(`--json` for scripts), a section appended to every `ide_status` answer, and `GET /junon/instances`
+on the dashboard; orphaned entries reaped on read.
 
-**Acceptance:**
-1. From a session on C, a second server `attach --project A` answers about A's files.
-2. `doctor` names each live instance and its clients; a killed instance disappears from it.
+**A scope decision, stated:** `doctor` — the TypeScript CLI — was on the list and is left alone.
+The liveness rule (pid *and* start time, ADR-0040) would need a second implementation in TS, and
+this repository's history is a list of two implementations of one rule drifting apart. The
+registry is JUNON's; JUNON reads it; `doctor` keeps to the daemon's side. `junon instances` is the
+command for a person.
+
+**Acceptance — all met:**
+1. From a session whose working directory is a git root of its own (C), a second server
+   `attach --project A` answers about A's files, from A's instance, and starts none for C. ✔
+2. Each live instance is named with its root, port, uptime and attached sessions, and whether it
+   is the one answering; an instance whose process is gone disappears — and its file with it —
+   the moment anyone looks. ✔ Pinned on the reader, then on each surface against the reader.
 
 ### Phase 4 — Ship
 
@@ -270,6 +282,7 @@ same; orphaned entries reaped on read.
 | When | What |
 | --- | --- |
 | 2026-09-15 16:10 | Plan written. Facts in §2 verified against serena 1.7.0 in the pipx venv and this machine's host configs; the counts in §1 measured with `ps`. Phase 0 next. |
+| 2026-09-15 18:50 | Phase 3 done. One reader for the shared instances, three surfaces on it — `junon instances`, `ide_status`, `/junon/instances`; cross-project proved from a session rooted elsewhere. `doctor` deliberately left alone, reason recorded. 292 Python tests. Phase 4 — the release — next. |
 | 2026-09-15 18:20 | Phase 2 done. `junon attach` relays stdio to the shared instance; two sessions — sequential or simultaneous — share one; a second session answers in 0.73 s; a dead instance is reported in words. Both hosts on this machine switched: opencode started an instance through it and Claude Code's `mcp list` connected to that same instance. Found and fixed on the way: hosts kill their MCP server's descendants, so the instance is re-parented to launchd at birth. 284 Python tests. Phase 3 next. |
 | 2026-09-15 17:30 | Phase 1 done. `junon serve` announces itself, refuses other projects, leaves when unused — watched on a real instance. Three things learned the hard way, each pinned: an override without upstream's docstring hangs every `initialize`; language servers die with the instance however it exits; a process test must launch the code beside it or a probe proves nothing. 274 Python tests. Phase 2 next. |
 | 2026-09-15 16:35 | Phase 0 done. Two clients on one instance: 0 wrong answers in 40 concurrent calls, per-call latency doubles under contention (0.105 → 0.198 s), one language-server set. The expected start-up gain did not materialise — a fresh session is under 2 s here, PHP included — so §1's case is the process sprawl and the orphans, not speed. Idle default 30 min. Phase 1 next. |

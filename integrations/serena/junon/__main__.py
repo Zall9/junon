@@ -65,10 +65,22 @@ def _attach(argv: list[str]) -> int:
     return run(argv)
 
 
+def _instances(argv: list[str]) -> int:
+    """`junon instances [--json]`: the shared instances on this machine and who is on them."""
+    import json
+
+    from junon import instances
+
+    described = instances.describe()
+    print(json.dumps(described, indent=2) if "--json" in argv else instances.describe_text(described))
+    return 0
+
+
 #: Subcommands JUNON answers itself. Each takes the arguments after its name and returns an exit code.
 OWN_SUBCOMMANDS = {
     "serve": _serve,
     "attach": _attach,
+    "instances": _instances,
 }
 
 

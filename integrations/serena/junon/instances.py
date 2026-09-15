@@ -180,3 +180,50 @@ def live_clients(instance_pid: int | None = None, prune: bool = True) -> list[Cl
     if instance_pid is None:
         return clients
     return [c for c in clients if c.instance_pid == instance_pid]
+
+
+# --- what a person or an agent is shown ----------------------------------------------------------
+
+
+def describe(now: float | None = None) -> list[dict[str, object]]:
+    """Every live instance with the sessions on it, oldest first — the one view every surface shows.
+
+    `ide_status`, the dashboard and `junon instances` all call this rather than reading the files
+    themselves, so the liveness rule has one implementation. Reading prunes: an entry whose process
+    is gone disappears from the directory the moment anyone looks.
+    """
+    import time
+
+    current = time.time() if now is None else now
+    clients = live_clients()
+    described: list[dict[str, object]] = []
+    for instance in live_instances():
+        attached = [c for c in clients if c.instance_pid == instance.pid]
+        described.append(
+            {
+                "pid": instance.pid,
+                "root": instance.root,
+                "port": instance.port,
+                "url": instance.url,
+                "uptime_seconds": None if instance.started_at is None else max(0, int(current - instance.started_at)),
+                "clients": [c.pid for c in attached],
+                "this_process": instance.pid == os.getpid(),
+            }
+        )
+    return described
+
+
+def describe_text(described: list[dict[str, object]] | None = None) -> str:
+    """The same, as lines. Empty is said in words: an absent list reads like a broken reader."""
+    described = describe() if described is None else described
+    if not described:
+        return "No shared JUNON instance is running on this machine."
+    lines = [f"{len(described)} shared JUNON instance(s) on this machine:"]
+    for entry in described:
+        uptime = entry["uptime_seconds"]
+        age = "" if uptime is None else f", up {int(uptime) // 60} min"
+        me = " (this one is answering you)" if entry["this_process"] else ""
+        clients = entry["clients"]
+        sessions = f"{len(clients)} session(s) attached" if clients else "no session attached — it will exit when idle"  # type: ignore[arg-type]
+        lines.append(f"  - {entry['root']}  pid {entry['pid']}, port {entry['port']}{age}: {sessions}{me}")
+    return "\n".join(lines)

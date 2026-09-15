@@ -262,6 +262,28 @@ class TestTwoSessions:
                 if proc.pid not in before:
                     proc.send_signal(signal.SIGTERM)
 
+    def test_a_session_elsewhere_reaches_this_project_through_an_explicit_root(self, tmp_path: Path) -> None:
+        """Plan §3.3: project C reads A by attaching a second server to A. The working directory is
+        C — a git root of its own, so cwd resolution would pick it — and `--project` names A."""
+        elsewhere = tmp_path / "project-c"
+        (elsewhere / ".git").mkdir(parents=True)
+        before = {p.pid for p in _serve_processes()}
+        try:
+
+            async def scenario() -> tuple[str, str]:
+                async with _session(_attach_params(tmp_path, elsewhere, "--project", str(REPO_ROOT))) as (session, _):
+                    return await _find_compose(session), instances.instance_for(REPO_ROOT).root
+
+            found, root = asyncio.run(scenario())
+
+            assert "compose" in found and "integrations/serena/junon/compose.py" in found
+            assert root == str(REPO_ROOT), "the instance serving the answer must be A's, not C's"
+            assert instances.instance_for(elsewhere) is None, "no instance was started for C"
+        finally:
+            for proc in _serve_processes():
+                if proc.pid not in before:
+                    proc.send_signal(signal.SIGTERM)
+
     def test_an_instance_that_dies_is_reported_and_the_next_session_gets_a_fresh_one(self, tmp_path: Path) -> None:
         before = {p.pid for p in _serve_processes()}
         try:

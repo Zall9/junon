@@ -166,6 +166,13 @@ class IdeStatusTool(IdeBridgeTool, ToolMarkerDoesNotRequireActiveProject):
 
         :return: a human-readable description of the daemon and the workspaces it can see.
         """
+        from junon import instances
+
+        # The shared instances travel with every answer, whatever the IDE half says: a session
+        # sharing its JUNON with three others should know it, and this is the tool it calls first.
+        return self._ide_report() + "\n\n" + instances.describe_text()
+
+    def _ide_report(self) -> str:
         try:
             client = self._client()
             workspaces = client.call("workspace/list", {}).get("workspaces", [])
