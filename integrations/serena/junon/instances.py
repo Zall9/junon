@@ -1,0 +1,182 @@
+"""Where a shared JUNON instance and the sessions using it announce themselves to each other.
+
+One instance per project root, shared by every session on that project
+(``docs/SHARED_JUNON_PLAN.md``). Two parties have to find each other with no process in between: a
+session starting up must learn whether an instance for its root already answers, and on which port;
+an instance must learn whether anyone still uses it, so it can stop when nobody does. Both questions
+are answered by files, one per process, the way ``dashboard_registry`` already answers "which
+dashboards are running" — and with the same liveness rule, because the failure it guards against is
+the same: **a pid alone does not identify a process** (ADR-0040). An entry outlives a crash, and a
+pid comes round again; an entry is trusted only while the process holding its pid started when the
+entry says it did.
+
+Two directories under one root:
+
+    <dir>/instances/<pid>.json   {pid, started_at, root, port}
+    <dir>/clients/<pid>.json     {pid, started_at, root, instance_pid}
+
+Nothing here carries a credential. The port answers on loopback to whoever asks, exactly as a
+stdio JUNON answers whoever spawned it; the boundary is the machine, as it is today.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, TypeVar
+
+from junon.dashboard_registry import _alive, _is_the_publisher, _start_time
+
+#: Redirects the whole registry, so tests never read or write the real one.
+REGISTRY_ENV_VAR = "JUNON_INSTANCES_DIR"
+
+T = TypeVar("T")
+
+
+def registry_dir() -> Path:
+    override = os.environ.get(REGISTRY_ENV_VAR)
+    if override:
+        return Path(override)
+    return Path.home() / ".ide-bridge" / "junon"
+
+
+@dataclass(frozen=True, slots=True)
+class Instance:
+    """A shared instance that was serving when it published, and whose process is still that process."""
+
+    pid: int
+    root: str
+    port: int
+    started_at: float | None = None
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/mcp"
+
+
+@dataclass(frozen=True, slots=True)
+class Client:
+    """A session attached to an instance. Its liveness is what keeps the instance alive."""
+
+    pid: int
+    root: str
+    instance_pid: int
+    started_at: float | None = None
+
+
+def _write(kind: str, pid: int, payload: dict[str, object]) -> Path:
+    directory = registry_dir() / kind
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{pid}.json"
+    started_at = _start_time(pid)
+    if started_at is not None:
+        payload["started_at"] = started_at
+    # Written whole then renamed, so a reader never sees half an entry.
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
+def _remove(kind: str, pid: int) -> None:
+    (registry_dir() / kind / f"{pid}.json").unlink(missing_ok=True)
+
+
+def _read_live(kind: str, parse: Callable[[dict[str, object]], T], prune: bool) -> list[T]:
+    """Every entry whose process is alive and is the process that wrote it, oldest first.
+
+    Anything unreadable, dead, or wearing a recycled pid is dropped — and removed when `prune` is
+    set, so the directory does not accumulate the fourteen dead entries the dashboard registry once
+    did.
+    """
+    directory = registry_dir() / kind
+    if not directory.is_dir():
+        return []
+    found: list[T] = []
+    for path in sorted(directory.glob("*.json"), key=lambda p: p.stat().st_mtime):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            pid = int(payload["pid"])
+            recorded_start = payload.get("started_at")
+            started_at = None if recorded_start is None else float(recorded_start)
+            if not _alive(pid) or not _is_the_publisher(pid, started_at):
+                raise ValueError("not the publisher")
+            payload["started_at"] = started_at
+            found.append(parse(payload))
+        except (OSError, ValueError, KeyError, TypeError):
+            if prune:
+                path.unlink(missing_ok=True)
+    return found
+
+
+def normalise_root(root: str | Path) -> str:
+    """The one spelling of a project root that two processes will agree on."""
+    return str(Path(root).expanduser().resolve())
+
+
+# --- instances ---------------------------------------------------------------------------------
+
+
+def publish_instance(root: str | Path, port: int, pid: int | None = None) -> Path:
+    process_id = os.getpid() if pid is None else pid
+    return _write(
+        "instances",
+        process_id,
+        {"pid": process_id, "root": normalise_root(root), "port": int(port)},
+    )
+
+
+def unpublish_instance(pid: int | None = None) -> None:
+    _remove("instances", os.getpid() if pid is None else pid)
+
+
+def live_instances(prune: bool = True) -> list[Instance]:
+    return _read_live(
+        "instances",
+        lambda p: Instance(
+            pid=int(p["pid"]), root=str(p["root"]), port=int(p["port"]), started_at=p.get("started_at")  # type: ignore[arg-type]
+        ),
+        prune,
+    )
+
+
+def instance_for(root: str | Path) -> Instance | None:
+    """The live instance serving this root, or `None`. The newest wins if there are several."""
+    wanted = normalise_root(root)
+    matches = [i for i in live_instances() if i.root == wanted]
+    return matches[-1] if matches else None
+
+
+# --- clients -----------------------------------------------------------------------------------
+
+
+def publish_client(root: str | Path, instance_pid: int, pid: int | None = None) -> Path:
+    process_id = os.getpid() if pid is None else pid
+    return _write(
+        "clients",
+        process_id,
+        {"pid": process_id, "root": normalise_root(root), "instance_pid": int(instance_pid)},
+    )
+
+
+def unpublish_client(pid: int | None = None) -> None:
+    _remove("clients", os.getpid() if pid is None else pid)
+
+
+def live_clients(instance_pid: int | None = None, prune: bool = True) -> list[Client]:
+    """Sessions still attached — to one instance if `instance_pid` is given, else to any."""
+    clients = _read_live(
+        "clients",
+        lambda p: Client(
+            pid=int(p["pid"]),
+            root=str(p["root"]),
+            instance_pid=int(p["instance_pid"]),
+            started_at=p.get("started_at"),  # type: ignore[arg-type]
+        ),
+        prune,
+    )
+    if instance_pid is None:
+        return clients
+    return [c for c in clients if c.instance_pid == instance_pid]

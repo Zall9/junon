@@ -149,18 +149,41 @@ set); time to first answer for the second client versus a fresh stdio start.
 
 ### Phase 1 — `junon serve`
 
-**Status:** pending (after Phase 0)
+**Status:** done 2026-09-15 — `junon/serve.py`, `junon/instances.py`, `tests/test_serve.py`,
+`tests/test_instances.py`; 20 tests, four rules mutation-proved on a copied tree.
 
-**Deliverables:** the subcommand; instance registry (`~/.ide-bridge/instances/<pid>.json`, pid +
-start time + root + port); the pinned `activate_project`; idle exit.
+**Deliverables:** the subcommand; instance registry (`~/.ide-bridge/junon/instances/<pid>.json`,
+pid + start time + root + port, and `clients/<pid>.json` beside it); the pinned
+`activate_project`; idle exit.
 
-**Acceptance:**
-1. `junon serve --project X` answers MCP over HTTP on its port and its entry is listed live.
+**Learned while building it**, each now pinned by a test:
+
+- **A tool override must keep upstream's docstring and signature.** Serena builds the MCP schema
+  from `apply`'s signature and docstring *per connection, inside the server lifespan*. The first
+  pin dropped them, and every `initialize` against the instance hung — port listening, no session
+  ever opened, nothing logged. `functools.wraps(original)` is the fix; the test asserts the
+  docstring and the parameter list survive the pin, and the process test bounds every call so this
+  fails in 20 s instead of hanging for ever.
+- **Language servers leave with the instance whichever way it exits.** Measured with `SIGTERM`,
+  `SIGINT` and a bare `os._exit`: no survivor in any of them — they read stdin and stop at
+  end-of-file. `SIGTERM` is kept so Serena's own shutdown runs; the survivors check in the test is
+  a guard against a future exit path, not a difference between these.
+- **A process test must run the code beside it, not the installed one.** `python -m junon` resolves
+  through the editable install to the checkout, so a mutation probe on a copy exercised the real
+  sources and reported green on a broken copy. `PYTHONPATH` does not beat the editable finder here;
+  an explicit `sys.path.insert(0, …)` does, and the test spawns the instance that way. Proved by a
+  marker the copy writes and the checkout does not.
+
+**Acceptance — all met:**
+1. `junon serve --project X` answers MCP over HTTP on its port and its entry is listed live. ✔
+   `TestServeProcess`, against this repository.
 2. `activate_project(Y)` on it is refused with a message naming X and the way to reach Y;
-   `activate_project(X)` is a no-op that succeeds.
+   `activate_project(X)` — by path or by registered name — goes to upstream. ✔ `TestPin`.
 3. With no live client entry for `--idle-minutes 0.05`, the process exits by itself; with one live
-   client entry it does not. A dead client's stale entry counts as absent (pid reused ≠ alive).
-4. Each rule above has a test that fails when the rule is broken (mutation-proved).
+   client entry it does not. A dead client's stale entry counts as absent (pid reused ≠ alive). ✔
+   `TestIdleWatchdog` with an injected clock, `TestClients`, and the process test end to end.
+4. Mutation-proved on a copy: pin never refuses → red; watchdog ignores sessions → red; `wraps`
+   removed → red in 42 s, not a hang; the control mutation writes a marker only the copy can. ✔
 
 ### Phase 2 — `junon attach`
 
@@ -221,4 +244,5 @@ same; orphaned entries reaped on read.
 | When | What |
 | --- | --- |
 | 2026-09-15 16:10 | Plan written. Facts in §2 verified against serena 1.7.0 in the pipx venv and this machine's host configs; the counts in §1 measured with `ps`. Phase 0 next. |
+| 2026-09-15 17:30 | Phase 1 done. `junon serve` announces itself, refuses other projects, leaves when unused — watched on a real instance. Three things learned the hard way, each pinned: an override without upstream's docstring hangs every `initialize`; language servers die with the instance however it exits; a process test must launch the code beside it or a probe proves nothing. 274 Python tests. Phase 2 next. |
 | 2026-09-15 16:35 | Phase 0 done. Two clients on one instance: 0 wrong answers in 40 concurrent calls, per-call latency doubles under contention (0.105 → 0.198 s), one language-server set. The expected start-up gain did not materialise — a fresh session is under 2 s here, PHP included — so §1's case is the process sprawl and the orphans, not speed. Idle default 30 min. Phase 1 next. |

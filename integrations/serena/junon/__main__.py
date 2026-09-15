@@ -42,9 +42,27 @@ def main() -> None:
             result.dashboard_rebound,
         )
 
+    # JUNON's own subcommands are taken before Serena's CLI sees the arguments: it would reject
+    # a name it does not know. Everything else is Serena's, unchanged.
+    own = OWN_SUBCOMMANDS.get(sys.argv[1] if len(sys.argv) > 1 else "")
+    if own is not None:
+        sys.exit(own(sys.argv[2:]))
+
     from serena.cli import top_level
 
     top_level()
+
+
+def _serve(argv: list[str]) -> int:
+    from junon.serve import run
+
+    return run(argv)
+
+
+#: Subcommands JUNON answers itself. Each takes the arguments after its name and returns an exit code.
+OWN_SUBCOMMANDS = {
+    "serve": _serve,
+}
 
 
 if __name__ == "__main__":
