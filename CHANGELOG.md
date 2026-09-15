@@ -15,6 +15,17 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.6
+
+- **"Install the plugin" is no longer the advice when the plugin is already installed.** An IDE
+  reports the plugin it loaded at start-up, so it keeps naming the old version for as long as it
+  runs — however current its disk has become. The version card read that as out of date and asked
+  for an install that answers "already current", burying the one step that would have fixed it at
+  the end of the sentence. When every IDE on the machine already holds the artefact's plugin, the
+  remedy is now: restart that IDE, and nothing else. A disk that really is behind still gets the
+  install advice, and a stale daemon or a stale JUNON keep their own — different halves, different
+  fixes.
+
 ## 0.3.5
 
 - **`junon instances --stop`**, because quitting the agent host was not the whole answer and there

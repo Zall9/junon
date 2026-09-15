@@ -30,6 +30,18 @@ REMEDY = (
     "once."
 )
 
+#: The same fault, when the installing has already happened and only the restart has not.
+#:
+#: An IDE reports the plugin it **loaded at start-up**, so it goes on naming the old version for as
+#: long as it runs, however current its disk has become. [REMEDY] then asks for an install that has
+#: nothing to do — quit the IDE, press a button, watch it answer "already current" — and the one
+#: step that would actually fix it is buried at the end of that sentence. Measured on 2026-09-15:
+#: both IDEs on 0.3.5 on disk, PhpStorm running 0.3.3, and a card still saying "install".
+RESTART_REMEDY = (
+    "The current plugin is already installed on this machine — the IDE named above is still running "
+    "the one it loaded at start-up. Restart that IDE and nothing else; there is nothing to install."
+)
+
 _RELEASE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
 

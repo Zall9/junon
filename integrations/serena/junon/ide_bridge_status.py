@@ -124,6 +124,41 @@ def daemon_process_is_gone(discovery: dict[str, Any]) -> bool:
     return abs(created - recorded) > _START_TIME_TOLERANCE_SECONDS
 
 
+def nothing_left_to_install() -> bool:
+    """Whether every IDE on this machine already holds the artefact's plugin.
+
+    Asked of the disk, both sides read from `plugin.xml`, so this is the same measurement the
+    install button makes when it answers "already current". No IDE at all, or no artefact to
+    compare against, is not an answer — the caller keeps its existing advice.
+    """
+    from junon.update_action import artefact, artefact_version, installed_ides, installed_version
+
+    wanted = artefact_version(artefact())
+    if wanted is None:
+        return False
+    ides = installed_ides()
+    return bool(ides) and all(installed_version(name) == wanted for name, _ in ides)
+
+
+def _restart_rather_than_install(verdict: dict[str, Any]) -> dict[str, Any]:
+    """Swaps "install then restart" for "just restart" once the installing is done.
+
+    An IDE reports the plugin it loaded at start-up, so it keeps naming the old one for as long as
+    it runs — and the card kept asking for an install that would answer "already current". Only the
+    `older` fault is rewritten: a stale daemon or a stale JUNON are different halves with different
+    remedies, and this knows nothing about either.
+    """
+    from junon.versions import RESTART_REMEDY
+
+    if verdict.get("agrees") or not verdict.get("older"):
+        return verdict
+    if verdict.get("daemonStale") or verdict.get("consumerStale") or verdict.get("newer"):
+        return verdict
+    if not nothing_left_to_install():
+        return verdict
+    return {**verdict, "remedy": RESTART_REMEDY}
+
+
 def _unavailable(status: Status, reason: str) -> dict[str, Any]:
     """The shape every failure answers with — carrying what is still knowable.
 
@@ -271,6 +306,7 @@ def read_status() -> dict[str, Any]:
         from junon.client import JUNON_VERSION
 
         versions = compare(daemon_version, all_adapters, consumer_version=JUNON_VERSION).as_dict()
+        versions = _restart_rather_than_install(versions)
 
     adapter = adapters_by_id.get(adapter_id, {})
 
