@@ -15,6 +15,24 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.1
+
+- **An IDE now notices a daemon that starts after it.** A project opened while no daemon was running
+  was refused once, at start-up, and never looked again — so the ordinary order of things (start the
+  IDE, start the daemon by hand later) left the two unable to meet. Measured on 2026-09-15: GoLand
+  open for ninety minutes with the plugin loaded, a daemon running beside it for eighty-seven of
+  them, no adapter, and a dashboard correctly reporting that no IDE was attached. The plugin now
+  keeps looking, and links itself within fifteen seconds of a daemon appearing. Only for the two
+  refusals a daemon would settle: a refused handshake or registration is the daemon saying no, and
+  retrying that on a timer is a flood. Unlinking outranks the watch — a decision is not undone
+  behind your back.
+- **The dashboard stops claiming a dead daemon is running.** It took the existence of the discovery
+  file as proof, so a daemon that had stopped three weeks earlier still read as "Daemon running, no
+  IDE attached" over an endpoint answering "connection refused". Liveness is now pid _and_ start
+  time (ADR-0040), the same rule the rest of this product already used; a file left behind by a
+  stopped daemon says so and names what to do, and a daemon whose process is alive while its
+  endpoint is silent is its own state rather than a contradiction.
+
 ## 0.3.0
 
 - **One JUNON per project, shared by every session on it.** Each agent session used to start its

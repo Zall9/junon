@@ -52,6 +52,7 @@ import com.intellij.util.concurrency.AppExecutorUtil
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import com.intellij.util.messages.MessageBusConnection
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
@@ -102,6 +103,14 @@ class BridgeDaemonConnectionService(
      * every link attempt, refused ones included, and released by nothing.
      */
     private val trackerFactory: (Project) -> DaemonAnalysisTracker = { DaemonAnalysisTracker(it) },
+    /**
+     * How often a project with no daemon looks for one, so a test need not wait out the real one.
+     *
+     * The same reason as the two above: the behaviour worth testing here is "a daemon that starts
+     * after the IDE is picked up", and fifteen seconds of real waiting per test is how that ends up
+     * untested — which is exactly what happened.
+     */
+    private val daemonWatchIntervalMs: Long = DAEMON_WATCH_INTERVAL_MS,
 ) {
 
     private val logger = logger<BridgeDaemonConnectionService>()
@@ -172,7 +181,92 @@ class BridgeDaemonConnectionService(
     private val links = ConcurrentHashMap<Project, Link>()
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 
+    /** Projects waiting for a daemon to exist, and the discovery each last tried. See [watchForDaemon]. */
+    private val waiting = ConcurrentHashMap<Project, Waiting>()
+
+    private class Waiting(@Volatile var triedIdentity: String?, @Volatile var future: ScheduledFuture<*>?)
+
     private fun discoveryPath(): Path = discoveryPathProvider()
+
+    /**
+     * What discovery file is on disk right now, as a value that changes when the daemon does.
+     *
+     * The endpoint alone is not enough — a daemon restarted onto the same free port would look
+     * identical — so the file's own modification time carries the rest. `null` means there is no
+     * usable file, which is a state of its own: it is what "no daemon has ever run here" looks like.
+     */
+    private fun discoveryIdentity(): String? {
+        val path = discoveryPath()
+        val outcome = DiscoveryReader.read(path)
+        if (outcome !is DiscoveryReader.Outcome.Ready) return null
+        val stamp = runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(0L)
+        return "${outcome.discovery.endpoint}@$stamp"
+    }
+
+    /**
+     * Links [project] as soon as a daemon exists, when the only thing missing was a daemon.
+     *
+     * **The ordering this exists for is the ordinary one.** The daemon is a foreground process
+     * somebody starts by hand; an IDE is usually already open when they do. Before this, a project
+     * that opened without a daemon was refused once, at start-up, and never looked again — measured
+     * on 2026-09-15: GoLand had been open for ninety minutes beside a daemon started three minutes
+     * after it, with the plugin loaded, the two never meeting, and nothing on screen to explain why
+     * beyond a panel saying no IDE was attached.
+     *
+     * Only for the refusals a daemon appearing would resolve. [Outcome.Refusal.NO_CONTENT_ROOT] is
+     * about the project and will never be fixed by one; a refused handshake or registration is the
+     * daemon *saying no*, and retrying that on a timer is the flood [scheduleRelink] is bounded to
+     * avoid. Those keep their single answer.
+     *
+     * Unbounded in time, unlike [scheduleRelink], and deliberately: there is no server to flood
+     * here, only a 200-byte file to read, and "no daemon yet" is a state that can end at any minute
+     * of a working day. It attempts a link only when that file describes something it has not
+     * already tried, so a dead endpoint is not reconnected to every fifteen seconds — it is read,
+     * recognised as the same dead endpoint, and left alone.
+     */
+    private fun watchForDaemon(project: Project, refusal: Outcome.Refusal) {
+        if (refusal != Outcome.Refusal.NO_DAEMON && refusal != Outcome.Refusal.UNREACHABLE) return
+        val state = waiting.computeIfAbsent(project) { Waiting(discoveryIdentity(), null) }
+        if (state.future != null) return
+        state.triedIdentity = discoveryIdentity()
+        scheduleDaemonCheck(project, state)
+    }
+
+    private fun scheduleDaemonCheck(project: Project, state: Waiting) {
+        state.future = AppExecutorUtil.getAppScheduledExecutorService().schedule(
+            {
+                if (project.isDisposed || links.containsKey(project) || waiting[project] !== state) {
+                    waiting.remove(project, state)
+                    return@schedule
+                }
+                val identity = discoveryIdentity()
+                if (identity != null && identity != state.triedIdentity) {
+                    state.triedIdentity = identity
+                    val outcome = runCatching { link(project) }.getOrNull()
+                    if (outcome is Outcome.Linked || outcome is Outcome.AlreadyLinked) {
+                        logger.info("[IDE Bridge] ${project.name} linked to the daemon that appeared at $identity")
+                        waiting.remove(project, state)
+                        return@schedule
+                    }
+                }
+                state.future = null
+                scheduleDaemonCheck(project, state)
+            },
+            daemonWatchIntervalMs,
+            TimeUnit.MILLISECONDS,
+        )
+    }
+
+    /** Stops waiting for a daemon on [project]'s behalf. */
+    private fun stopWaiting(project: Project) {
+        waiting.remove(project)?.future?.cancel(false)
+    }
+
+    /** Refuses, and — for the reasons a daemon appearing would settle — keeps looking for one. */
+    private fun refuse(project: Project, reason: Outcome.Refusal): Outcome {
+        watchForDaemon(project, reason)
+        return Outcome.Refused(reason)
+    }
 
     /**
      * Links [project]: connects, registers it as a workspace, and serves. Must be called off the EDT.
@@ -187,7 +281,7 @@ class BridgeDaemonConnectionService(
         val discovery = DiscoveryReader.read(path)
         if (discovery !is DiscoveryReader.Outcome.Ready) {
             logger.info("[IDE Bridge] no usable discovery file at $path: $discovery")
-            return Outcome.Refused(Outcome.Refusal.NO_DAEMON)
+            return refuse(project, Outcome.Refusal.NO_DAEMON)
         }
 
         val snapshot = IntelliJProjectSnapshot.capture(project)
@@ -202,7 +296,7 @@ class BridgeDaemonConnectionService(
         val socket = runCatching { WebSocketTransport.connect(discovery.discovery.endpoint) }
             .getOrElse {
                 logger.info("[IDE Bridge] daemon endpoint unreachable")
-                return Outcome.Refused(Outcome.Refusal.UNREACHABLE)
+                return refuse(project, Outcome.Refusal.UNREACHABLE)
             }
 
         val topology = EndpointTopology(
@@ -446,6 +540,9 @@ class BridgeDaemonConnectionService(
     }
 
     fun unlink(project: Project) {
+        // First, and whether or not there is a link: unlinking is a decision, and a watcher that
+        // linked the project again a few seconds later would be overruling the person who made it.
+        stopWaiting(project)
         val link = links.remove(project) ?: return
         // Before the transport, so no readiness announcement races a closing socket.
         link.heartbeat?.cancel(false)
@@ -782,7 +879,7 @@ class BridgeDaemonConnectionService(
         private const val PLUGIN_NAME = "ide-bridge-jetbrains"
         // Internal rather than private: a test asserts it equals the repository's VERSION file, and a
         // number the plugin announces to the daemon is exactly the kind that drifts unobserved.
-        internal const val PLUGIN_VERSION = "0.3.0"
+        internal const val PLUGIN_VERSION = "0.3.1"
 
         /**
          * How long a read action may take before the IDE counts as not answering.
@@ -814,6 +911,15 @@ class BridgeDaemonConnectionService(
          * than the minute-plus an unfocused IDE would otherwise take to notice.
          */
         private const val REFRESH_INTERVAL_MS = 15_000L
+
+        /**
+         * How often a project with no daemon looks for one.
+         *
+         * The work is one read of a 200-byte file, and a link is attempted only when that file
+         * describes something new — so this can stay short without costing anything, and fifteen
+         * seconds is a delay nobody notices between starting a daemon and the IDE finding it.
+         */
+        private const val DAEMON_WATCH_INTERVAL_MS = 15_000L
 
         /** First reconnection delay; each attempt doubles it, up to the cap below. */
         private const val RELINK_BASE_DELAY_MS = 2_000L
