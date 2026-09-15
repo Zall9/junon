@@ -15,6 +15,32 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.7
+
+- **One click, then nothing else.** The install button used to reach one half of the product. It now
+  runs one sequence: install the plugin, record how to start the daemon, restart the daemon and wait
+  for it to answer, stop every other shared JUNON instance so open sessions move to the new release
+  at their next call, and finish by stating the state it then measured rather than the steps it took.
+  Proved end to end on a real machine: click, the IDEs quit, reopen them — seven adapters registered
+  within five seconds and every half at the same version, with nothing typed in between.
+- **An IDE that finds no daemon starts one.** The daemon was the half nobody owned: this plugin only
+  ever connected, so a daemon that died stayed dead — one did, and an IDE sat beside it for ninety
+  minutes. The command is recorded by whichever installer put the plugin in place, since that one is
+  by definition running from a checkout where the daemon is built. Because that file names a program
+  that will be executed, it is refused unless it is owned by you and writable by nobody else.
+- **A session follows its instance when it is replaced.** The relay reconnects instead of reporting
+  that its instance is gone, which is what makes it safe to replace an instance somebody is using —
+  and therefore what makes the click above possible. A call that was _in flight_ at that moment is
+  reported as unknown rather than retried: it may have run, and a write must not be applied twice.
+- **`junon instances --stop`**, and `--all` for the busy ones now that their sessions survive it.
+- **The click keeps the ground it stands on.** The dashboard is served by a shared instance, and the
+  first version of the sequence stopped that one too: the page died mid-answer and the machine was
+  left with no daemon. The instance running the sequence is spared, and the daemon is restarted
+  before anything is stopped.
+- Each click writes one line into its instance's log — what was installed, what each IDE holds, what
+  the daemon did, and the headline — because the one time the answer was wrong, nothing had recorded
+  enough to say why.
+
 ## 0.3.6
 
 - **"Install the plugin" is no longer the advice when the plugin is already installed.** An IDE
