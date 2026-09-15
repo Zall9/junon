@@ -1,6 +1,7 @@
 # One click, then nothing else: making an update take by itself
 
-**Status:** in progress — see the [update log](#6-update-log).
+**Status:** done — shipped as 0.3.7 on 2026-09-16, after the whole sequence was run once on a
+real machine with nothing typed between the click and the result.
 
 ## 1. The goal, in the user's words
 
@@ -98,10 +99,23 @@ case and a deliberately broken one.
 
 ### Phase 5 — Release
 
-**Status:** pending
+**Status:** done 2026-09-16 — **0.3.7**, tag `v0.3.7`, commit `6c6372c`.
 
-Not before Phases 1–4 are each proved on this machine, end to end, with the full sequence run once:
-click → quit → reopen → everything agrees, with nothing typed in between.
+The sequence was run once for real, and this is what it produced:
+
+| Step | Measured |
+| --- | --- |
+| The click | Both IDEs quit; PhpStorm moved 0.3.6 → 0.3.7 (its jar rewritten at 01:14:45); daemon 91846 stopped, 91848 answering; the instance serving the page survived to deliver the answer |
+| Reopening the IDEs | GoLand and PhpStorm both loaded 0.3.7; **seven adapters registered within five seconds**, with nothing typed |
+| The verdict | `Verified: daemon and every adapter at 0.3.7, with an IDE attached. Nothing left to do.` |
+| `doctor` | `ok: true`, `adapters: registered-and-ready`, `versions: all-at-0.3.7` |
+
+**What pressing it for real found, that the tests had not.** The sequence stopped the instance
+serving the dashboard, so the page died mid-answer and the steps after it ran in a shutting-down
+process — leaving the machine with no daemon, the worse end of what the click exists to fix. And the
+headline said "Already current" while a plugin was being replaced in that very click, with nothing
+recorded well enough to explain it. Both are fixed; the second is why every click now writes a line
+saying what it did.
 
 ## 5. Risks and decisions
 
@@ -118,4 +132,5 @@ click → quit → reopen → everything agrees, with nothing typed in between.
 | When | What |
 | --- | --- |
 | 2026-09-16 | Plan written, after measuring that a click reaches only the plugin. The reconnecting relay (0.3.7, built and green, unreleased) is what makes Phase 1 safe. |
+| 2026-09-16 | Phase 5 done: 0.3.7 released after the live sequence. Two defects that only a real click could show — the sequence stopping the process that owed the answer, and a headline contradicting the disk with nothing logged to settle it. The plan is closed; §5's two residuals stand. |
 | 2026-09-16 | Phases 1–4 done. A click now installs the plugin, records how to start the daemon, stops every shared instance so open sessions move over at their next call, restarts the daemon and waits for it to answer, then states the end state it measured. An IDE that finds no daemon starts one itself, refusing a command file anyone else could have written. 402 Python, 488 TypeScript, 301 Kotlin. Two things caught while building: the unit tests were restarting the developer's own daemon — 0.4 s of tests had become 33 s — so the two machine-touching steps are injected now; and `Killer` was counting `os.kill(pid, 0)` liveness probes as kills. Phase 5 is the live sequence, which needs the button pressed. |
