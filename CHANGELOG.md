@@ -15,6 +15,21 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.0
+
+- **One JUNON per project, shared by every session on it.** Each agent session used to start its
+  own JUNON — its own language servers, index and dashboard — and nothing ended it: ten were found
+  running on one machine, four of them a week old and serving nobody. Now the hosts run
+  `junon attach`, a thin stdio relay to one `junon serve` per project root, started on first use,
+  pinned to that project, and gone after thirty idle minutes. Measured before it was built: two
+  sessions on one instance, forty concurrent calls, zero wrong answers; a second session answers
+  0.73 s after it is spawned. Details, numbers and what was learned in
+  [docs/SHARED_JUNON_PLAN.md](docs/SHARED_JUNON_PLAN.md).
+
+  **What you have to do:** change one word in each host's MCP configuration — the `serena` entry's
+  command becomes `junon attach` (AGENT_SETUP §5 has all three hosts in full) — and restart the
+  host. `junon instances` shows what is running; `ide_status` now says it too.
+
 ## 0.2.8
 
 - **Every diagnostics snapshot came back incomplete.** A cancelled daemon pass cleared _every_

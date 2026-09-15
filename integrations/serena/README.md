@@ -41,11 +41,18 @@ adds exactly `aenum`, `websockets` and `ide_bridge`, upgrades nothing, and `pip 
 ## Running it
 
 ```bash
-junon start-mcp-server --project-from-cwd --transport stdio
+junon attach
 ```
 
-`junon` composes and then hands the process to Serena's own CLI, unchanged — every Serena argument,
-subcommand and flag keeps working, and nothing here has to track them.
+That is what an agent host runs: it speaks MCP on its stdio, and behind it there is **one JUNON per
+project root** — `junon serve`, started on first use, shared by every session on that project,
+pinned to it, gone after thirty idle minutes. `junon instances` lists what is running. The design
+and its measurements are in [docs/SHARED_JUNON_PLAN.md](../../docs/SHARED_JUNON_PLAN.md).
+
+`junon start-mcp-server …` still works and still means what it did — one private JUNON for this
+process — because `junon` composes and then hands anything it does not know to Serena's own CLI,
+unchanged: every Serena argument, subcommand and flag keeps working, and nothing here has to track
+them. Flags after `attach` that it does not know go to the instance it starts.
 
 **Configure your agent host to run `junon`, not `serena`.** This is the one mistake the design makes
 easy to make and hard to see: `serena` still starts plain Serena, on purpose, so that a machine with
