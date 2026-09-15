@@ -22,7 +22,16 @@ from typing import Any, Literal
 #: non-default install layouts the CLI supports.
 DISCOVERY_ENV_VAR = "IDE_BRIDGE_DISCOVERY_FILE"
 
-Status = Literal["connected", "no-adapter", "no-daemon", "unreadable"]
+Status = Literal["connected", "no-adapter", "no-daemon", "daemon-unreachable", "unreadable"]
+
+#: Every state this module can report, and what it means. The panel must have a label for each.
+STATUS_MEANINGS: dict[str, str] = {
+    "connected": "an IDE has a workspace open on a daemon that answers",
+    "no-adapter": "the daemon answers, and no IDE has a workspace open",
+    "no-daemon": "no daemon is running — no discovery file, or one its process no longer backs",
+    "daemon-unreachable": "the daemon's process is alive and its endpoint does not answer",
+    "unreadable": "the discovery file could not be read or trusted",
+}
 
 
 def _discovery_path() -> Path:
@@ -61,6 +70,58 @@ def _disk_versions(daemon_version: str | None) -> dict[str, Any] | None:
     if not verdict["agrees"]:
         verdict["summary"] = verdict["summary"].replace("plugin(s)", "installed plugin(s)")
     return verdict
+
+
+#: How far the daemon's recorded `startedAt` may sit from the kernel's start time for its pid.
+#:
+#: The daemon writes the file after its process exists, so the difference is positive and small —
+#: measured on this machine: +0.160 s for `node packages/cli/dist/bin.js daemon`. Two seconds is
+#: the same allowance `dashboard_registry` makes, for the same reason: this is a sanity check
+#: against a **recycled pid**, not a precision instrument.
+_START_TIME_TOLERANCE_SECONDS = 2.0
+
+
+def daemon_process_is_gone(discovery: dict[str, Any]) -> bool:
+    """Whether the process the discovery file names has stopped, or is now somebody else.
+
+    **The file is a claim, not a fact.** A daemon that dies leaves it behind — the daemon of
+    2026-08-25 left one that outlived it by three weeks, and until this function existed the panel
+    read that tombstone and announced *"Daemon running, no IDE attached"* over a port that had been
+    refusing connections since. `doctor` had the check (`daemon-process: pid-not-running`) and this
+    side did not, which is how one question came to have two answers on one machine.
+
+    Unknowable is not the same as gone: a file from before `pid` existed, a `psutil` that was
+    stripped out, a process this user may not query — each leaves the claim exactly as trustworthy
+    as it was, which is what the port test after it is for.
+    """
+    pid = discovery.get("pid")
+    if not isinstance(pid, int):
+        return False
+    try:
+        import psutil
+    except ImportError:  # pragma: no cover - declared in pyproject
+        return False
+    try:
+        process = psutil.Process(pid)
+        created = float(process.create_time())
+    except psutil.NoSuchProcess:
+        return True
+    except Exception:  # noqa: BLE001 - psutil raises a family of its own; none of it is an answer
+        return False
+
+    started_at = discovery.get("startedAt")
+    if not isinstance(started_at, str):
+        return False
+    try:
+        from datetime import datetime
+
+        recorded = datetime.fromisoformat(started_at.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return False
+    # A pid that came round again wears a start time of its own, and it is never the one the daemon
+    # wrote. Compared in both directions: a process that started long after the file was written did
+    # not write it, and neither did one that started long before.
+    return abs(created - recorded) > _START_TIME_TOLERANCE_SECONDS
 
 
 def _unavailable(status: Status, reason: str) -> dict[str, Any]:
@@ -116,6 +177,20 @@ def read_status() -> dict[str, Any]:
         "protocolVersion": discovery.get("protocolVersion"),
     }
 
+    # Before anything is claimed about a daemon: is the one this file describes still there?
+    if daemon_process_is_gone(discovery):
+        return {
+            **base,
+            **_unavailable(
+                "no-daemon",
+                f"No daemon is running. The discovery file still describes pid "
+                f"{discovery.get('pid')}, started {discovery.get('startedAt')}, which is gone — a "
+                "daemon that stops leaves the file behind. Start one with "
+                "`node packages/cli/dist/bin.js daemon`, then relink the IDE from its IDE Bridge "
+                "tool window.",
+            ),
+        }
+
     # Reading the file proves a daemon was started, not that an IDE is attached — and the panel says
     # "connected". Until 2026-08-11 this returned `no-adapter` unconditionally, which was a guess
     # that happened to be right whenever no IDE was open and wrong the rest of the time. Asking is
@@ -144,10 +219,13 @@ def read_status() -> dict[str, Any]:
     try:
         workspaces = client.call("workspace/list", {}).get("workspaces", [])
     except IdeBridgeError as error:
+        # Its process is alive — checked above — and its endpoint does not answer. That is its own
+        # state, not "no IDE attached": the panel used to say a daemon was running and unreachable
+        # in the same breath, which reads as a broken dashboard rather than as a stopped daemon.
         return {
             **base,
-            "status": "no-adapter",
-            "reason": f"The daemon is running but did not answer: {error}",
+            "status": "daemon-unreachable",
+            "reason": f"The daemon's process is alive but its endpoint did not answer: {error}",
             "adapter": None,
             # Both of these mean every IDE is closed — which is the state the install
             # button can act in, so the page must still get its token and a verdict.

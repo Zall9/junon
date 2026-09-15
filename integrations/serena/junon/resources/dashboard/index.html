@@ -627,6 +627,9 @@
 
       function renderBridge(status) {
         const state = status.status;
+        // One label per status in `ide_bridge_status.STATUS_MEANINGS`, and a test asserts that this
+        // table has them all. An unmapped status used to fall through to "Unreadable", which is a
+        // sentence about the file rather than about the daemon.
         const label =
           state === "connected"
             ? "Connected"
@@ -634,7 +637,9 @@
               ? "No daemon running"
               : state === "no-adapter"
                 ? "Daemon running, no IDE attached"
-                : "Unreadable";
+                : state === "daemon-unreachable"
+                  ? "Daemon not answering"
+                  : "Unreadable";
         const tone = state === "connected" ? "" : state === "no-daemon" ? "idle" : "warn";
         const adapter = status.adapter || {};
 
