@@ -20,6 +20,7 @@ which is why the answer says what to do next rather than claiming success.
 
 from __future__ import annotations
 
+import os
 import secrets
 import shutil
 import subprocess
@@ -231,10 +232,14 @@ def apply_release(
     restart_daemon = restart_daemon or daemon_control.restart
     check = check or verify
 
+    # The daemon before the instances, deliberately. Stopping things is the step that can go wrong,
+    # and the one thing worse than an instance surviving an upgrade is a machine left with no daemon
+    # — which is exactly what the first ordering produced when this process was stopped halfway
+    # through its own sequence.
     outcome = install(quit_running=quit_running)
     record_daemon_command()
-    stopped = refresh_instances()
     daemon = restart_daemon()
+    stopped = refresh_instances()
 
     told = outcome.next_step
     if stopped:
@@ -261,7 +266,7 @@ def apply_release(
 
 
 def refresh_instances() -> tuple[str, ...]:
-    """Stops every shared JUNON instance, so live sessions land on the code just installed.
+    """Stops every shared JUNON instance **except this one**, so live sessions land on the new code.
 
     Installing changes files; a running process keeps what it imported. Every session on this
     machine would otherwise go on using the previous release until its instance idled out — which is
@@ -270,10 +275,16 @@ def refresh_instances() -> tuple[str, ...]:
     Stopping a busy instance became reasonable in 0.3.7: a relay follows its instance and reconnects
     on its next call. Before that this would have ended those sessions, which is why the button did
     not do it.
+
+    **Except this one**, because the dashboard is served *by* an instance. The first version stopped
+    it too: the page died mid-request, the browser showed a connection refused, and the rest of the
+    sequence ran inside a process that was shutting down — which left the machine with no daemon.
+    This instance is superseded like any other and leaves when its sessions end (0.3.4); what it
+    must not do is pull the floor out from under the answer it owes.
     """
     from junon import instances
 
-    stopped, _ = instances.stop_free(including_busy=True)
+    stopped, _ = instances.stop_free(including_busy=True, except_pid=os.getpid())
     return tuple(instance.root for instance in stopped)
 
 

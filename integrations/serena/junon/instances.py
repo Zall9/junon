@@ -201,6 +201,7 @@ def instance_for(root: str | Path) -> Instance | None:
 def stop_free(
     kill: Callable[[int, int], None] | None = None,
     including_busy: bool = False,
+    except_pid: int | None = None,
 ) -> tuple[list[Instance], list[Instance]]:
     """Stops instances. Returns what was stopped, and what was left running.
 
@@ -222,6 +223,13 @@ def stop_free(
     stopped: list[Instance] = []
     kept: list[Instance] = []
     for instance in live_instances():
+        if except_pid is not None and instance.pid == except_pid:
+            # The caller is running inside this one. Measured on 2026-09-16, by pressing the button:
+            # the dashboard's own instance was stopped mid-request, so the answer never reached the
+            # browser — and the rest of the sequence ran in a dying process, which is how a machine
+            # ended up with no daemon at all. Whatever is asking keeps the ground it stands on.
+            kept.append(instance)
+            continue
         if live_clients(instance_pid=instance.pid) and not including_busy:
             kept.append(instance)
             continue

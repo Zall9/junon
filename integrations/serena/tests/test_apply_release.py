@@ -90,18 +90,72 @@ class TestRefreshInstances:
     def test_it_stops_every_instance_including_the_busy_ones(self, tmp_path, monkeypatch) -> None:
         import os
 
-        instances.publish_instance(tmp_path, 4242)
-        instances.publish_client(tmp_path, instance_pid=os.getpid())
+        # Somebody else's instance: the sequence spares only the process running it, and this test
+        # process is that one. Published under the parent's pid, which is alive and is not us.
+        other = os.getppid()
+        instances.publish_instance(tmp_path, 4242, pid=other)
+        instances.publish_client(tmp_path, instance_pid=other)
         killer = Killer()
         monkeypatch.setattr(os, "kill", killer)
 
         stopped = refresh_instances()
 
         assert stopped == (str(tmp_path.resolve()),)
-        assert killer.terminated == [os.getpid()]
+        assert killer.terminated == [other]
 
     def test_nothing_running_is_nothing_stopped(self) -> None:
         assert refresh_instances() == ()
+
+
+class TestItKeepsTheGroundItStandsOn:
+    """Pressed for real on 2026-09-16, and the page went dead: *ERR_CONNECTION_REFUSED*.
+
+    The dashboard is served *by* a shared instance, and the sequence stopped every shared instance.
+    So the process answering the request stopped itself mid-answer — the browser got nothing, and
+    the steps after that ran inside a process that was shutting down, which left the machine with no
+    daemon at all. Every part of that is pinned below.
+    """
+
+    def test_the_instance_running_the_sequence_is_not_stopped(self, tmp_path, monkeypatch) -> None:
+        import os
+
+        instances.publish_instance(tmp_path / "mine", 4242, pid=os.getpid())
+        # A second instance, belonging to somebody else, which must still be stopped.
+        directory = tmp_path.parent / "other"
+        directory.mkdir(exist_ok=True)
+        instances.publish_instance(directory, 5555, pid=os.getppid())
+        killer = Killer()
+        monkeypatch.setattr(os, "kill", killer)
+
+        stopped = refresh_instances()
+
+        assert stopped == (str(directory.resolve()),), "only the other one may be stopped"
+        assert killer.terminated == [os.getppid()]
+        assert os.getpid() not in killer.terminated, "it must not stop the process that is answering"
+
+    def test_the_daemon_is_restarted_before_anything_is_stopped(self, installed, steps, monkeypatch) -> None:
+        """Order matters because stopping is the step that can go wrong. The first ordering stopped
+        the instances first, died halfway, and never reached the daemon — leaving none."""
+        import os
+
+        order: list[str] = []
+        installed(InstallOutcome((), ("GoLand",), (), ()))
+
+        def restart():
+            order.append("daemon")
+            from junon import daemon_control
+
+            return daemon_control.Restart("restarted", "daemon replaced", 1, 2)
+
+        def stopping(*args: Any, **kwargs: Any):
+            order.append("instances")
+            return ((), ())
+
+        monkeypatch.setattr(instances, "stop_free", stopping)
+        _, _, check = steps
+        apply_release(restart_daemon=restart, check=check)
+
+        assert order == ["daemon", "instances"]
 
 
 class TestApplyRelease:
@@ -109,7 +163,7 @@ class TestApplyRelease:
         import os
 
         installs = installed(InstallOutcome(("GoLand",), (), (), ()))
-        instances.publish_instance(tmp_path, 4242)
+        instances.publish_instance(tmp_path, 4242, pid=os.getppid())
         monkeypatch.setattr(os, "kill", Killer())
 
         _, restart, check = steps
@@ -125,7 +179,7 @@ class TestApplyRelease:
         import os
 
         installed(InstallOutcome((), ("GoLand",), (), ()))
-        instances.publish_instance(tmp_path, 4242)
+        instances.publish_instance(tmp_path, 4242, pid=os.getppid())
         monkeypatch.setattr(os, "kill", Killer())
 
         calls, restart, check = steps
