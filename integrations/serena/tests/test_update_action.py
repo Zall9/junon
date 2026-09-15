@@ -74,9 +74,14 @@ class TestItAlwaysSaysHowToCheck:
 
 
 class TestOk:
-    def test_ok_requires_something_installed(self) -> None:
+    def test_an_ide_that_already_had_the_plugin_is_a_success(self) -> None:
+        """This test used to assert the opposite — `ok` required something to have been *installed*,
+        so a machine where every IDE was already current reported not-ok and the card headed it
+        "Not installed". Pressing the button twice is the ordinary way to reach that state, and it
+        happened to a user on 2026-09-15. The rule it encoded was the defect, so the rule changed
+        and this test with it; `test_install_outcome.py` holds the whole table of headlines."""
         assert outcome(installed=("PyCharm",)).ok
-        assert not outcome(unchanged=("GoLand",)).ok
+        assert outcome(unchanged=("GoLand",)).ok
 
     def test_a_running_ide_does_not_make_a_success_a_failure(self) -> None:
         """Measured: two IDEs updated, and the toast said "Not installed" because a third was open."""

@@ -55,14 +55,44 @@ class InstallOutcome:
 
     @property
     def ok(self) -> bool:
-        """Whether this went as well as it could.
+        """Whether there is nothing left for the person to do.
 
         A running IDE is not a failure: it is a reason, stated in the answer, and the person can act
         on it. Counting it as one made the toast announce "Not installed" over two IDEs that had just
         been updated — and the title is what gets read.
+
+        `bool(self.installed)` used to be required, which made the best possible outcome — every IDE
+        already carrying this exact plugin — report as not-ok, and the card headed it "Not installed".
+        Seen on 2026-09-15, twice in an hour. Nothing to do is the definition of ok, not the absence
+        of it.
+
+        A running IDE that still needs the plugin was considered for this verdict and deliberately
+        left out of it: the measurement above is that turning an open third IDE into a failed run
+        mislabels two successful ones. What remains to be done is said by [title] and [next_step],
+        which is where a person reads it, rather than by flipping a boolean that also travels to
+        callers with no headline to write.
         """
         unexplained = set(self.failed) - set(self.running)
-        return bool(self.installed) and not unexplained
+        return not unexplained and bool(self.installed or self.unchanged)
+
+    @property
+    def title(self) -> str:
+        """The headline, decided here rather than from a boolean the page has to interpret.
+
+        "Installed" and "Not installed" cannot between them describe *already current*, which is the
+        ordinary answer to pressing this button twice — and the one that read as a failure.
+        """
+        if set(self.failed) - set(self.running):
+            return "Install failed"
+        if self.running and self.installed:
+            return "Partly installed"
+        if self.running:
+            return "Not installed"
+        if self.installed:
+            return "Installed"
+        if self.unchanged:
+            return "Already current"
+        return "Nothing to install"
 
     def _split(self, names: tuple[str, ...]) -> tuple[list[str], list[str]]:
         live = [name for name in names if name in self.running]
@@ -165,6 +195,35 @@ def artefact() -> Path | None:
     return max(candidates, key=release)
 
 
+def artefact_version(zip_path: Path | None) -> str | None:
+    """The version inside the artefact, read from its descriptor rather than from its filename.
+
+    The filename is written by the build and is nearly always right; "nearly" is the problem. This
+    is compared against what an IDE has on disk to decide whether there is anything to install, and
+    both sides of that comparison must be the same measurement — `installed_version` reads
+    `plugin.xml`, so this does too.
+    """
+    import re
+    import zipfile
+
+    if zip_path is None:
+        return None
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            name = next(
+                (n for n in archive.namelist() if n.endswith("lib/ide-bridge-jetbrains") or n.endswith(".jar")),
+                None,
+            )
+            if name is None:
+                return None
+            with archive.open(name) as raw, zipfile.ZipFile(raw) as jar:
+                descriptor = jar.read("META-INF/plugin.xml").decode("utf-8", "replace")
+    except (OSError, KeyError, zipfile.BadZipFile, ValueError):
+        return None
+    found = re.search(r"<version>([^<]+)", descriptor)
+    return found.group(1) if found else None
+
+
 def plugins_directory(ide: str) -> Path | None:
     base = Path.home() / "Library/Application Support/JetBrains"
     for directory in sorted(base.glob(f"{ide.replace(' ', '')}*/plugins")):
@@ -211,8 +270,17 @@ def install(timeout: float = 300.0, quit_running: bool = False) -> InstallOutcom
     failed: list[str] = []
     running: list[str] = []
 
+    wanted = artefact_version(zip_path)
+
     for name, launcher in installed_ides():
         before = installed_version(name)
+        # Asked before anything about running: an IDE that already holds this exact plugin has
+        # nothing to write, so whether it is open is beside the point. Asked the other way round —
+        # which is how this shipped — it told someone to quit PhpStorm to install a plugin PhpStorm
+        # already had, and the card headed the whole answer "Not installed". Seen on 2026-09-15.
+        if wanted is not None and before == wanted:
+            unchanged.append(name)
+            continue
         if is_running(name) and quit_running:
             # Asked, not killed — and if it declines, that is the answer, not a reason to insist.
             ask_to_quit(name)

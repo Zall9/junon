@@ -210,6 +210,7 @@ class JunonDashboardAPI(SerenaDashboardAPI):
             outcome = install(quit_running=True)
             return jsonify({
                 "ok": outcome.ok,
+                "title": outcome.title,
                 "installed": list(outcome.installed),
                 "unchanged": list(outcome.unchanged),
                 "failed": list(outcome.failed),
@@ -244,6 +245,7 @@ class JunonDashboardAPI(SerenaDashboardAPI):
             outcome = install()
             return jsonify({
                 "ok": outcome.ok,
+                "title": outcome.title,
                 "installed": list(outcome.installed),
                 "unchanged": list(outcome.unchanged),
                 "failed": list(outcome.failed),

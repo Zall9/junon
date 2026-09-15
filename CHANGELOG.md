@@ -15,6 +15,20 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.3
+
+- **The install button stops sending you to quit an IDE for nothing.** It asked whether an IDE was
+  running before asking whether there was anything to install, so an IDE already carrying this exact
+  plugin was reported as _"could not be written to because it is running: quit it and press this
+  again"_. Now an IDE that already has the artefact's version is left alone, open or not — the two
+  versions compared by reading `plugin.xml` on both sides rather than trusting a filename.
+- **"Already current" is no longer headed "Not installed".** `ok` required something to have been
+  installed, so the best possible outcome — every IDE already up to date, which is what pressing the
+  button twice produces — read as a failure. The headline is now named by the outcome itself
+  (`Installed`, `Already current`, `Partly installed`, `Not installed`, `Install failed`, `Nothing to
+install`) instead of being squeezed out of a boolean. A running IDE that genuinely needs the plugin
+  is still reported, and still tells you to quit it.
+
 ## 0.3.2
 
 - **An upgraded JUNON is no longer handed back the instance running the old one.** A shared instance

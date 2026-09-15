@@ -598,7 +598,9 @@
             headers: { "X-JUNON-Token": installToken || "" },
           });
           const result = await response.json();
-          $("toast-title").textContent = result.ok ? "Installed" : "Not installed";
+          // The backend names the outcome: a boolean cannot say "already current", which is what
+          // pressing this twice produces and what used to be headed "Not installed".
+          $("toast-title").textContent = result.title || (result.ok ? "Installed" : "Not installed");
           // The sentence that matters is not "done" — a plugin that is installed is not a plugin
           // that is loaded, and the IDE reads them at start-up.
           // Only the prepared sentence: the page used to build its own summary from the raw
