@@ -262,8 +262,8 @@ junon tools list | grep '^ \* `ide_'
 
 Ten tools — the tenth is `ide_refactor`, the IDE's own rename. Zero means plain Serena answered.
 
-Then configure your MCP host to run **`junon`**, never `serena`. The three hosts do not share a
-schema, so each is given in full rather than as a shape to adapt.
+Then configure your MCP host to run **`junon attach`**, never `serena`. The three hosts do not share
+a schema, so each is given in full rather than as a shape to adapt.
 
 **Claude Code** — `~/.claude.json`, under `mcpServers`:
 
@@ -272,7 +272,7 @@ schema, so each is given in full rather than as a shape to adapt.
   "serena": {
     "type": "stdio",
     "command": "junon",
-    "args": ["start-mcp-server", "--project-from-cwd", "--transport", "stdio"]
+    "args": ["attach"]
   }
 }
 ```
@@ -285,7 +285,7 @@ not work here:
 {
   "serena": {
     "type": "local",
-    "command": ["junon", "start-mcp-server", "--project-from-cwd", "--transport", "stdio"],
+    "command": ["junon", "attach"],
     "cwd": ".",
     "enabled": true,
     "timeout": 60000
@@ -300,7 +300,7 @@ the shape is Claude Code's:
 {
   "serena": {
     "command": "junon",
-    "args": ["start-mcp-server", "--project-from-cwd", "--transport", "stdio"]
+    "args": ["attach"]
   }
 }
 ```
@@ -309,6 +309,46 @@ The first two are copied from what is running on the machine this was written on
 not**: Cursor is not installed here, so it comes from Cursor's own documentation and has not been
 watched working. Check it with `get_current_config` — `ide_*` tools in the active list mean JUNON
 answered — before believing it.
+
+### What `attach` does, and what it replaced
+
+Through 0.2.8 the hosts ran `junon start-mcp-server --project-from-cwd --transport stdio`: one JUNON
+process per session, with its own language servers and its own dashboard. Ten of them were found
+running on one machine one afternoon, four of them a week old and serving nobody
+([SHARED_JUNON_PLAN.md](SHARED_JUNON_PLAN.md) has the count).
+
+`junon attach` keeps the host's side of the contract — a command speaking MCP on its stdio — and
+puts everything else in **one instance per project root**, `junon serve`, shared by every session on
+that project:
+
+- the project is resolved the way `--project-from-cwd` did it, Serena's own rule — the nearest
+  `.serena/project.yml` or `.git` above the working directory. `--project /path` names one instead;
+- a live instance for that root is used; otherwise one is started, and the session waits until it
+  answers. Two sessions starting together take a lock per root, so they end up on one instance;
+- the instance is **pinned**: `activate_project` for any other project is refused and names the way
+  to reach it, so no session can switch the project under another;
+- the instance exits by itself after **30 idle minutes** with no session attached
+  (`--idle-minutes` on `attach` sets it for the instance it starts), and its language servers go
+  with it. Nothing outlives its sessions by a week any more;
+- if the instance dies under a session, the next call answers in words — *the shared JUNON for …
+  stopped answering* — and the next session starts a fresh one.
+
+Flags after `attach` that it does not know go to the instance it starts, so
+`"args": ["attach", "--enable-web-dashboard", "false"]` still works as it did.
+
+**A second project from the same session** is a second server entry, pointed at that project's
+root; the tools arrive prefixed with the entry's name, which says where each answer came from:
+
+```json
+{
+  "serena": { "type": "stdio", "command": "junon", "args": ["attach"] },
+  "serenaA": { "type": "stdio", "command": "junon", "args": ["attach", "--project", "/path/to/A"] }
+}
+```
+
+What is where: instances announce themselves under `~/.ide-bridge/junon/instances/`, sessions under
+`~/.ide-bridge/junon/clients/`, and an instance's output is in `~/.ide-bridge/junon/logs/`. Each
+entry is trusted only while the process holding its pid is the one that wrote it (ADR-0040).
 
 **Keeping the server named `serena` is deliberate**, in all three. The tools take the server's name,
 so `serena_find_symbol` and `serena_ide_read_symbol` are what an agent sees, and every prompt, memory

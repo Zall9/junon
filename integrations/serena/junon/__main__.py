@@ -59,9 +59,16 @@ def _serve(argv: list[str]) -> int:
     return run(argv)
 
 
+def _attach(argv: list[str]) -> int:
+    from junon.attach import run
+
+    return run(argv)
+
+
 #: Subcommands JUNON answers itself. Each takes the arguments after its name and returns an exit code.
 OWN_SUBCOMMANDS = {
     "serve": _serve,
+    "attach": _attach,
 }
 
 

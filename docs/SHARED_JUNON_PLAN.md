@@ -187,21 +187,47 @@ pid + start time + root + port, and `clients/<pid>.json` beside it); the pinned
 
 ### Phase 2 — `junon attach`
 
-**Status:** pending (after Phase 1)
+**Status:** done 2026-09-15 — `junon/attach.py`, `tests/test_attach.py`; 10 tests, four rules
+mutation-proved; both hosts on this machine switched and exercised.
 
-**Deliverables:** the subcommand; project-from-cwd resolution reusing Serena's; find-or-start with a
-ready wait; client entry; the stdio ↔ HTTP proxy.
+**Deliverables:** the subcommand; project-from-cwd resolution reusing Serena's `find_project_root`;
+find-or-start under a per-root lock, with a ready wait; client entry; the stdio ↔ HTTP relay with
+the instance's death turned into an answer rather than a closed pipe.
 
-**Acceptance:**
-1. Two `junon attach` in the same root → exactly **one** `junon serve` process (counted by `ps`),
-   both clients answered.
-2. `tools/list` through the proxy equals `tools/list` on the instance; `instructions` reach the
-   client; a `tools/list_changed` from the instance reaches the client.
-3. Second attach: first answer < 1 s. First attach: within the language-server start-up plus a
-   bounded margin.
-4. A serve that dies mid-session: the attach reports it, and the next attach starts a fresh one.
-5. Both host configurations updated in `docs/AGENT_SETUP.md`, and this machine's, and a session in
-   each host verified end to end.
+**Acceptance — all met:**
+1. Two `junon attach` in the same root → exactly **one** `junon serve` process, counted in the
+   process table; both answered. ✔ Also two started **at the same moment** — the race the lock is
+   for; without the lock both start one (mutation, red in 62 s). ✔
+2. `tools/list` through the relay is the instance's own (39 tools, `ide_*` included);
+   `instructions` reach the client. ✔ `tools/list_changed` is relayed by code and not by a test —
+   the pinned instance never changes its toolset, so nothing here can provoke one.
+3. Second attach, spawn → first correct answer: **0.73 s** (0.743, 0.727, 0.728 over three runs),
+   interpreter start included. First attach: the instance's ~2 s plus the same. ✔
+4. Instance killed under a session: the next call answers `isError` with *the shared JUNON for …
+   stopped answering*; the next session gets a fresh instance with a different pid. ✔ A call on a
+   dead connection is raced against the death mark — without the race it waits for a response
+   that never comes (mutation, red).
+5. `docs/AGENT_SETUP.md` §5 rewritten for `attach`; this machine's `~/.claude.json` and
+   `~/.config/opencode/opencode.json` switched (backups beside them). Exercised: a headless
+   `opencode run` started an instance through `attach` — its model provider refused the call,
+   which is opencode's business, but the MCP side ran — and `claude mcp list` reported
+   `serena: junon attach - ✔ Connected` **against the instance opencode had started**. One
+   instance, two hosts. ✔
+
+**Learned while building it**, pinned by a test:
+
+- **A new session is not enough to survive the host.** The first real opencode session ended and
+  the instance — in its own session via `start_new_session` — received a shutdown the same second.
+  The same instance started from a Python stdio client outlived it. Hosts kill their MCP server's
+  descendants, presumably by walking the tree; a session boundary is not a tree boundary. The
+  instance is now started by a middle process that exits at once, so launchd adopts it; the test
+  asserts the instance's parent is pid 1, and starting it directly goes red.
+- **The relay's upstream connection must be its own task.** The HTTP transport runs a task group,
+  and when the instance dies that group raises; inside the same `async with` as the stdio server,
+  the exception closed the host's pipe with no message. Held in a task, its death is a fact the
+  next request is answered with.
+- **A fake clock that never advances hangs a poll loop forever.** A unit test did, once. The clock
+  in that test now ticks on every glance.
 
 ### Phase 3 — Cross-project and visibility
 
@@ -244,5 +270,6 @@ same; orphaned entries reaped on read.
 | When | What |
 | --- | --- |
 | 2026-09-15 16:10 | Plan written. Facts in §2 verified against serena 1.7.0 in the pipx venv and this machine's host configs; the counts in §1 measured with `ps`. Phase 0 next. |
+| 2026-09-15 18:20 | Phase 2 done. `junon attach` relays stdio to the shared instance; two sessions — sequential or simultaneous — share one; a second session answers in 0.73 s; a dead instance is reported in words. Both hosts on this machine switched: opencode started an instance through it and Claude Code's `mcp list` connected to that same instance. Found and fixed on the way: hosts kill their MCP server's descendants, so the instance is re-parented to launchd at birth. 284 Python tests. Phase 3 next. |
 | 2026-09-15 17:30 | Phase 1 done. `junon serve` announces itself, refuses other projects, leaves when unused — watched on a real instance. Three things learned the hard way, each pinned: an override without upstream's docstring hangs every `initialize`; language servers die with the instance however it exits; a process test must launch the code beside it or a probe proves nothing. 274 Python tests. Phase 2 next. |
 | 2026-09-15 16:35 | Phase 0 done. Two clients on one instance: 0 wrong answers in 40 concurrent calls, per-call latency doubles under contention (0.105 → 0.198 s), one language-server set. The expected start-up gain did not materialise — a fresh session is under 2 s here, PHP included — so §1's case is the process sprawl and the orphans, not speed. Idle default 30 min. Phase 1 next. |
