@@ -1,2 +1,2 @@
 export const DAEMON_NAME = "ide-bridge-daemon" as const;
-export const DAEMON_VERSION = "0.3.4" as const;
+export const DAEMON_VERSION = "0.3.5" as const;

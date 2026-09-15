@@ -350,6 +350,21 @@ What is where: instances announce themselves under `~/.ide-bridge/junon/instance
 `~/.ide-bridge/junon/clients/`, and an instance's output is in `~/.ide-bridge/junon/logs/`. Each
 entry is trusted only while the process holding its pid is the one that wrote it (ADR-0040).
 
+### Getting everything onto a new release
+
+Three lifetimes, and each ends differently. A process runs the code it imported at start-up, so
+installing files never reaches one that is already running:
+
+| What | How it ends |
+| --- | --- |
+| The agent host's own JUNON relays (`junon attach`) | They die with the host — measured, one second after it closes the pipe. Quitting opencode or Claude Code is enough, and a single `opencode serve` can be holding several. |
+| The shared instances (`junon serve`) | **Not** with the host: they are re-parented on purpose so they outlive the session that started them. `junon instances --stop` ends the ones nobody is attached to; the rest go when their sessions end, or after thirty idle minutes. Since 0.3.4 a free instance whose code has been superseded leaves at once rather than waiting. |
+| The daemon, and the plugin in each IDE | The daemon is a process you restart; the plugin is read at IDE start-up, so that IDE must be restarted once. |
+
+So the whole recipe is: `junon instances --stop`, quit the agent hosts, restart the daemon, restart
+each IDE. Nothing needs starting again by hand — the next session starts the instance it needs, on
+the installed JUNON.
+
 **Keeping the server named `serena` is deliberate**, in all three. The tools take the server's name,
 so `serena_find_symbol` and `serena_ide_read_symbol` are what an agent sees, and every prompt, memory
 and habit that already says `serena_*` keeps working. A server renamed `junon` would rename all of

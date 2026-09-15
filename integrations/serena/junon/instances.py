@@ -198,6 +198,59 @@ def instance_for(root: str | Path) -> Instance | None:
     return matches[-1] if matches else None
 
 
+def stop_free(
+    kill: Callable[[int, int], None] | None = None,
+) -> tuple[list[Instance], list[Instance]]:
+    """Stops every instance no session is attached to. Returns what was stopped, and what was kept.
+
+    The answer to "how do I get everything onto the current code". Quitting the agent host does not
+    do it: a host's stdio children die with it — measured, one second after the pipe closes — but a
+    shared instance is re-parented to launchd on purpose, so that it can outlive the session that
+    started it. Nothing was left to end one on demand except waiting out its idle period.
+
+    An instance with a session attached is left alone, and named rather than silently skipped: that
+    session is using it, and the rule everywhere else in this file is that a session outranks a
+    version. Nothing is started here — the next session in that project starts what it needs.
+    """
+    import signal
+
+    send = kill if kill is not None else os.kill
+    stopped: list[Instance] = []
+    kept: list[Instance] = []
+    for instance in live_instances():
+        if live_clients(instance_pid=instance.pid):
+            kept.append(instance)
+            continue
+        try:
+            send(instance.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            # Gone between the listing and now — an idle exit that beat us to it, which is the
+            # outcome this was asking for. Not reported as stopped: it was not this that did it.
+            continue
+        stopped.append(instance)
+    return stopped, kept
+
+
+def stop_report(stopped: list[Instance], kept: list[Instance]) -> str:
+    """What `--stop` says, in the same voice as the listing."""
+    if not stopped and not kept:
+        return "No shared JUNON instance is running on this machine; there was nothing to stop."
+    lines: list[str] = []
+    if stopped:
+        lines.append(f"Stopped {len(stopped)} instance(s):")
+        for i in stopped:
+            lines.append(f"  - {i.root}  pid {i.pid}, JUNON {i.version or 'unknown'}")
+        lines.append("  The next session in those projects starts a fresh one on the installed JUNON.")
+    if kept:
+        lines.append(f"Left running, because a session is attached — ending it would take that work away:")
+        for i in kept:
+            lines.append(
+                f"  - {i.root}  pid {i.pid}, {len(live_clients(instance_pid=i.pid))} session(s)"
+            )
+        lines.append("  Close those sessions and run this again, or let them exit when idle.")
+    return "\n".join(lines)
+
+
 def superseded_instances(root: str | Path | None = None) -> list[Instance]:
     """Live instances running a JUNON that is no longer the installed one."""
     current = running_version()

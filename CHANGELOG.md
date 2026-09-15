@@ -15,6 +15,18 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.5
+
+- **`junon instances --stop`**, because quitting the agent host was not the whole answer and there
+  was no other. A host's stdio children die with it — one second after it closes the pipe — but a
+  shared instance is re-parented on purpose so that it outlives the session that started it, which
+  left waiting out the idle period or `pkill` as the only ways to end one. The command stops every
+  instance nobody is attached to and names the ones it refused to touch, because a session is doing
+  someone's work and a version number is not a reason to take it away. Nothing is restarted: the
+  next session in a project starts what it needs, on the installed JUNON.
+- AGENT_SETUP §5 now states the three lifetimes and how each one ends, since "why did the update not
+  take" has the same answer every time: a process runs the code it imported at start-up.
+
 ## 0.3.4
 
 - **A shared instance left behind by an upgrade now goes as soon as it is free**, instead of sitting

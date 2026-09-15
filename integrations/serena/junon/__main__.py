@@ -66,10 +66,19 @@ def _attach(argv: list[str]) -> int:
 
 
 def _instances(argv: list[str]) -> int:
-    """`junon instances [--json]`: the shared instances on this machine and who is on them."""
+    """`junon instances [--json | --stop]`: the shared instances, and a way to end the free ones.
+
+    `--stop` is what "get everything onto the current code" needs beyond quitting the agent hosts:
+    their stdio children die with them, a shared instance does not — it is re-parented on purpose.
+    """
     import json
 
     from junon import instances
+
+    if "--stop" in argv:
+        stopped, kept = instances.stop_free()
+        print(instances.stop_report(stopped, kept))
+        return 0
 
     described = instances.describe()
     print(json.dumps(described, indent=2) if "--json" in argv else instances.describe_text(described))
