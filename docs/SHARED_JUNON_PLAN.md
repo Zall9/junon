@@ -1,6 +1,7 @@
 # One JUNON per project, shared by every session on it
 
-**Status:** in progress — see the [update log](#7-update-log) for where it stands.
+**Status:** done — shipped as 0.3.0 on 2026-09-15. The [update log](#7-update-log) is the
+iteration-by-iteration account; §4 holds each phase's acceptance and what it taught.
 
 ## 1. Why
 
@@ -255,9 +256,22 @@ command for a person.
 
 ### Phase 4 — Ship
 
-**Status:** pending (after Phase 3)
+**Status:** done 2026-09-15 — **0.3.0**, tag `v0.3.0`, commit `33a6cc9`.
 
-`CHANGELOG.md`, `AGENT_SETUP.md`, this document's final numbers, a release.
+`CHANGELOG.md` says what changed and the one word a user has to change; `AGENT_SETUP.md` §5 and
+`integrations/serena/README.md` show `attach`; the plugin and the daemon carry the number without
+having changed. 488 TypeScript, 292 Python, 289 Kotlin tests at the tag.
+
+**Final numbers, for the record:**
+
+| | Before | After |
+| --- | --- | --- |
+| JUNON processes for N sessions on one project | N, plus the ones nobody ended | 1 |
+| Language-server sets per project | N | 1 |
+| Instance lifetime after its last session | for ever (a week, measured) | 30 idle minutes |
+| Second session, spawn → first answer | ~2 s | 0.73 s |
+| Per-call latency with two sessions active | 0.105 s | 0.198 s (queued, not interleaved) |
+| Sessions that can switch the project under another | any | none — refused, with the way to reach it |
 
 ## 5. Risks and open questions
 
@@ -282,6 +296,7 @@ command for a person.
 | When | What |
 | --- | --- |
 | 2026-09-15 16:10 | Plan written. Facts in §2 verified against serena 1.7.0 in the pipx venv and this machine's host configs; the counts in §1 measured with `ps`. Phase 0 next. |
+| 2026-09-15 19:15 | Phase 4 done: 0.3.0 tagged and pushed, plugin repository advertising it, both hosts on this machine already on `attach`. The plan is closed; the numbers above are final. |
 | 2026-09-15 18:50 | Phase 3 done. One reader for the shared instances, three surfaces on it — `junon instances`, `ide_status`, `/junon/instances`; cross-project proved from a session rooted elsewhere. `doctor` deliberately left alone, reason recorded. 292 Python tests. Phase 4 — the release — next. |
 | 2026-09-15 18:20 | Phase 2 done. `junon attach` relays stdio to the shared instance; two sessions — sequential or simultaneous — share one; a second session answers in 0.73 s; a dead instance is reported in words. Both hosts on this machine switched: opencode started an instance through it and Claude Code's `mcp list` connected to that same instance. Found and fixed on the way: hosts kill their MCP server's descendants, so the instance is re-parented to launchd at birth. 284 Python tests. Phase 3 next. |
 | 2026-09-15 17:30 | Phase 1 done. `junon serve` announces itself, refuses other projects, leaves when unused — watched on a real instance. Three things learned the hard way, each pinned: an override without upstream's docstring hangs every `initialize`; language servers die with the instance however it exits; a process test must launch the code beside it or a probe proves nothing. 274 Python tests. Phase 2 next. |
