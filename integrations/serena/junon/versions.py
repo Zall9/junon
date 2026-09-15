@@ -61,10 +61,19 @@ DAEMON_REMEDY = (
 
 #: What to do when JUNON is the stale half. Not a reinstall: an editable JUNON already *is* the
 #: checkout, and the process is simply holding the modules it imported at start-up.
+#:
+#: **This sentence had to be earned back.** Since 0.3.0 a session does not hold its own JUNON — it
+#: relays to one shared instance per project, which outlives the host that started it on purpose.
+#: Restarting the host therefore did *not* pick up the current one: the new session reattached to
+#: the same superseded instance, and this very card said the same thing again. A session now
+#: attaches only to an instance running the installed JUNON (`instances.instance_for`), which is
+#: what makes "restart the host" true rather than a loop. `junon instances` names any instance left
+#: behind, and it exits once the sessions on it end.
 CONSUMER_REMEDY = (
     "This JUNON is older than the daemon it is talking to. It was imported when this agent host "
     "started, so nothing you install changes it — restart the host (opencode, Claude Code) and the "
-    "session will pick up the current one."
+    "session will pick up the current one. A shared instance still running the older JUNON is not "
+    "reused by the new session; `junon instances` lists any that are still finishing their work."
 )
 
 

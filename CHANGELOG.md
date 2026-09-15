@@ -15,6 +15,19 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.2
+
+- **An upgraded JUNON is no longer handed back the instance running the old one.** A shared instance
+  holds the code it imported at start-up and outlives its sessions on purpose, so the moment JUNON is
+  upgraded the machine is running instances of the previous release — and a new session attached to
+  one and ran it. That turned the version card's own advice into a loop: it said _restart the host
+  and the session will pick up the current one_, the host restarted, `attach` found the same
+  superseded instance by root, and the card said it again. Seen on a live dashboard the day the
+  shared instance shipped. Matching the project root is no longer enough: a session attaches only to
+  an instance running the installed JUNON. The superseded one is left to the sessions already on it —
+  killing it would take work away from them — and it exits when they end. `junon instances` names it,
+  and says what becomes of it.
+
 ## 0.3.1
 
 - **An IDE now notices a daemon that starts after it.** A project opened while no daemon was running

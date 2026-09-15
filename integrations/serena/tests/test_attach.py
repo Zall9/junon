@@ -9,6 +9,7 @@ session says about it. That last part is the acceptance of ``docs/SHARED_JUNON_P
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import signal
 import subprocess
@@ -257,6 +258,46 @@ class TestTwoSessions:
 
             assert a == b, "the two sessions ended up on different instances"
             assert started == 1, f"{started} instances were started for one project"
+        finally:
+            for proc in _serve_processes():
+                if proc.pid not in before:
+                    proc.send_signal(signal.SIGTERM)
+
+    def test_a_session_does_not_attach_to_an_instance_running_an_older_junon(self, tmp_path: Path) -> None:
+        """The loop of 2026-09-15, end to end: the card says restart the host, the host restarts,
+        and it must not land back on the instance carrying the JUNON it was told to leave behind.
+
+        A real instance is started, its registry entry is then rewritten to claim an older JUNON —
+        which is precisely the state an upgrade leaves — and a real session attaches. It must get a
+        second instance, and the first must still be running.
+        """
+        before = {p.pid for p in _serve_processes()}
+        try:
+
+            async def scenario() -> tuple[int, int, bool]:
+                async with _session(_attach_params(tmp_path, REPO_ROOT)) as (first, _):
+                    assert "compose" in await _find_compose(first)
+                    stale = instances.instance_for(REPO_ROOT)
+                    assert stale is not None
+
+                    # What an upgrade looks like from the registry's side.
+                    entry = tmp_path / "instances" / f"{stale.pid}.json"
+                    payload = json.loads(entry.read_text())
+                    payload["version"] = "0.0.1-older"
+                    entry.write_text(json.dumps(payload))
+                    assert instances.instance_for(REPO_ROOT) is None, "a superseded instance must not be offered"
+
+                    async with _session(_attach_params(tmp_path, REPO_ROOT)) as (second, _):
+                        assert "compose" in await _find_compose(second)
+                        fresh = instances.instance_for(REPO_ROOT)
+                        assert fresh is not None
+                        return stale.pid, fresh.pid, psutil.pid_exists(stale.pid)
+
+            stale_pid, fresh_pid, stale_alive = asyncio.run(scenario())
+
+            assert fresh_pid != stale_pid, "the session reused the instance it was meant to leave"
+            assert stale_alive, "the superseded instance must be left to its own sessions, not killed"
+            assert len({p.pid for p in _serve_processes()} - before) == 2
         finally:
             for proc in _serve_processes():
                 if proc.pid not in before:

@@ -50,6 +50,9 @@ class Instance:
     root: str
     port: int
     started_at: float | None = None
+    #: The JUNON this instance is *running* — the code it imported at start-up, not what is on disk.
+    #: `None` for an entry written before instances carried one, which makes it older by definition.
+    version: str | None = None
 
     @property
     def url(self) -> str:
@@ -119,12 +122,24 @@ def normalise_root(root: str | Path) -> str:
 # --- instances ---------------------------------------------------------------------------------
 
 
-def publish_instance(root: str | Path, port: int, pid: int | None = None) -> Path:
+def running_version() -> str:
+    """The JUNON this process is running, which is not necessarily the one installed on disk."""
+    from junon.client import JUNON_VERSION
+
+    return JUNON_VERSION
+
+
+def publish_instance(root: str | Path, port: int, pid: int | None = None, version: str | None = None) -> Path:
     process_id = os.getpid() if pid is None else pid
     return _write(
         "instances",
         process_id,
-        {"pid": process_id, "root": normalise_root(root), "port": int(port)},
+        {
+            "pid": process_id,
+            "root": normalise_root(root),
+            "port": int(port),
+            "version": running_version() if version is None else version,
+        },
     )
 
 
@@ -133,20 +148,48 @@ def unpublish_instance(pid: int | None = None) -> None:
 
 
 def live_instances(prune: bool = True) -> list[Instance]:
+    """Every instance running right now, stale ones included — this is the view, not the chooser."""
     return _read_live(
         "instances",
         lambda p: Instance(
-            pid=int(p["pid"]), root=str(p["root"]), port=int(p["port"]), started_at=p.get("started_at")  # type: ignore[arg-type]
+            pid=int(p["pid"]),
+            root=str(p["root"]),
+            port=int(p["port"]),
+            started_at=p.get("started_at"),  # type: ignore[arg-type]
+            version=p.get("version"),  # type: ignore[arg-type]
         ),
         prune,
     )
 
 
 def instance_for(root: str | Path) -> Instance | None:
-    """The live instance serving this root, or `None`. The newest wins if there are several."""
+    """The live instance a session may attach to for this root, or `None`.
+
+    **Running the same JUNON is part of matching the root.** An instance holds the code it imported
+    at start-up, and it outlives the sessions that started it on purpose — so after an upgrade the
+    machine has instances running the previous release, and a session that attached to one would run
+    it too. On 2026-09-15 that turned the version card's own advice into a loop: it said *restart the
+    host and the session will pick up the current one*, while the restarted host reattached to the
+    same superseded instance and the card said the same thing again.
+
+    A superseded instance is left running rather than killed — the sessions already on it are using
+    it, and it exits on its own once they are gone. It simply stops being offered to new ones. An
+    entry with no version was written before this field existed, which makes it older by definition.
+    """
     wanted = normalise_root(root)
-    matches = [i for i in live_instances() if i.root == wanted]
+    current = running_version()
+    matches = [i for i in live_instances() if i.root == wanted and i.version == current]
     return matches[-1] if matches else None
+
+
+def superseded_instances(root: str | Path | None = None) -> list[Instance]:
+    """Live instances running a JUNON that is no longer the installed one."""
+    current = running_version()
+    wanted = None if root is None else normalise_root(root)
+    return [
+        i for i in live_instances()
+        if i.version != current and (wanted is None or i.root == wanted)
+    ]
 
 
 # --- clients -----------------------------------------------------------------------------------
@@ -196,6 +239,7 @@ def describe(now: float | None = None) -> list[dict[str, object]]:
 
     current = time.time() if now is None else now
     clients = live_clients()
+    installed = running_version()
     described: list[dict[str, object]] = []
     for instance in live_instances():
         attached = [c for c in clients if c.instance_pid == instance.pid]
@@ -208,6 +252,10 @@ def describe(now: float | None = None) -> list[dict[str, object]]:
                 "uptime_seconds": None if instance.started_at is None else max(0, int(current - instance.started_at)),
                 "clients": [c.pid for c in attached],
                 "this_process": instance.pid == os.getpid(),
+                "version": instance.version,
+                # Said out loud, because two instances on one root is otherwise a puzzle rather
+                # than the ordinary aftermath of an upgrade.
+                "superseded": instance.version != installed,
             }
         )
     return described
@@ -226,4 +274,12 @@ def describe_text(described: list[dict[str, object]] | None = None) -> str:
         clients = entry["clients"]
         sessions = f"{len(clients)} session(s) attached" if clients else "no session attached — it will exit when idle"  # type: ignore[arg-type]
         lines.append(f"  - {entry['root']}  pid {entry['pid']}, port {entry['port']}{age}: {sessions}{me}")
+        if entry["superseded"]:
+            # An entry with no version was written before instances carried one; naming it "None"
+            # tells the reader about a missing field rather than about their machine.
+            running = f"JUNON {entry['version']}" if entry["version"] else "a JUNON from before this field existed"
+            lines.append(
+                f"      running {running}, superseded by {running_version()}: "
+                "no new session will attach to it, and it exits once the ones on it end."
+            )
     return "\n".join(lines)
