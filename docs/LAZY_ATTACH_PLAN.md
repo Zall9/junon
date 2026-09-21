@@ -1,6 +1,6 @@
 # Starting a session must not start a project
 
-**Status:** built and verified; release pending — see the [update log](#7-update-log).
+**Status:** done — released as 0.3.8 on 2026-09-21. See the [update log](#7-update-log).
 
 ## 1. Why
 
@@ -184,9 +184,38 @@ in the stale-cache test, and the mutation is red now.
 
 ### Phase 5 — Release
 
-**Status:** pending
+**Status:** done 2026-09-21 — **0.3.8 is out, and the machine was measured rather than assumed.**
 
-Only after Phase 4, and after the real thing has been started and used on this machine.
+Run with the binary an agent host actually launches — `/Users/pauldelifer/.local/bin/junon` — against
+the machine's own registry, not an isolated one:
+
+| | |
+| --- | --- |
+| Version reported by the installed JUNON | 0.3.8 |
+| Recorded handshake for 0.3.8, before | absent |
+| A session that calls a tool | started one instance in 4.0 s, and recorded the handshake |
+| Six sessions on six real projects, `initialize` + `tools/list` | **0 instances started**, 39 tools each, 3.2 s |
+
+The one instance this measurement started was stopped by its pid; the one that was already on the
+machine was left alone.
+
+#### What the release itself turned up
+
+`scripts/update-all.sh` reported *none was running*, then *the daemon did not restart*, while a daemon
+was running, answering, with two IDEs attached. It looked for
+`pgrep -f 'node packages/cli/dist/bin.js daemon'` — the relative command a daemon started from the
+repository root has. Since 0.3.7 a daemon normally starts from the recorded command in
+`~/.ide-bridge/daemon.json`, in absolute paths, so the half added to make the daemon self-healing had
+made it invisible to the script that updates it. It never stopped the old daemon, could not start a
+new one, and left the machine on the previous build while reporting a failed step. It now asks the
+discovery file, which is what `doctor` and the plugin have always done. Re-run: pid 90957 stopped,
+92498 started, daemon at 0.3.8.
+
+#### Left to the person who owns the IDEs
+
+GoLand and PhpStorm were running, so their plugins are still 0.3.7 — no script can write into a
+running IDE. Quitting them and pressing install, or running the script again, finishes it. Agent
+hosts pick up 0.3.8 when they next start, since JUNON is imported at start-up.
 
 ## 6. Risks
 
@@ -202,5 +231,6 @@ Only after Phase 4, and after the real thing has been started and used on this m
 | When | What |
 | --- | --- |
 | 2026-09-21 | Plan written after measuring 23 instances / 55 language servers / 4.16 GB at opencode start-up, caused by `attach` starting its instance eagerly. |
+| 2026-09-21 | Phase 5 done: 0.3.8 pushed and installed. Measured on the machine with the installed binary and the real registry — six sessions on six real projects started nothing. One more defect found by doing it for real: the update script could not see a daemon it had not started itself, so it left the machine on the previous build while saying a step had failed. |
 | 2026-09-21 | Phase 4 done: the nine behaviours run one by one, twenty simultaneous attaches accepted, four mutations probed on a copy. Two defects found and fixed — tests that counted (and killed) instances belonging to the user's own sessions, and three unsafe edges in the relay found by reading the diff. |
 | 2026-09-21 | Phases 0–3 done. Eight host-like sessions opened at once, each doing what a host does — initialize, `tools/list`, then nothing: **8 instances and 5 717 MB before, 0 and 0 after**. The 14 tests of `test_attach.py` still pass unchanged, which is the point: sharing, reconnection, in-flight semantics and cross-project are untouched. Two mistakes of mine along the way, both recorded in the risks: a `pkill` in a diagnostic script killed the suite that was running, and the first cost measurement counted — and then terminated — every instance on the machine rather than its own. |
