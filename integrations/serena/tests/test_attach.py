@@ -174,11 +174,21 @@ async def _find_compose(session) -> str:  # noqa: ANN001
 
 
 def _serve_processes() -> list[psutil.Process]:
+    """The instances **this test** started, read from its own registry — never the machine's.
+
+    Filtering the process table by repository path looked equivalent and was not. An instance the
+    user's own agent host started on this very repository while the suite ran was counted as one of
+    the test's, and then terminated by its cleanup: two tests failed that way on a busy machine on
+    2026-09-21 and passed on a quiet one, and somebody else's editor lost its instance. The registry
+    is `tmp_path` for the relay and for this process alike, so what it lists is ours and nothing
+    else can appear in it.
+    """
     mine = []
-    for proc in psutil.process_iter(["cmdline"]):
-        cmd = proc.info.get("cmdline") or []
-        if "serve" in cmd and "--project" in cmd and str(REPO_ROOT) in cmd and any("junon" in c for c in cmd):
-            mine.append(proc)
+    for inst in instances.live_instances():
+        try:
+            mine.append(psutil.Process(inst.pid))
+        except psutil.NoSuchProcess:
+            pass
     return mine
 
 

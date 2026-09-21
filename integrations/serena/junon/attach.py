@@ -35,7 +35,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from junon import instances
+from junon import handshake_cache, instances
 from junon.instances import Instance
 from junon.serve import DEFAULT_IDLE_MINUTES
 
@@ -44,6 +44,11 @@ log = logging.getLogger("junon.attach")
 #: How long a fresh instance may take to answer before attaching gives up. Language servers that
 #: index a large project for the first time are the slow case; two seconds is the usual one.
 DEFAULT_START_TIMEOUT_SECONDS = 120.0
+
+#: How long an instance that has registered but is not answering yet is given before a second one is
+#: started for the same root. Long enough to cover a cold start under load — twenty-three at once,
+#: measured — and short enough that a genuinely wedged instance does not hold a session for ever.
+_SETTLE_SECONDS = 30.0
 
 #: Runs the `junon` package that contains this file, whatever is installed (see the module docstring).
 _LAUNCH = "import sys, runpy; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module('junon', run_name='__main__', alter_sys=True)"
@@ -179,6 +184,26 @@ def find_or_start(
         existing = instances.instance_for(root)
         if existing is not None and alive(existing.url):
             return existing
+
+        if existing is not None:
+            # Registered but not answering *yet*. Treating that as absent is how one root ended up
+            # with two instances on 2026-09-21: twenty-three were booting at once, the first had
+            # published its port but had not finished starting its language servers, and the second
+            # attach gave up on it immediately. It gets a bounded wait before being written off.
+            started_waiting = last = clock()
+            while clock() - started_waiting < _SETTLE_SECONDS:
+                if alive(existing.url):
+                    return existing
+                if instances.instance_for(root) is None:
+                    break  # it died rather than started; stop waiting for it
+                time.sleep(poll_seconds)
+                now = clock()
+                if now == last:
+                    # A clock that does not move cannot expire a wait, and a test that injects a
+                    # still one is asking what happens *now*, not in thirty seconds. Without this
+                    # the loop never ends — it hung the suite once, with `time.sleep(0)`.
+                    break
+                last = now
 
         pid = launch(root, idle_minutes, passthrough or [])
         deadline = clock() + start_timeout
@@ -473,15 +498,60 @@ async def relay(
         passthrough=passthrough,
         on_reconnect=tools_may_have_changed,
     )
-    await upstream.open()
-    instance = upstream.instance
+
+    # **Opening a session must not start a project.** A host launches one relay per registered
+    # project the moment it starts — opencode had 119 of them — and until 0.3.8 each of those
+    # immediately started the project's instance and its language servers, whether or not anyone
+    # would ever touch it: 23 instances, 55 language servers, 4.16 GB, measured on 2026-09-21.
+    #
+    # So the two things a host asks at start-up are answered from a file recorded by whichever relay
+    # last had a live instance, and the instance itself is started by the first request that is
+    # genuinely about the project. With nothing recorded, this behaves exactly as it did before.
+    def record(handshake: handshake_cache.Handshake) -> None:
+        # Recording is an optimisation for the *next* session. A full disk, a read-only home, a
+        # registry someone chmod'd — none of those are reasons for this session to fail.
+        try:
+            handshake_cache.write(handshake)
+        except OSError as error:
+            log.warning("the handshake could not be recorded (%s); sessions will keep starting "
+                        "their project at open", error)
+
+    recorded = handshake_cache.read()
+    if recorded is None:
+        await upstream.open()
+        record(handshake_cache.capture(
+            upstream.init, (await upstream.call(ClientSession.list_tools)).tools, root
+        ))
+        recorded = handshake_cache.read()
+
+    async def ensure_upstream() -> None:
+        """Starts the instance the first time something really needs it, and reconciles the cache."""
+        if upstream.session is not None or upstream.instance is not None:
+            return
+        await upstream.open()
+        live = handshake_cache.capture(
+            upstream.init, (await upstream.call(ClientSession.list_tools)).tools, root
+        )
+        if recorded is None or live.tool_names() != recorded.tool_names():
+            # The file was answering for a toolset this instance does not have. Rewritten, and the
+            # host told to ask again — the notification it already honours.
+            record(live)
+            log.warning(
+                "the recorded toolset did not match %s; it has been rewritten and the host notified",
+                root,
+            )
+            await tools_may_have_changed()
+
     try:
-        init = upstream.init
-        server: Server = Server("junon", instructions=init.instructions)
+        instructions = recorded.instructions if recorded else (upstream.init.instructions if upstream.init else None)
+        server: Server = Server("junon", instructions=instructions)
 
         @server.list_tools()
         async def list_tools() -> list[types.Tool]:
             downstream["session"] = server.request_context.session
+            if upstream.session is None and recorded is not None:
+                # Answered without a project: this is the whole point of the change.
+                return [types.Tool.model_validate(tool) for tool in recorded.tools]
             return (await upstream.call(ClientSession.list_tools)).tools
 
         # No input validation here: the instance validates, and validating twice against a
@@ -490,20 +560,30 @@ async def relay(
         async def call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
             downstream["session"] = server.request_context.session
             try:
+                await ensure_upstream()
                 return await upstream.call(ClientSession.call_tool, name, arguments)
             except Exception as error:  # noqa: BLE001 - reported to the model, not raised at it
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=gone(error))], isError=True
                 )
 
-        if init.capabilities.prompts is not None:
+        # What the instance really offers when there is nothing recorded — the pre-0.3.8 test, kept
+        # exactly, so the fallback path advertises neither more nor less than it used to.
+        offers_prompts = (
+            recorded.prompts
+            if recorded is not None
+            else upstream.init is not None and upstream.init.capabilities.prompts is not None
+        )
+        if offers_prompts:
 
             @server.list_prompts()
             async def list_prompts() -> list[types.Prompt]:
+                await ensure_upstream()
                 return (await upstream.call(ClientSession.list_prompts)).prompts
 
             @server.get_prompt()
             async def get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+                await ensure_upstream()
                 return await upstream.call(ClientSession.get_prompt, name, arguments)
 
         options = server.create_initialization_options(NotificationOptions(tools_changed=True))
@@ -544,15 +624,10 @@ def run(argv: list[str]) -> int:
         print(f"junon attach: {root} is not a directory", file=sys.stderr)
         return 2
 
-    # The first attach is checked here so a project that can never be served fails at start-up with
-    # a sentence on stderr, rather than as an error inside the first tool call. Afterwards the relay
-    # owns the connection, including finding an instance again whenever the one it had is replaced.
-    try:
-        find_or_start(root, options.idle_minutes, options.start_timeout, passthrough)
-    except StartFailed as error:
-        print(f"junon attach: {error}", file=sys.stderr)
-        return 1
-
+    # Nothing is started here. Until 0.3.8 this checked the project could be served by starting its
+    # instance, which cost 4 GB across a host's twenty-three registered projects for the sake of an
+    # early error message. A project that cannot be served now says so at the first call that needs
+    # it, in the same words — the trade is stated in docs/LAZY_ATTACH_PLAN.md §6.
     atexit.register(instances.unpublish_client)
     asyncio.run(relay(root, options.idle_minutes, passthrough))
     return 0

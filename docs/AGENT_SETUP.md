@@ -323,15 +323,22 @@ that project:
 
 - the project is resolved the way `--project-from-cwd` did it, Serena's own rule — the nearest
   `.serena/project.yml` or `.git` above the working directory. `--project /path` names one instead;
-- a live instance for that root is used; otherwise one is started, and the session waits until it
-  answers. Two sessions starting together take a lock per root, so they end up on one instance;
+- **opening a session starts nothing.** A host launches one relay per registered project the moment
+  it starts, and starting each project with it cost 23 instances, 55 language servers and 4.16 GB
+  on one machine, for projects nobody had opened. What a host asks at start-up — the instructions
+  and the tool list — is answered from a file recorded by whichever session last had a live
+  instance, keyed by JUNON version;
+- the **first request that is really about the project** uses the live instance for that root, or
+  starts one and waits until it answers. Two sessions starting together take a lock per root, so
+  they end up on one instance — twenty at the same instant, measured, still one;
 - the instance is **pinned**: `activate_project` for any other project is refused and names the way
   to reach it, so no session can switch the project under another;
 - the instance exits by itself after **30 idle minutes** with no session attached
   (`--idle-minutes` on `attach` sets it for the instance it starts), and its language servers go
   with it. Nothing outlives its sessions by a week any more;
-- if the instance dies under a session, the next call answers in words — *the shared JUNON for …
-  stopped answering* — and the next session starts a fresh one.
+- if the instance dies under a session, the session **reattaches** (0.3.7): the next call finds or
+  starts a fresh one and is answered normally. Only a call that was in flight when the instance went
+  is reported instead of retried, because a call that writes must not be applied twice.
 
 Flags after `attach` that it does not know go to the instance it starts, so
 `"args": ["attach", "--enable-web-dashboard", "false"]` still works as it did.
