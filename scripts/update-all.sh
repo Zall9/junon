@@ -67,11 +67,38 @@ if [[ -d jetbrains-plugin ]]; then
   [[ $DRY_RUN -eq 1 ]] || ok "plugin built"
 fi
 
+# Ask the discovery file who the daemon is, the way `doctor` and the plugin do.
+#
+# This used to be `pgrep -f 'node packages/cli/dist/bin.js daemon'`, which recognises only a daemon
+# started from the repository root with that exact relative command. Since 0.3.7 a daemon is normally
+# started from the recorded command in `~/.ide-bridge/daemon.json`, in absolute paths — by the
+# dashboard's install button, or by an IDE that found none — and such a daemon was invisible here.
+# The script then said "none was running", failed to start a second one (`already-running`), and left
+# the machine on the previous build while reporting a failed step. Measured on 2026-09-21, which is
+# how this was found.
+daemon_pid() {
+  local recorded
+  recorded="$(python3 - <<'PY' 2>/dev/null
+import json, os, pathlib
+try:
+    record = json.loads((pathlib.Path.home() / ".ide-bridge" / "discovery.json").read_text())
+    pid = int(record.get("pid") or 0)
+    os.kill(pid, 0)          # a recorded pid is not a running one
+    print(pid)
+except Exception:
+    pass
+PY
+)"
+  if [[ -n "$recorded" ]]; then printf '%s\n' "$recorded"; return 0; fi
+  # A daemon that never published, or one the file no longer describes.
+  pgrep -f 'bin\.js daemon' | head -1 || true
+}
+
 step "3. the daemon — rebuilt code is not running code"
 if [[ $DRY_RUN -eq 1 ]]; then
   note "would stop the running daemon and start the new build"
 else
-  BEFORE_PID="$(pgrep -f 'node packages/cli/dist/bin.js daemon' | head -1 || true)"
+  BEFORE_PID="$(daemon_pid)"
   if [[ -n "$BEFORE_PID" ]]; then
     kill "$BEFORE_PID" 2>/dev/null
     for _ in $(seq 1 15); do kill -0 "$BEFORE_PID" 2>/dev/null || break; sleep 1; done
@@ -85,7 +112,7 @@ else
   # exact mistake the check in `doctor` was written for.
   RUNNING="$(node packages/cli/dist/bin.js doctor 2>/dev/null \
     | python3 -c 'import json,sys;r=json.load(sys.stdin);print(next((c["detail"] for c in r["checks"] if c["name"]=="versions"), "?"))' 2>/dev/null)"
-  NEW_PID="$(pgrep -f 'node packages/cli/dist/bin.js daemon' | head -1 || true)"
+  NEW_PID="$(daemon_pid)"
   if [[ -n "$NEW_PID" && "$NEW_PID" != "$BEFORE_PID" ]]; then
     ok "daemon restarted as pid $NEW_PID"
     note "$RUNNING"
