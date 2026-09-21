@@ -15,6 +15,34 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.8
+
+- **Opening a session no longer starts a project.** An agent host launches one MCP server per
+  *registered* project the moment it starts, and each of those used to boot its project's language
+  servers whether or not anyone would ever touch it. Measured seconds after launching opencode: 23
+  shared instances, 55 language servers, **4 160 MB**, for projects nobody had opened. The two
+  things a host asks at start-up — the instructions from `initialize` and the tool list — are now
+  answered from a recorded handshake, and the instance is found or started by the first request that
+  is genuinely about the project. The same measurement with eight host-like sessions: **8 instances
+  and 5 717 MB before, 0 and 0 after**.
+- **The handshake is keyed by JUNON version alone, which is a measurement.** Ten live instances
+  across ten unrelated projects — Go, PHP, TypeScript, Swift — returned byte-identical instructions
+  and the same thirty-nine tools. Keying by project as well would have made every project pay one
+  eager start after every release, to guard against a difference that was not there. A recorded list
+  that no longer matches its instance is rewritten on first use and the host told to ask again, so
+  the cost of staleness is one refresh rather than a wrong answer; a file the MCP SDK would refuse is
+  ignored, so a session is never left unable to list its tools.
+- **Nothing else about a session changes.** Sharing, the per-root lock, reconnection when an instance
+  is replaced, the in-flight call that is reported rather than retried, `--stop`, `--stop --all`, the
+  refusal of a superseded instance and cross-project access all behave exactly as they did in 0.3.7,
+  each pinned by the test that already covered it.
+- **Two instances for one project, when twenty-three start at once.** An entry that had registered
+  but was not yet answering was treated as absent, so a second attach started another instance for
+  the same root. Inside the lock it now gets a bounded wait. Twenty relays opened at the same instant
+  start nothing at all; the same twenty calling a tool together are served by one instance.
+- **What you have to do about it:** nothing, beyond the usual update. Instances already running are
+  superseded by the new release and leave as their sessions finish, as they have since 0.3.4.
+
 ## 0.3.7
 
 - **One click, then nothing else.** The install button used to reach one half of the product. It now
