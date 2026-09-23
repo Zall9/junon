@@ -15,6 +15,28 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.10
+
+- **The file-tool gate speaks both opencodes.** opencode 1 exposes each MCP tool as a tool of its
+  own; opencode 2 exposes none — a model reaches them only through the `execute` meta-tool, as
+  `await tools.serena.find_symbol({...})`, measured in real sessions. The gate told opencode 2 models
+  to call `serena_find_symbol`, a tool they did not have, and never noticed when a session did use
+  serena through `execute`. It now writes each refusal in the asking host's terms, and recognises a
+  symbolic call under either. The argument it named for `ide_read_document` was also wrong (`path`,
+  not `relative_path`), under both.
+- **One file for both hosts.** A single default export, `{ id, server, setup }`: opencode 1.18 takes
+  `server`, opencode 2.0 takes `setup`. Proved by loading it into each real host with a scripted
+  model: refused once in that host's dialect, then allowed when repeated. The first attempt — a named
+  plugin beside a default with only `setup` — loaded under opencode 1 and never ran; only the real
+  host could show it.
+- **Every update now updates the gate.** `scripts/update-all.sh` and the dashboard's install button
+  run the same installer and read it back with `--check`. Until now the gate on a machine was
+  whatever had been copied there once: the move to opencode 2 left a hand-ported copy that existed
+  nowhere else, which the next install would have overwritten with the opencode-1-only file. A copy
+  that differs is kept under `~/.ide-bridge/agent-gate-backups/` before it is replaced.
+- **What you have to do about it:** the usual update, then restart opencode and Claude Code — both
+  read plugins and hooks once, at start-up.
+
 ## 0.3.9
 
 - **JUNON works in opencode 2 sessions again.** opencode 2 starts every MCP server once in the
@@ -25,7 +47,7 @@ tells the agent — and through it, you.
   answers any call that reaches it with what to do — open the host in a project, or pass
   `--project`.
 - **Opening an opencode 2 session no longer starts the project.** 0.3.8 answered what a host asks
-  at open from a recorded handshake — but what a host asks had been *assumed*. Measured with a tap
+  at open from a recorded handshake — but what a host asks had been _assumed_. Measured with a tap
   between each host and the relay: opencode 1 asks `initialize` and `tools/list`; opencode 2 asks
   those **and `prompts/list`**, on every relay. 0.3.8 started the project to answer that one — for
   an empty list, since Serena advertises prompts and has none. The prompt list is recorded now.
@@ -39,7 +61,7 @@ tells the agent — and through it, you.
 ## 0.3.8
 
 - **Opening a session no longer starts a project.** An agent host launches one MCP server per
-  *registered* project the moment it starts, and each of those used to boot its project's language
+  _registered_ project the moment it starts, and each of those used to boot its project's language
   servers whether or not anyone would ever touch it. Measured seconds after launching opencode: 23
   shared instances, 55 language servers, **4 160 MB**, for projects nobody had opened. The two
   things a host asks at start-up — the instructions from `initialize` and the tool list — are now
