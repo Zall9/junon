@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from junon import daemon_command, instances
+from junon import daemon_command, instances, update_action
 
 
 @pytest.fixture(autouse=True)
@@ -32,3 +32,6 @@ def nothing_outside_this_test(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     """
     monkeypatch.setenv(instances.REGISTRY_ENV_VAR, str(tmp_path / "junon-registry"))
     monkeypatch.setenv(daemon_command.ENV_VAR, str(tmp_path / "daemon.json"))
+    # The agent gates: `apply_release` installs them into ~/.config/opencode and ~/.claude, and
+    # every test that calls it without injecting that step would otherwise do it for real.
+    monkeypatch.setenv(update_action.GATE_HOME_ENV_VAR, str(tmp_path / "agent-home"))

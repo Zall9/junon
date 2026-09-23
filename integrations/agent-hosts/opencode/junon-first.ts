@@ -1,4 +1,3 @@
-import type { Plugin } from "@opencode-ai/plugin"
 import { readFileSync } from "node:fs"
 
 /**
@@ -23,6 +22,14 @@ import { readFileSync } from "node:fs"
  *
  * Every agent that this touches — explorer, fixer, orchestrator, oracle — already has serena in its
  * `mcps` list, so nothing is being asked of them that they cannot do.
+ *
+ * **One file, both opencodes.** opencode 1 takes the default export's `server` and calls its
+ * `tool.execute.before`; opencode 2 takes its `setup` and registers a hook through `ctx.tool.hook`
+ * (measured — see the export at the end). Both sit over one decision, and nothing is imported from
+ * either host's plugin package — so the file loads under both, and a machine that rolls back loses
+ * nothing.
+ * The migration to opencode 2 had produced a second copy, ported by hand and living only on the
+ * machine; the next update would have overwritten it with this file's opencode 1 form.
  */
 
 /** Files where a symbol tree exists and reading the whole thing is the wasteful way in. */
@@ -80,9 +87,10 @@ const spent = new Map<string, number>()
  * Sessions that have used a symbolic tool at least once — proof the agent has them at all.
  *
  * Not every agent does: `gitlab-review-orchestrator` has no serena in its `mcps`, and three of the
- * first five refusals went to it, naming a tool it could not call. The hook is given only
- * `{tool, sessionID, callID}`, so which agent is asking is not knowable here — but what the session
- * has *done* is, and that answers the same question without reading anyone's configuration.
+ * first five refusals went to it, naming a tool it could not call. opencode 1 gives the hook only
+ * `{tool, sessionID, callID}`, so which agent is asking is not knowable there — but what the session
+ * has *done* is, and that answers the same question under both hosts without reading anyone's
+ * configuration. Under opencode 2 "done" is an `execute` whose code calls `tools.serena`.
  */
 const usesSymbolicTools = new Set<string>()
 
@@ -173,129 +181,238 @@ function segmentFor(command: string, commands: Set<string>): string {
   return ""
 }
 
-export const JunonFirstPlugin: Plugin = async () => {
-  return {
-    "tool.execute.before": async (input: any, output: any) => {
-      const tool = String(input?.tool ?? "").toLowerCase()
-      const args = (output?.args ?? {}) as Record<string, unknown>
-      const session = String(input?.sessionID ?? "no-session")
+/** Which opencode is asking. They expose MCP tools differently, and advice must match the asker. */
+type Host = 1 | 2
 
-      // Every call passes through here, which is what makes the session's own behaviour readable
-      // without asking anyone: a session that reaches for a symbolic tool has them.
-      if (tool.startsWith("serena")) {
-        usesSymbolicTools.add(session)
-        unheeded.set(session, 0)
-        return
-      }
+/**
+ * A serena call written the way this host lets a model make it.
+ *
+ * opencode 1 exposes every MCP tool as a tool of its own: `serena_find_symbol`. opencode 2 exposes
+ * none of them. A model reaches them through the `execute` meta-tool, as code — measured in the
+ * user's own sessions on 2026-09-23: `await tools.serena.find_symbol({...})`, after `search` has
+ * loaded them. Until this was written the gate named `serena_find_symbol` to opencode 2 models too:
+ * a tool they could not call.
+ */
+function serena(host: Host, name: string, args: string): string {
+  return host === 1 ? `serena_${name}(${args})` : `execute → await tools.serena.${name}(${args})`
+}
 
-      if (tool === "bash") {
-        if (!worthNudging(session)) return
-        const command = String(args.command ?? "")
-        const words = firstWords(command)
-        const searching = words.find((word) => SEARCH_COMMANDS.has(word))
-        const reading = words.find((word) => READ_COMMANDS.has(word))
-        if (!searching && !reading) return
-        // What it is aimed at, not just what it is. Judging the verb alone refused
-        // `cat .serena/project.yml` during a diagnosis — a config file, which this rule's own message
-        // promises to let through. The tool-level rules were always careful here; this one was not.
-        const segment = segmentFor(command, searching ? SEARCH_COMMANDS : READ_COMMANDS)
-        if (!segment || !segmentAsksAboutSymbols(segment, Boolean(searching))) return
+/** The line only an opencode 2 model needs: where those calls go, and how to load them. */
+function howToCall(host: Host): string {
+  return host === 1
+    ? ""
+    : `In opencode 2 these run inside the \`execute\` tool; if \`tools.serena\` is not there yet, ` +
+        `\`await search({ query: "serena" })\` loads it.\n`
+}
 
-        const key = `${session}:bash:${command.slice(0, 120)}`
-        if (alreadyNudged.has(key)) return
-        alreadyNudged.add(key)
-        unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+/** `tools.serena.x` or `tools["serena"].x` — a symbolic call, as opencode 2 makes it. */
+const SERENA_IN_CODE = /\btools\s*(?:\.\s*serena\b|\[\s*["']serena["']\s*\])/
 
-        throw new Error(
-          `That command was not run: it uses \`${searching ?? reading}\` to answer a question the ` +
-            `symbol index answers better, and running it through bash reaches the same dead end as ` +
-            `the tool would.\n` +
-            `  serena_find_symbol({ name_path_pattern: "…" })          where something is defined\n` +
-            `  serena_find_referencing_symbols(...)                    who uses it\n` +
-            `  serena_ide_read_symbol / serena_ide_read_document       from the running IDE\n` +
-            `If the command is really about text or files — a log, a config, a build output — run it ` +
-            `again and it will go through.`,
-        )
-      }
+/** Whether this call is the session using the symbolic tools, under either host. */
+function isSymbolicCall(tool: string, args: Record<string, unknown>): boolean {
+  if (tool.startsWith("serena")) return true
+  return tool === "execute" && SERENA_IN_CODE.test(String(args.code ?? ""))
+}
 
-      if (tool !== "read" && tool !== "grep") return
-      if (!worthNudging(session)) return
+/**
+ * A path as serena wants it: relative to the project when it lies inside it. The file tools pass
+ * absolute paths, and `relative_path` is what every serena tool is declared with.
+ */
+function projectRelative(path: string, directory: string | undefined): string {
+  if (!directory) return path
+  const root = directory.endsWith("/") ? directory : `${directory}/`
+  return path.startsWith(root) ? path.slice(root.length) : path
+}
 
-      if (tool === "grep") {
-        const pattern = String(args.pattern ?? "")
-        // A regex is a text search and this has no opinion about it. A bare identifier is a question
-        // about a symbol, and grep answers it with every comment, string and unrelated name that
-        // happens to contain it.
-        if (!IDENTIFIER.test(pattern)) return
+/**
+ * The decision, for either host: the sentence to refuse this call with, or nothing.
+ *
+ * Returned rather than thrown so both entry points share it unchanged; each throws it the way its
+ * host expects a hook to refuse.
+ */
+function gate(
+  host: Host,
+  rawTool: unknown,
+  args: Record<string, unknown>,
+  rawSession: unknown,
+  directory?: string,
+): string | undefined {
+  const tool = String(rawTool ?? "").toLowerCase()
+  const session = String(rawSession ?? "no-session")
 
-        const key = `${session}:grep:${pattern}`
-        if (alreadyNudged.has(key)) return
-        alreadyNudged.add(key)
-      unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
-
-        throw new Error(
-          `grep "${pattern}" was not run. Ask the index instead — it resolves what a text search ` +
-            `cannot:\n` +
-            `  serena_find_symbol({ name_path_pattern: "${pattern}" })        the definition\n` +
-            `  serena_find_referencing_symbols(...)                          real callers, including overrides\n` +
-            `  serena_ide_find_symbol / serena_ide_hierarchy                 same, from the running IDE\n` +
-            `If you genuinely want text — a log line, a config value, a string — run the same grep ` +
-            `again and it will go through, or pass a regex.`,
-        )
-      }
-
-      const path = String(args.filePath ?? args.path ?? "")
-      if (!path || !CODE.test(path)) return
-      // A range means the caller already knows what they want. Nothing to teach.
-      if (args.offset !== undefined || args.limit !== undefined) return
-
-      const lines = lineCount(path)
-      const used = (spent.get(session) ?? 0) + 1
-      spent.set(session, used)
-      const overBudget = used > budgetFor(session)
-
-      if (lines < WHOLE_FILE_IS_FINE && !overBudget) {
-        // A project of small files was a way to read everything without ever being asked: each read
-        // is under the threshold and the budget is never spent. One nudge per session closes it, and
-        // only where there is something to teach.
-        if (usesSymbolicTools.has(session) || nudgedAboutSmallFiles.has(session)) return
-        nudgedAboutSmallFiles.add(session)
-        unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
-        throw new Error(
-          `read of ${path} was not run — this session has not asked the index anything yet, and a ` +
-            `short file is still a file read whole:\n` +
-            `  serena_ide_read_symbol({ ... })    one declaration, from the running IDE\n` +
-            `  serena_find_symbol({ name_path_pattern: "…", include_body: true })\n` +
-            `Said once per session. Run the same read again and it will go through, as will every ` +
-            `short file after it.`,
-        )
-      }
-
-      const key = `${session}:read:${path}`
-      if (alreadyNudged.has(key)) return
-      alreadyNudged.add(key)
-      unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
-
-      if (overBudget && lines < WHOLE_FILE_IS_FINE) {
-        throw new Error(
-          `read of ${path} was not run — that is ${used} whole files opened in this session. Reading ` +
-            `them one after another to find something is the search the symbol index does in one call:\n` +
-            `  serena_find_symbol({ name_path_pattern: "…" })                 where it is defined\n` +
-            `  serena_find_referencing_symbols(...)                           who uses it\n` +
-            `  serena_search_for_pattern({ substring_pattern: "…" })          text, but scoped\n` +
-            `Run the same read again and it will go through.`,
-        )
-      }
-
-      throw new Error(
-        `read of ${path} (${lines} lines) was not run — the whole file would enter the context to ` +
-          `answer a question about part of it:\n` +
-          `  serena_get_symbols_overview({ relative_path: "${path}" })                 what is in it\n` +
-          `  serena_find_symbol({ name_path_pattern: "…", include_body: true })        one declaration\n` +
-          `  serena_ide_read_document({ path: "${path}" })                             the file as the ` +
-          `editor holds it, unsaved edits included — which the disk does not have\n` +
-          `If you do need the raw file, pass offset/limit, or run the same read again and it will go through.`,
-      )
-    },
+  // Every call passes through here, which is what makes the session's own behaviour readable
+  // without asking anyone: a session that reaches for a symbolic tool has them.
+  if (isSymbolicCall(tool, args)) {
+    usesSymbolicTools.add(session)
+    unheeded.set(session, 0)
+    return undefined
   }
+
+  // `bash` in opencode 1, `shell` in opencode 2 — measured from each host's own tool list.
+  if (tool === "bash" || tool === "shell") {
+    if (!worthNudging(session)) return undefined
+    const command = String(args.command ?? "")
+    const words = firstWords(command)
+    const searching = words.find((word) => SEARCH_COMMANDS.has(word))
+    const reading = words.find((word) => READ_COMMANDS.has(word))
+    if (!searching && !reading) return undefined
+    // What it is aimed at, not just what it is. Judging the verb alone refused
+    // `cat .serena/project.yml` during a diagnosis — a config file, which this rule's own message
+    // promises to let through. The tool-level rules were always careful here; this one was not.
+    const segment = segmentFor(command, searching ? SEARCH_COMMANDS : READ_COMMANDS)
+    if (!segment || !segmentAsksAboutSymbols(segment, Boolean(searching))) return undefined
+
+    const key = `${session}:shell:${command.slice(0, 120)}`
+    if (alreadyNudged.has(key)) return undefined
+    alreadyNudged.add(key)
+    unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+
+    return (
+      `That command was not run: it uses \`${searching ?? reading}\` to answer a question the ` +
+      `symbol index answers better, and running it through the shell reaches the same dead end as ` +
+      `the tool would.\n` +
+      `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where something is defined\n` +
+      `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
+      `  ${serena(host, "ide_read_symbol", '{ name: "…" }')}  — one declaration, from the running IDE\n` +
+      howToCall(host) +
+      `If the command is really about text or files — a log, a config, a build output — run it ` +
+      `again and it will go through.`
+    )
+  }
+
+  if (tool !== "read" && tool !== "grep") return undefined
+  if (!worthNudging(session)) return undefined
+
+  if (tool === "grep") {
+    const pattern = String(args.pattern ?? "")
+    // A regex is a text search and this has no opinion about it. A bare identifier is a question
+    // about a symbol, and grep answers it with every comment, string and unrelated name that
+    // happens to contain it.
+    if (!IDENTIFIER.test(pattern)) return undefined
+
+    const key = `${session}:grep:${pattern}`
+    if (alreadyNudged.has(key)) return undefined
+    alreadyNudged.add(key)
+    unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+
+    return (
+      `grep "${pattern}" was not run. Ask the index instead — it resolves what a text search ` +
+      `cannot:\n` +
+      `  ${serena(host, "find_symbol", `{ name_path_pattern: "${pattern}" }`)}  — the definition\n` +
+      `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — real callers, including overrides\n` +
+      `  ${serena(host, "ide_find_symbol", `{ query: "${pattern}" }`)}  — the same, from the running IDE\n` +
+      howToCall(host) +
+      `If you genuinely want text — a log line, a config value, a string — run the same grep ` +
+      `again and it will go through, or pass a regex.`
+    )
+  }
+
+  // `filePath` in opencode 1, `path` in opencode 2 — measured from each host's tool schema.
+  const path = String(args.filePath ?? args.path ?? "")
+  if (!path || !CODE.test(path)) return undefined
+  // A range means the caller already knows what they want. Nothing to teach.
+  if (args.offset !== undefined || args.limit !== undefined) return undefined
+  const relative = projectRelative(path, directory)
+
+  const lines = lineCount(path)
+  const used = (spent.get(session) ?? 0) + 1
+  spent.set(session, used)
+  const overBudget = used > budgetFor(session)
+
+  if (lines < WHOLE_FILE_IS_FINE && !overBudget) {
+    // A project of small files was a way to read everything without ever being asked: each read
+    // is under the threshold and the budget is never spent. One nudge per session closes it, and
+    // only where there is something to teach.
+    if (usesSymbolicTools.has(session) || nudgedAboutSmallFiles.has(session)) return undefined
+    nudgedAboutSmallFiles.add(session)
+    unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+    return (
+      `read of ${path} was not run — this session has not asked the index anything yet, and a ` +
+      `short file is still a file read whole:\n` +
+      `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "${relative}" }`)}  — one declaration, from the running IDE\n` +
+      `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}\n` +
+      howToCall(host) +
+      `Said once per session. Run the same read again and it will go through, as will every ` +
+      `short file after it.`
+    )
+  }
+
+  const key = `${session}:read:${path}`
+  if (alreadyNudged.has(key)) return undefined
+  alreadyNudged.add(key)
+  unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+
+  if (overBudget && lines < WHOLE_FILE_IS_FINE) {
+    return (
+      `read of ${path} was not run — that is ${used} whole files opened in this session. Reading ` +
+      `them one after another to find something is the search the symbol index does in one call:\n` +
+      `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where it is defined\n` +
+      `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
+      `  ${serena(host, "search_for_pattern", '{ substring_pattern: "…" }')}  — text, but scoped\n` +
+      howToCall(host) +
+      `Run the same read again and it will go through.`
+    )
+  }
+
+  return (
+    `read of ${path} (${lines} lines) was not run — the whole file would enter the context to ` +
+    `answer a question about part of it:\n` +
+    `  ${serena(host, "get_symbols_overview", `{ relative_path: "${relative}" }`)}  — what is in it\n` +
+    `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}  — one declaration\n` +
+    `  ${serena(host, "ide_read_document", `{ relative_path: "${relative}" }`)}  — the file as the ` +
+    `editor holds it, unsaved edits included — which the disk does not have\n` +
+    howToCall(host) +
+    `If you do need the raw file, pass offset/limit, or run the same read again and it will go through.`
+  )
+}
+
+// --- the entry points ---------------------------------------------------------------------------
+
+interface V1Context {
+  readonly directory?: string
+}
+
+/** opencode 1's plugin: called once per project instance, its hook once per tool call. */
+const opencode1 = async (ctx?: V1Context) => ({
+  "tool.execute.before": async (input: any, output: any) => {
+    const refusal = gate(1, input?.tool, (output?.args ?? {}) as Record<string, unknown>, input?.sessionID, ctx?.directory)
+    if (refusal !== undefined) throw new Error(refusal)
+  },
+})
+
+/** The part of opencode 2's plugin context this uses — declared here so nothing has to be imported. */
+interface V2Context {
+  readonly location?: { readonly directory?: string }
+  readonly tool: {
+    hook(
+      name: "execute.before",
+      callback: (event: { tool: string; readonly sessionID: string; input: unknown }) => Promise<void> | void,
+    ): Promise<{ dispose(): Promise<void> }>
+  }
+}
+
+/**
+ * One default export, read by both hosts — measured with a traced copy under each, 2026-09-23:
+ *
+ * - opencode 1.18 takes `server` whenever the default export exists, and then ignores named exports.
+ *   The first version of this file had a named plugin and a default with only `setup`; opencode 1
+ *   loaded it and never ran the gate.
+ * - opencode 2.0 takes `setup`.
+ * - Each runs the hook exactly once per tool call. No host registered it twice, so nothing here
+ *   de-duplicates calls — which would have been dangerous besides: models that number their tool
+ *   calls per message (Kimi's `functions.grep:0`) reuse the same id on every turn.
+ *
+ * It is also the shape oh-my-opencode-slim ships, which both hosts already load on this machine.
+ */
+export default {
+  id: "junon-first",
+  server: opencode1,
+  async setup(ctx: V2Context) {
+    const directory = ctx.location?.directory
+    const registration = await ctx.tool.hook("execute.before", async (event) => {
+      const refusal = gate(2, event.tool, (event.input ?? {}) as Record<string, unknown>, event.sessionID, directory)
+      if (refusal !== undefined) throw new Error(refusal)
+    })
+    return () => registration.dispose()
+  },
 }

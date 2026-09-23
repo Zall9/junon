@@ -162,9 +162,26 @@ PY
   [[ "${PLUGIN_FAILURES:-0}" =~ ^[0-9]+$ ]] && FAILURES=$((FAILURES + PLUGIN_FAILURES))
 fi
 
-step "5. what no script can do for you"
+step "5. the agent gates — the file-tool gate each agent host loads"
+# Part of every update since 0.3.10. Before, the gate on a machine was whatever had been copied there
+# once: moving to opencode 2 left a hand-ported copy that lived nowhere else and named tools opencode 2
+# does not have. A copy that differs is kept before it is replaced; see the script.
+if [[ $DRY_RUN -eq 1 ]]; then
+  bash scripts/install-agent-gate.sh --dry-run | sed 's/^/     /'
+else
+  bash scripts/install-agent-gate.sh | sed 's/^/     /'
+  # Read back rather than trusted: the same rule as the daemon's version above.
+  if bash scripts/install-agent-gate.sh --check > /dev/null 2>&1; then
+    ok "every installed gate is this release's"
+  else
+    bad "an installed gate still differs — scripts/install-agent-gate.sh --check says which"
+  fi
+fi
+
+step "6. what no script can do for you"
 note "JUNON is imported by each agent host at start-up: restart opencode and Claude Code for the"
-note "sessions to pick up $WANTED. Any IDE listed as skipped above needs to be closed and reopened."
+note "sessions to pick up $WANTED, and the gate with it. Any IDE listed as skipped above needs to be"
+note "closed and reopened."
 note "Check with: node packages/cli/dist/bin.js doctor --check-updates"
 
 if [[ $FAILURES -gt 0 ]]; then

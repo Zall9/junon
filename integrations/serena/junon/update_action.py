@@ -215,10 +215,61 @@ def verify() -> dict[str, Any]:
     }
 
 
+#: Where the agent gates are installed — the machine's own home unless this names another. Set by the
+#: test suite's floor, so that no test can write into `~/.config/opencode` or `~/.claude`.
+GATE_HOME_ENV_VAR = "JUNON_AGENT_GATE_HOME"
+
+
+@dataclass(frozen=True)
+class AgentGates:
+    """What updating the agent hosts' file-tool gate did — read back, not assumed."""
+
+    state: str  # "current" | "updated" | "differs" | "unavailable"
+    reason: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {"state": self.state, "reason": self.reason}
+
+
+def install_agent_gates() -> AgentGates:
+    """Brings the gate each agent host loads to this release, through the same script as the shell.
+
+    Part of every click since 0.3.10. Before, the gate on a machine was whatever had been copied there
+    once, and when the machine moved to opencode 2 the copy was ported by hand, lived nowhere else, and
+    advised tools opencode 2 does not have. One script does it for both routes — a second
+    implementation here is how two routes drift — and its `--check` is what the answer reports.
+    """
+    script = Path(__file__).resolve().parents[3] / "scripts" / "install-agent-gate.sh"
+    if not script.is_file():
+        return AgentGates("unavailable", "The agent gates were not updated: this JUNON is not running from a checkout.")
+    env = dict(os.environ)
+    target = os.environ.get(GATE_HOME_ENV_VAR)
+    if target:
+        env["HOME"] = target
+    try:
+        installed = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True, timeout=60)
+        checked = subprocess.run(["bash", str(script), "--check"], env=env, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return AgentGates("differs", f"The agent gates could not be updated ({type(error).__name__}: {error}).")
+    if checked.returncode != 0:
+        return AgentGates(
+            "differs",
+            "An agent gate still differs from this release — scripts/install-agent-gate.sh --check says which.",
+        )
+    replaced = [line for line in installed.stdout.splitlines() if line.strip().startswith("installed ")]
+    if replaced:
+        return AgentGates(
+            "updated",
+            f"The agent gates were updated ({len(replaced)} file(s)); each agent host loads them at its next start.",
+        )
+    return AgentGates("current", "The agent gates were already this release's.")
+
+
 def apply_release(
     quit_running: bool = False,
     restart_daemon: Callable[[], Any] | None = None,
     check: Callable[[], dict[str, Any]] | None = None,
+    install_gates: Callable[[], AgentGates] | None = None,
 ) -> dict[str, Any]:
     """Everything a click should do, in one place, and what came of each part.
 
@@ -234,6 +285,7 @@ def apply_release(
 
     restart_daemon = restart_daemon or daemon_control.restart
     check = check or verify
+    install_gates = install_gates or install_agent_gates
 
     # The daemon before the instances, deliberately. Stopping things is the step that can go wrong,
     # and the one thing worse than an instance surviving an upgrade is a machine left with no daemon
@@ -243,6 +295,7 @@ def apply_release(
     record_daemon_command()
     daemon = restart_daemon()
     stopped = refresh_instances()
+    gates = install_gates()
 
     told = outcome.next_step
     if stopped:
@@ -252,6 +305,7 @@ def apply_release(
             "with nothing to restart."
         )
     told += f" {daemon.reason}"
+    told += f" {gates.reason}"
     checked = check()
     told += f" {checked['sentence']}"
 
@@ -260,7 +314,7 @@ def apply_release(
     # installing PhpStorm" could only be argued about. A line per click, in the instance's own log.
     log.info(
         "[JUNON] release applied: installed=%s unchanged=%s failed=%s running=%s "
-        "on_disk=%s wanted=%s daemon=%s instances_stopped=%s title=%r",
+        "on_disk=%s wanted=%s daemon=%s instances_stopped=%s agent_gates=%s title=%r",
         list(outcome.installed),
         list(outcome.unchanged),
         list(outcome.failed),
@@ -269,10 +323,12 @@ def apply_release(
         checked.get("wanted"),
         daemon.state,
         list(stopped),
+        gates.state,
         outcome.title,
     )
     return {
-        "ok": outcome.ok and daemon.state != "refused" and checked["agrees"],
+        "ok": outcome.ok and daemon.state != "refused" and checked["agrees"] and gates.state != "differs",
+        "agentGates": gates.as_dict(),
         "verified": checked,
         "title": outcome.title,
         "installed": list(outcome.installed),

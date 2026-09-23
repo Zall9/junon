@@ -8,6 +8,7 @@ and it is one that fails loudly the day the fixture is removed.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from junon import daemon_command, instances
@@ -30,6 +31,12 @@ class TestWhereTestsAreAllowedToWrite:
 
         assert recorded == tmp_path / "daemon.json", recorded
         assert recorded != REAL_DAEMON_COMMAND
+
+    def test_the_agent_gates_are_installed_into_the_test_s_own_home(self, tmp_path: Path) -> None:
+        """`apply_release` writes into ~/.config/opencode and ~/.claude unless told otherwise."""
+        from junon import update_action
+
+        assert os.environ[update_action.GATE_HOME_ENV_VAR] == str(tmp_path / "agent-home")
 
     def test_recording_a_command_leaves_the_machine_alone(self, tmp_path: Path) -> None:
         """`apply_release` records unconditionally, which is right — it must simply record here.

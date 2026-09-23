@@ -545,8 +545,9 @@ and no configuration decides it.
 logs), every source file under 300 lines while the budget holds — except the first one in a session
 that has never used the index, said once — every `grep` whose pattern is a real
 regex or shorter than three characters, every path that cannot be read, every command that is not a
-search or a `cat` — `git`, `pnpm`, `tail`, `ls` — and every `serena_*` call, which it observes rather
-than judges.
+search or a `cat` — `git`, `pnpm`, `tail`, `ls` — and every symbolic call, which it observes rather
+than judges: a `serena_*` tool under opencode 1, an `execute` whose code calls `tools.serena` under
+opencode 2.
 
 The shell rule looks at **what a command is aimed at**, not only what it is, and it took two
 corrections to get there. Judging the verb alone refused `cat .serena/project.yml` — a config file the
@@ -557,7 +558,13 @@ scoped to the segment holding the command and asks *where* as well as *what*: a 
 searched across a tree is a symbol question; the same pattern pointed at a `.log` is not.
 
 The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
-`ide_read_document`. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
+`ide_read_document` — **in the asking host's own terms**, because the two opencodes do not expose
+MCP tools the same way. opencode 1 has a tool per MCP tool, so it is told
+`serena_find_symbol({ name_path_pattern: "X" })`. opencode 2 has none: a model reaches MCP tools only
+through the `execute` meta-tool, as code — measured in real sessions — so it is told
+`execute → await tools.serena.find_symbol({ name_path_pattern: "X" })`, and that `search` loads
+`tools.serena` if it is not there yet. Until 0.3.10 opencode 2 models were told the opencode 1 name, a
+tool they could not call. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
 genuine text search, a file outside any project all go through, most on the first attempt. That is
 the difference from `{"tools": {"read": false}}` above — a ban an agent cannot escape becomes a new
 failure, and this one always has an exit.
@@ -588,8 +595,28 @@ refusals. Nothing was broken and nothing said so — the check is
 `python3 integrations/agent-hosts/junon-usage.py --days 1`, and a gate that is working shows up as
 refusals in the transcript, not as an absence of reads.
 
+**One file for both opencodes, kept current by every update (0.3.10).** `junon-first.ts` has a single
+default export, `{ id, server, setup }`: opencode 1.18 takes `server`, opencode 2.0 takes `setup` —
+each measured by loading a traced copy into the real host, which is also how the first attempt was
+caught: with only `setup` and a named plugin beside it, opencode 1 loaded the file and never ran the
+gate. Nothing is imported from either host's plugin package, so a machine that rolls back to opencode
+1 keeps a working gate.
+
+Every update installs it — `scripts/update-all.sh` and the dashboard's install button run the same
+`scripts/install-agent-gate.sh`, then read it back with `--check`. Until then the gate on a machine
+was whatever had been copied there once; the move to opencode 2 left a hand-ported copy that existed
+nowhere else and advised tools opencode 2 does not have. A copy that differs from the release is kept
+under `~/.ide-bridge/agent-gate-backups/` — outside every directory a host scans for plugins — before
+it is replaced, and a second copy in `~/.config/opencode/plugins/` is reported, since it would be
+loaded as a second plugin.
+
+```bash
+scripts/install-agent-gate.sh --check    # exit 1, naming the file, if an installed copy differs
+```
+
 **To remove it:** delete `~/.config/opencode/plugin/junon-first.ts`, and the `junon-first-gate` entry
-from `~/.claude/settings.json`. Both take effect on the next start of the host, for the same reason.
+from `~/.claude/settings.json`. Both take effect on the next start of the host, for the same reason —
+and the next update will put the opencode one back, so remove it from that script's list as well.
 
 ### "I get Serena's dashboard, not JUNON's"
 
