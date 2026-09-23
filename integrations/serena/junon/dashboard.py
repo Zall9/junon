@@ -290,6 +290,23 @@ class JunonDashboardAPI(SerenaDashboardAPI):
             Reported as *unavailable with a reason* rather than as an error, because "no IDE is
             connected" is an ordinary state of this system, not a failure of the dashboard.
             """
+            from junon import agent_gates
             from junon.ide_bridge_status import read_status
 
-            return read_status()
+            status = read_status()
+            # Whether the agent hosts' gate is this JUNON's. Beside the versions because it is the
+            # same question — is every piece on this release — and the one no other line answered.
+            try:
+                status["agentGates"] = agent_gates.check().as_dict()
+            except Exception as error:  # noqa: BLE001 - a reading problem must not blank the card
+                status["agentGates"] = {"state": "unavailable", "summary": f"Could not be read: {error}"}
+            return status
+
+        @self._app.route("/junon/changelog", methods=["GET"])
+        def get_changelog() -> Any:
+            """The last three releases of the running JUNON, from the changelog that ships with it."""
+            from flask import jsonify
+
+            from junon.changelog import recent
+
+            return jsonify(recent())

@@ -1,0 +1,39 @@
+{
+  "$comment": "What the agent gates are and where each goes, relative to the home directory. Read by junon/agent_gates.py (install, check, self-update) and by `ide-bridge doctor` — one list, so the installer and the checks cannot disagree about what a complete installation is.",
+  "files": [
+    {
+      "source": "opencode/junon-first.ts",
+      "target": ".config/opencode/plugin/junon-first.ts",
+      "mode": "644",
+      "host": ".config/opencode",
+      "hostName": "opencode"
+    },
+    {
+      "source": "claude-code/junon-first-gate",
+      "target": ".claude/hooks/junon-first-gate",
+      "mode": "755",
+      "host": ".claude",
+      "hostName": "Claude Code"
+    },
+    {
+      "source": "claude-code/register-junon-gate.py",
+      "target": ".claude/hooks/register-junon-gate.py",
+      "mode": "644",
+      "host": ".claude",
+      "hostName": "Claude Code"
+    },
+    {
+      "source": "junon-usage.py",
+      "target": ".config/opencode/scripts/junon-usage.py",
+      "mode": "755",
+      "host": ".config/opencode",
+      "hostName": "measurement"
+    }
+  ],
+  "strays": [
+    {
+      "path": ".config/opencode/plugins/junon-first.ts",
+      "why": "opencode scans plugins/ as well as plugin/; a second copy is a second plugin, judging every call twice"
+    }
+  ]
+}

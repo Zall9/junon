@@ -98,6 +98,112 @@ class TestTheScript:
         assert after == before, "a test installed a gate into the machine's own opencode"
 
 
+class TestAStartingInstanceRefreshesTheGate:
+    """Every update route ends in a `junon serve` starting on the new code; the gate follows there."""
+
+    def test_an_outdated_gate_is_replaced_and_kept(self, home: Path) -> None:
+        from junon import agent_gates
+
+        gate_in(home).parent.mkdir(parents=True)
+        gate_in(home).write_text("// the gate of a previous release\n")
+
+        thread = agent_gates.refresh_on_start()
+        assert thread is not None
+        thread.join(30)
+
+        assert gate_in(home).read_bytes() == (SOURCE / "opencode" / "junon-first.ts").read_bytes()
+        kept = list((home / ".ide-bridge" / "agent-gate-backups").glob("*/junon-first.ts"))
+        assert [copy.read_text() for copy in kept] == ["// the gate of a previous release\n"]
+
+    def test_the_opt_out_leaves_it_alone(self, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from junon import agent_gates
+
+        monkeypatch.setenv(agent_gates.AUTO_ENV_VAR, "0")
+        gate_in(home).parent.mkdir(parents=True)
+        gate_in(home).write_text("// kept on purpose\n")
+
+        assert agent_gates.refresh_on_start() is None
+        assert gate_in(home).read_text() == "// kept on purpose\n"
+
+    def test_instances_starting_together_write_it_once(self, home: Path) -> None:
+        """Twenty-three can start at once. Each refreshes; the lock makes the rest find it current."""
+        import threading
+
+        from junon import agent_gates
+
+        gate_in(home).parent.mkdir(parents=True)
+        gate_in(home).write_text("// old\n")
+        results = []
+        threads = [threading.Thread(target=lambda: results.append(agent_gates.install())) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30)
+
+        assert sum(1 for result in results if gate_in(home) in result.installed) == 1
+        assert len(list((home / ".ide-bridge" / "agent-gate-backups").glob("*/junon-first.ts"))) == 1
+        assert all(result.report.state == "current" for result in results)
+
+    def test_a_real_instance_does_it(self, home: Path, tmp_path: Path) -> None:
+        """The whole route, not the function: a `junon serve` process started against a home that
+        holds an older gate leaves it current. ~10 s."""
+        import subprocess
+        import sys
+        import time
+
+        import psutil
+
+        from junon import agent_gates, instances
+        from junon.attach import serve_command
+
+        gate_in(home).parent.mkdir(parents=True)
+        gate_in(home).write_text("// the gate of a previous release\n")
+        registry = tmp_path / "registry"
+        process = subprocess.Popen(
+            serve_command(str(REPO), 0.5, ["--enable-web-dashboard", "false", "--enable-gui-log-window", "false"]),
+            env={**os.environ, instances.REGISTRY_ENV_VAR: str(registry)},
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        try:
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline and agent_gates.check(home).state != "current":
+                time.sleep(0.5)
+            assert agent_gates.check(home).state == "current", "the instance did not refresh the gate"
+        finally:
+            for proc in [psutil.Process(process.pid), *psutil.Process(process.pid).children(recursive=True)]:
+                try:
+                    proc.terminate()
+                except psutil.Error:
+                    pass
+            process.wait(30)
+        del sys
+
+
+class TestOneImplementation:
+    """The shell command, the click and the instance all go through `agent_gates`, reading one list."""
+
+    def test_the_shell_command_is_the_same_installer(self, home: Path) -> None:
+        import subprocess
+
+        done = subprocess.run(["bash", str(REPO / "scripts" / "install-agent-gate.sh")],
+                              capture_output=True, text=True, timeout=60)
+
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert gate_in(home).read_bytes() == (SOURCE / "opencode" / "junon-first.ts").read_bytes()
+        check = subprocess.run(["bash", str(REPO / "scripts" / "install-agent-gate.sh"), "--check"],
+                               capture_output=True, text=True, timeout=60)
+        assert check.returncode == 0, check.stdout
+
+    def test_every_file_the_manifest_names_exists(self) -> None:
+        import json
+
+        manifest = json.loads((SOURCE / "manifest.json").read_text())
+
+        assert [item["source"] for item in manifest["files"] if not (SOURCE / item["source"]).is_file()] == []
+
+
 class TestTheClick:
     """`apply_release` — the dashboard's install button — runs the same step and reports it."""
 

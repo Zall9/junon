@@ -215,8 +215,7 @@ def verify() -> dict[str, Any]:
     }
 
 
-#: Where the agent gates are installed — the machine's own home unless this names another. Set by the
-#: test suite's floor, so that no test can write into `~/.config/opencode` or `~/.claude`.
+#: Kept under this name for the callers that already use it; `agent_gates` owns the variable.
 GATE_HOME_ENV_VAR = "JUNON_AGENT_GATE_HOME"
 
 
@@ -232,35 +231,28 @@ class AgentGates:
 
 
 def install_agent_gates() -> AgentGates:
-    """Brings the gate each agent host loads to this release, through the same script as the shell.
+    """Brings the gate each agent host loads to this release — through `agent_gates`, like every route.
 
-    Part of every click since 0.3.10. Before, the gate on a machine was whatever had been copied there
-    once, and when the machine moved to opencode 2 the copy was ported by hand, lived nowhere else, and
-    advised tools opencode 2 does not have. One script does it for both routes — a second
-    implementation here is how two routes drift — and its `--check` is what the answer reports.
+    Part of every click since 0.3.10. Until then the gate on a machine was whatever had been copied
+    there once, and when the machine moved to opencode 2 the copy was ported by hand, lived nowhere
+    else, and advised tools opencode 2 does not have. The answer is the check that follows the install,
+    not the install's own account of itself.
     """
-    script = Path(__file__).resolve().parents[3] / "scripts" / "install-agent-gate.sh"
-    if not script.is_file():
-        return AgentGates("unavailable", "The agent gates were not updated: this JUNON is not running from a checkout.")
-    env = dict(os.environ)
-    target = os.environ.get(GATE_HOME_ENV_VAR)
-    if target:
-        env["HOME"] = target
+    from junon import agent_gates
+
     try:
-        installed = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True, timeout=60)
-        checked = subprocess.run(["bash", str(script), "--check"], env=env, capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.TimeoutExpired) as error:
+        result = agent_gates.install()
+    except OSError as error:
         return AgentGates("differs", f"The agent gates could not be updated ({type(error).__name__}: {error}).")
-    if checked.returncode != 0:
-        return AgentGates(
-            "differs",
-            "An agent gate still differs from this release — scripts/install-agent-gate.sh --check says which.",
-        )
-    replaced = [line for line in installed.stdout.splitlines() if line.strip().startswith("installed ")]
-    if replaced:
+    report = result.report
+    if report.state == "unavailable":
+        return AgentGates("unavailable", "The agent gates were not updated: this JUNON carries none.")
+    if report.state != "current":
+        return AgentGates("differs", f"{report.summary} scripts/install-agent-gate.sh --check says which.")
+    if result.installed:
         return AgentGates(
             "updated",
-            f"The agent gates were updated ({len(replaced)} file(s)); each agent host loads them at its next start.",
+            f"The agent gates were updated ({len(result.installed)} file(s)); each agent host loads them at its next start.",
         )
     return AgentGates("current", "The agent gates were already this release's.")
 

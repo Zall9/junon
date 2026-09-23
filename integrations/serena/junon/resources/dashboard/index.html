@@ -96,6 +96,33 @@
       }
       nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
 
+      /* The Changelog tab. Its HTML is rendered by junon/changelog.py, which escapes every character
+         of the notes before adding any markup; this is the only place the page inserts server HTML. */
+      .changelog { max-width: 920px; }
+      .release { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+      .release:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+      .release h3 { margin: 0 0 10px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+      .release ul { margin: 0; padding-left: 18px; }
+      .release li { margin: 0 0 8px; }
+      .release p { margin: 0 0 8px; }
+      .release code {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+      .release pre {
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        overflow-x: auto;
+      }
+      .release pre code { border: 0; padding: 0; background: none; }
+      .changelog-more { margin: 20px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+
       main { padding: 0 24px 32px; }
       .grid {
         display: grid;
@@ -303,6 +330,7 @@
     <nav>
       <button id="tab-overview" aria-selected="true">Overview</button>
       <button id="tab-logs" aria-selected="false">Logs</button>
+      <button id="tab-changelog" aria-selected="false">Changelog</button>
     </nav>
 
     <main>
@@ -352,6 +380,13 @@
         <section>
           <h2>Logs</h2>
           <pre class="logs" id="logs">loading…</pre>
+        </section>
+      </div>
+
+      <div id="changelog-pane" hidden>
+        <section class="changelog">
+          <h2>Changelog <span class="count">the last three releases</span></h2>
+          <div id="changelog">loading…</div>
         </section>
       </div>
     </main>
@@ -680,6 +715,18 @@
           }
         }
 
+        // The agent hosts' file-tool gate: every update installs it and every starting JUNON
+        // refreshes it. Shown when current as well, for the same reason as the versions line above.
+        const gates = status.agentGates;
+        if (gates) {
+          if (gates.state === "differs") {
+            html += `<p class="reason warn"><strong>Update needed.</strong> ${escapeHtml(gates.summary)}<br>
+              <code>scripts/install-agent-gate.sh</code>, or the install button — and the next JUNON to start does it anyway.</p>`;
+          } else {
+            html += `<p class="reason muted">Agent gate: ${escapeHtml(gates.summary)}</p>`;
+          }
+        }
+
         // Everything above compares this machine against itself, which is why none of it can see a
         // release nobody here has fetched. This asks the repository — on a click, never on a poll.
         // The answer is held outside the card because the card is redrawn every couple of seconds.
@@ -825,24 +872,52 @@
         }
       }
 
-      function selectTab(name) {
-        const overview = name === "overview";
-        $("tab-overview").setAttribute("aria-selected", String(overview));
-        $("tab-logs").setAttribute("aria-selected", String(!overview));
-        $("overview").hidden = !overview;
-        $("logs-pane").hidden = overview;
-        if (!overview) refreshLogs();
+      function renderChangelog(payload) {
+        const versions = payload.versions || [];
+        let html = "";
+        if (!versions.length) {
+          html += `<p class="empty">${escapeHtml(payload.reason || "No release notes were found.")}</p>`;
+        }
+        for (const release of versions) {
+          const installed =
+            release.version === payload.running ? ` <span class="tag">installed</span>` : "";
+          // `release.html` comes from junon/changelog.py, which escapes the notes before any markup.
+          html += `<article class="release"><h3>${escapeHtml(release.version)}${installed}</h3>${release.html}</article>`;
+        }
+        html += `<p class="changelog-more"><a href="${escapeHtml(payload.more)}" target="_blank" rel="noopener">Every release, in CHANGELOG.md on GitHub →</a></p>`;
+        $("changelog").innerHTML = html;
       }
 
-      $("tab-overview").addEventListener("click", () => selectTab("overview"));
-      $("tab-logs").addEventListener("click", () => selectTab("logs"));
+      async function refreshChangelog() {
+        try {
+          renderChangelog(await getJson("/junon/changelog"));
+        } catch (error) {
+          $("changelog").innerHTML = `<p class="empty">Not loaded: <code>/junon/changelog</code> did not answer.</p>`;
+        }
+      }
+
+      const TABS = { overview: "overview", logs: "logs-pane", changelog: "changelog-pane" };
+
+      function selectTab(name) {
+        for (const [tab, pane] of Object.entries(TABS)) {
+          $("tab-" + tab).setAttribute("aria-selected", String(tab === name));
+          $(pane).hidden = tab !== name;
+        }
+        if (name === "logs") refreshLogs();
+        if (name === "changelog") refreshChangelog();
+      }
+
+      for (const tab of Object.keys(TABS)) {
+        $("tab-" + tab).addEventListener("click", () => selectTab(tab));
+      }
 
       // Only the visible tab polls. Refreshing eight hidden panels every five seconds costs the
       // agent real work — `/get_config_overview` is not free — for a screen nobody is looking at.
+      // The changelog is not polled at all: it cannot change while the running JUNON does not.
       refresh();
       setInterval(() => {
-        if ($("logs-pane").hidden) refresh();
-        else refreshLogs();
+        if (!$("overview").hidden) refresh();
+        else if (!$("logs-pane").hidden) refreshLogs();
       }, 5000);
     </script>
   </body>

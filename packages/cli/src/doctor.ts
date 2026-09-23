@@ -1,4 +1,7 @@
-import { lstat } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { readPrivateDiscoveryFile } from "@ide-bridge/bridge-client";
 import {
@@ -30,7 +33,9 @@ export interface DoctorCheck {
     | "versions"
     // The only check that leaves the machine, and the only one that can see a release nobody here
     // has fetched. Runs on `--check-updates` and reports `skip` otherwise.
-    | "published-release";
+    | "published-release"
+    // Whether the file-tool gate each agent host loads is this checkout's. Needs no daemon.
+    | "agent-gates";
   status: DoctorCheckStatus;
   detail: string;
 }
@@ -130,7 +135,9 @@ async function adapterCheck(connection: AuthenticatedBridgeConnection): Promise<
  * handshake already refuses the case where it genuinely cannot. What it must not do is stay quiet,
  * which is what it did until now.
  */
-export async function versionCheck(connection: AuthenticatedBridgeConnection): Promise<DoctorCheck> {
+export async function versionCheck(
+  connection: AuthenticatedBridgeConnection,
+): Promise<DoctorCheck> {
   try {
     const [{ adapters }, status] = await Promise.all([
       connection.request("bridge/listAdapters", {}, { timeoutMs: CLI_REQUEST_TIMEOUT_MS }),
@@ -302,6 +309,72 @@ async function sessionExpirationCheck(
   }
 }
 
+interface AgentGateManifest {
+  files: { source: string; target: string; host: string }[];
+  strays?: { path: string }[];
+}
+
+/**
+ * Whether the file-tool gate each agent host loads is this checkout's.
+ *
+ * What goes where is read from `integrations/agent-hosts/manifest.json` — the list JUNON installs
+ * from — so this check and the installer cannot disagree about what a complete installation is. A
+ * host that is not configured on this machine is not a finding. Reads only; never installs.
+ */
+export async function agentGateCheck(
+  options: { home?: string; source?: string } = {},
+): Promise<DoctorCheck> {
+  const source =
+    options.source ?? fileURLToPath(new URL("../../../integrations/agent-hosts/", import.meta.url));
+  const home = options.home ?? process.env["JUNON_AGENT_GATE_HOME"] ?? homedir();
+  let manifest: AgentGateManifest;
+  try {
+    manifest = JSON.parse(
+      await readFile(join(source, "manifest.json"), "utf8"),
+    ) as AgentGateManifest;
+  } catch {
+    return { name: "agent-gates", status: "skip", detail: "not-running-from-a-checkout" };
+  }
+  const stale: string[] = [];
+  let configured = 0;
+  for (const file of manifest.files) {
+    if (!(await isDirectory(join(home, file.host)))) continue;
+    configured += 1;
+    const [wanted, installed] = await Promise.all([
+      readFile(join(source, file.source)).catch(() => undefined),
+      readFile(join(home, file.target)).catch(() => undefined),
+    ]);
+    if (wanted === undefined || installed === undefined || !wanted.equals(installed)) {
+      stale.push(installed === undefined ? `${file.target} missing` : `${file.target} differs`);
+    }
+  }
+  for (const stray of manifest.strays ?? []) {
+    if (await isFile(join(home, stray.path))) stale.push(`second copy at ${stray.path}`);
+  }
+  if (configured === 0)
+    return { name: "agent-gates", status: "skip", detail: "no-agent-host-configured" };
+  if (stale.length > 0) {
+    return {
+      name: "agent-gates",
+      status: "warn",
+      detail: `${stale.join(", ")} — run scripts/install-agent-gate.sh, or start any JUNON session: a starting instance refreshes it`,
+    };
+  }
+  return { name: "agent-gates", status: "pass", detail: "current" };
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  return lstat(path)
+    .then((entry) => entry.isDirectory())
+    .catch(() => false);
+}
+
+async function isFile(path: string): Promise<boolean> {
+  return lstat(path)
+    .then((entry) => entry.isFile())
+    .catch(() => false);
+}
+
 export async function runDoctor(
   discoveryFile: string,
   options: { now?: () => Date; checkUpdates?: boolean } = {},
@@ -318,6 +391,8 @@ export async function runDoctor(
           detail: "not-asked — pass --check-updates to ask the plugin repository",
         },
   );
+  // Second, and also present in every report: it needs no daemon either.
+  checks.push(await agentGateCheck());
   let discovery;
   try {
     discovery = await readPrivateDiscoveryFile(discoveryFile);

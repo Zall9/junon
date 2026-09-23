@@ -234,6 +234,13 @@ def run(argv: list[str]) -> int:
         superseded=lambda: instances.version_on_disk() != mine,
     ).start()
 
+    # The agent hosts' gate follows the code that is now running, however that code arrived — a
+    # `git pull` on an editable install, `pipx upgrade`, the install button. In the background, under
+    # a lock, and never at the cost of this instance: see `agent_gates`.
+    from junon import agent_gates
+
+    agent_gates.refresh_on_start()
+
     sys.argv = serena_argv(options, port, passthrough)
     from serena.cli import top_level
 

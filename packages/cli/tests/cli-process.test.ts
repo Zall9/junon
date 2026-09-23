@@ -166,6 +166,8 @@ describe("ide-bridge CLI process integration", () => {
       // First, and present even here: this one needs no daemon, and the person with nothing running
       // is the likeliest to want to know a newer release exists.
       "published-release",
+      // Also daemon-free: whether the agent hosts' gate is this checkout's.
+      "agent-gates",
       "discovery-file",
       "permissions",
       "daemon-process",

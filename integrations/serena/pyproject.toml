@@ -61,6 +61,10 @@ exclude = ["tests*"]
 # it does not fail, it renders the wrong page. That survived every release up to 0.2.5 because the
 # editable install AGENT_SETUP prescribes reads the checkout directly and never exercises packaging.
 [tool.setuptools.package-data]
+# `resources/agent-hosts` and `resources/CHANGELOG.md` are links into the repository, so a
+# non-editable install carries the agent gates and the release notes without a second copy to drift.
+# The gate's own test and vitest config travel with them: `exclude-package-data` was tried and not
+# honoured for them, and nothing installs them — the manifest lists exactly what is installed.
 junon = ["resources/**/*"]
 
 # --- pytest config ---

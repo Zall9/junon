@@ -21,6 +21,7 @@ are absent anyway.
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -52,6 +53,10 @@ def wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
         pytest.skip("no setuptools in this environment; nothing here can build a wheel")
 
     destination = tmp_path_factory.mktemp("wheel")
+    # setuptools reuses `build/` and never removes a file from it, so a wheel built after a file left
+    # the package still carries it: an exclusion added to pyproject.toml was invisible here until the
+    # stale copy was cleared by hand. Generated and git-ignored — nothing of anyone's is in it.
+    shutil.rmtree(PROJECT / "build", ignore_errors=True)
     done = subprocess.run(
         [sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation",
          "-w", str(destination), str(PROJECT)],
@@ -85,3 +90,49 @@ def test_the_modules_ship_too(wheel: Path) -> None:
 
     assert "junon/tools.py" in names
     assert "junon/dashboard.py" in names
+
+
+#: What a JUNON installed without a checkout needs to keep its agent gates current and to show its
+#: release notes. They are links into the repository (`junon/resources/agent-hosts`,
+#: `junon/resources/CHANGELOG.md`), so the wheel carries the files themselves, not a second copy.
+GATES = (
+    "junon/agent_gates.py",
+    "junon/resources/agent-hosts/manifest.json",
+    "junon/resources/agent-hosts/opencode/junon-first.ts",
+    "junon/resources/agent-hosts/claude-code/junon-first-gate",
+    "junon/resources/agent-hosts/claude-code/register-junon-gate.py",
+    "junon/resources/agent-hosts/junon-usage.py",
+    "junon/resources/CHANGELOG.md",
+)
+
+
+def test_the_agent_gates_and_the_changelog_ship(wheel: Path) -> None:
+    """Without them, a `pipx`-installed JUNON cannot refresh its gate, and its dashboard cannot say
+    what a release changed — both silently, since a missing source reads as "nothing to do"."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = set(archive.namelist())
+
+    assert not [name for name in GATES if name not in names]
+
+
+def test_without_a_checkout_the_packaged_gates_are_found(wheel: Path, tmp_path: Path) -> None:
+    """Loaded from where a wheel puts it, `agent_gates` finds the copy that travelled with it.
+
+    Loaded by path rather than imported: `import junon` would find the editable checkout this suite
+    runs from, which is precisely the case this is not about.
+    """
+    import importlib.util
+
+    with zipfile.ZipFile(wheel) as archive:
+        archive.extractall(tmp_path)
+    spec = importlib.util.spec_from_file_location("packaged_agent_gates", tmp_path / "junon" / "agent_gates.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve their annotations through sys.modules
+    try:
+        spec.loader.exec_module(module)
+        found = module.source_dir()
+    finally:
+        sys.modules.pop(spec.name, None)
+
+    assert found == tmp_path / "junon" / "resources" / "agent-hosts"
+    assert (found / "manifest.json").is_file()

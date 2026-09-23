@@ -630,16 +630,27 @@ caught: with only `setup` and a named plugin beside it, opencode 1 loaded the fi
 gate. Nothing is imported from either host's plugin package, so a machine that rolls back to opencode
 1 keeps a working gate.
 
-Every update installs it — `scripts/update-all.sh` and the dashboard's install button run the same
-`scripts/install-agent-gate.sh`, then read it back with `--check`. Until then the gate on a machine
-was whatever had been copied there once; the move to opencode 2 left a hand-ported copy that existed
-nowhere else and advised tools opencode 2 does not have. A copy that differs from the release is kept
-under `~/.ide-bridge/agent-gate-backups/` — outside every directory a host scans for plugins — before
-it is replaced, and a second copy in `~/.config/opencode/plugins/` is reported, since it would be
-loaded as a second plugin.
+Every update installs it — `scripts/update-all.sh` and the dashboard's install button — and since
+0.3.11 so does **every `junon serve` instance when it starts**, which is what makes it follow JUNON
+however JUNON was updated: a `git pull` on an editable install, `pipx upgrade`, the button. All three
+go through one implementation (`junon/agent_gates.py`) reading one list
+(`integrations/agent-hosts/manifest.json`); `scripts/install-agent-gate.sh` is its command. Until
+0.3.10 the gate on a machine was whatever had been copied there once, and the move to opencode 2 left
+a hand-ported copy that existed nowhere else and advised tools opencode 2 does not have.
+
+A copy that differs is kept under `~/.ide-bridge/agent-gate-backups/` — outside every directory a
+host scans for plugins — before it is replaced; the file is written whole and renamed into place, so
+a host starting at that moment never loads half a plugin; instances starting together write it once,
+under a lock. A second copy in `~/.config/opencode/plugins/` is reported, since it would be loaded as
+a second plugin. A non-editable install carries the gate inside the package, so it can do all this
+without a checkout.
+
+Where to see it: `ide-bridge doctor` has an `agent-gates` check, and the dashboard's IDE Bridge card
+has a line for it — shown when current as well as when not.
 
 ```bash
 scripts/install-agent-gate.sh --check    # exit 1, naming the file, if an installed copy differs
+JUNON_AGENT_GATE_AUTO=0                   # in an agent host's environment: instances leave the gate alone
 ```
 
 **To remove it:** delete `~/.config/opencode/plugin/junon-first.ts`, and the `junon-first-gate` entry
