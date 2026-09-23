@@ -14,6 +14,7 @@ asked of it.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import os
 import signal
@@ -123,6 +124,12 @@ class TestTheRecordedHandshake:
             # A tool the SDK would refuse. Caught here rather than at `tools/list`, where it would
             # leave a session unable to list anything — worse than the eager start this replaces.
             json.dumps({"version": "9.9.9", "tools": [{"description": "no name, no schema"}]}),
+            # The same door for a recorded prompt: `prompts/list` would otherwise fail at open.
+            json.dumps({
+                "version": "9.9.9",
+                "tools": [{"name": "find_symbol", "inputSchema": {"type": "object"}}],
+                "promptList": [{"description": "a prompt without a name"}],
+            }),
         ],
     )
     def test_a_damaged_or_empty_file_is_ignored_rather_than_trusted(self, content: str) -> None:
@@ -148,6 +155,53 @@ class TestTheRecordedHandshake:
 
         assert recorded is not None
         assert [types.Tool.model_validate(tool).name for tool in recorded.tools] == ["find_symbol"]
+
+    def test_the_prompt_list_is_recorded_and_read_back(self) -> None:
+        """What opencode 2 asks at every open, kept alongside the tools."""
+        recorded = handshake_cache.Handshake(
+            version="9.9.9",
+            instructions="",
+            tools=({"name": "find_symbol", "inputSchema": {"type": "object"}},),
+            prompts=True,
+            prompt_list=({"name": "onboarding", "description": "first steps"},),
+        )
+        handshake_cache.write(recorded)
+
+        assert handshake_cache.read("9.9.9") == recorded
+        assert handshake_cache.read("9.9.9").prompt_names() == ("onboarding",)
+
+    def test_a_file_written_by_0_3_8_is_read_with_its_prompts_unrecorded(self) -> None:
+        """Backward compatible: the key did not exist, and absent is not the same as empty. An
+        unrecorded list makes the relay ask the instance, exactly as 0.3.8 did; an empty one says
+        the instance offers none."""
+        target = handshake_cache.path("9.9.9")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps({
+            "version": "9.9.9",
+            "instructions": "",
+            "tools": [{"name": "find_symbol", "inputSchema": {"type": "object"}}],
+            "prompts": True,
+            "capturedFrom": "/somewhere",
+        }))
+
+        written_by_0_3_8 = handshake_cache.read("9.9.9")
+
+        assert written_by_0_3_8 is not None, "an older file must still be read, not discarded"
+        assert written_by_0_3_8.prompt_list is None
+        assert written_by_0_3_8.prompt_names() is None
+
+    def test_an_instance_with_no_prompts_is_recorded_as_none_rather_than_unknown(self) -> None:
+        from mcp import types
+
+        init = types.InitializeResult(
+            protocolVersion="2025-06-18",
+            capabilities=types.ServerCapabilities(tools=types.ToolsCapability()),
+            serverInfo=types.Implementation(name="x", version="1"),
+        )
+        captured = handshake_cache.capture(init, [], "/somewhere")
+
+        assert captured.prompts is False
+        assert captured.prompt_list == ()
 
     def test_it_is_keyed_by_version_only(self) -> None:
         """Measured across ten projects: identical instructions, identical thirty-nine tools. Keying
@@ -278,6 +332,112 @@ class TestWhatTheHostIsTold:
             )
         finally:
             _terminate_ours()
+
+
+#: What each host sends to a relay while a session opens — measured on 2026-09-23 with a stdio tap
+#: between the host and `junon attach`, both hosts run isolated against a scripted local model.
+#: Not what a host was *assumed* to send: 0.3.8 was proved against `initialize` + `tools/list`,
+#: which is opencode 1, and shipped starting an instance on every opencode 2 session.
+HOST_OPENING = {
+    "opencode 1.18": ("tools/list",),
+    "opencode 2.0": ("tools/list", "prompts/list"),
+}
+
+
+class TestWhatEachHostAsksAtOpen:
+    """~20 s. Each host's own opening sequence, replayed against a real relay with a primed file."""
+
+    @pytest.mark.parametrize("host", sorted(HOST_OPENING))
+    def test_opening_a_session_starts_nothing(self, host: str, tmp_path: Path) -> None:
+        assert _started_here() == [], "the registry must start empty for the count to mean anything"
+        try:
+            _record_a_handshake()
+            recorded = handshake_cache.read()
+            assert recorded is not None
+            assert recorded.prompt_list is not None, "priming must record the prompts as well as the tools"
+
+            async def opening() -> dict[str, object]:
+                answers: dict[str, object] = {}
+                async with _session(_attach_params(tmp_path, REPO_ROOT)) as (session, _):
+                    for method in HOST_OPENING[host]:
+                        if method == "tools/list":
+                            listed = (await asyncio.wait_for(session.list_tools(), 60)).tools
+                            answers[method] = sorted(tool.name for tool in listed)
+                        elif method == "prompts/list":
+                            listed = (await asyncio.wait_for(session.list_prompts(), 60)).prompts
+                            answers[method] = sorted(prompt.name for prompt in listed)
+                    answers["started"] = len(_started_here())
+                return answers
+
+            answers = asyncio.run(opening())
+
+            assert answers["started"] == 0, f"{host} opening a session started {answers['started']} instance(s)"
+            assert answers["tools/list"] == sorted(recorded.tool_names()), "the instance's own tools"
+            if "prompts/list" in answers:
+                assert answers["prompts/list"] == sorted(recorded.prompt_names() or ()), "and its own prompts"
+        finally:
+            _terminate_ours()
+
+    def test_a_handshake_written_by_0_3_8_is_filled_in_on_first_use(self, tmp_path: Path) -> None:
+        """Backward compatible with the files already on disk. A list 0.3.8 never recorded is asked
+        of the instance, exactly as 0.3.8 did, and recorded so the next session need not ask — and
+        the host is told nothing changed, because nothing did."""
+        assert _started_here() == [], "the registry must start empty for the count to mean anything"
+        try:
+            _record_a_handshake()
+            primed = handshake_cache.read()
+            assert primed is not None and primed.prompt_list is not None
+            handshake_cache.write(dataclasses.replace(primed, prompt_list=None))  # what 0.3.8 wrote
+            assert handshake_cache.read().prompt_list is None
+            notified: list[str] = []
+
+            async def scenario() -> tuple[list[str], int]:
+                async with _session(_attach_params(tmp_path, REPO_ROOT), notified) as (session, _):
+                    await asyncio.wait_for(session.list_tools(), 60)
+                    listed = (await asyncio.wait_for(session.list_prompts(), 60)).prompts
+                    await asyncio.sleep(0.5)  # a notification in flight would arrive by now
+                    return sorted(prompt.name for prompt in listed), len(_started_here())
+
+            prompts, started = asyncio.run(scenario())
+
+            assert started == 1, "an unrecorded list is asked of the instance, as 0.3.8 did"
+            assert prompts == sorted(primed.prompt_names() or ())
+            assert handshake_cache.read().prompt_list is not None, "and recorded for the next session"
+            assert "ToolListChangedNotification" not in notified, notified
+            assert "PromptListChangedNotification" not in notified, notified
+        finally:
+            _terminate_ours()
+
+
+class TestOutsideAnyProject:
+    """opencode 2 runs every MCP server once in its own service's directory — $HOME, not a project.
+
+    The relay used to exit there with status 2, and opencode then marked the whole server failed in
+    every directory: measured on 2026-09-23, JUNON gone from every session on the machine.
+    """
+
+    def test_the_relay_stays_up_offers_nothing_and_explains_itself(self, tmp_path: Path) -> None:
+        nowhere = tmp_path / "not-a-project"
+        nowhere.mkdir()
+
+        async def scenario():  # noqa: ANN202
+            # The whole exchange completing is the first assertion: an exited relay fails here.
+            async with _session(_attach_params(tmp_path, nowhere)) as (session, init):
+                tools = (await asyncio.wait_for(session.list_tools(), 30)).tools
+                prompts = (await asyncio.wait_for(session.list_prompts(), 30)).prompts
+                result = await asyncio.wait_for(
+                    session.call_tool("find_symbol", {"name_path_pattern": "compose"}), 30
+                )
+                return init, tools, prompts, result
+
+        init, tools, prompts, result = asyncio.run(scenario())
+
+        assert tools == [], "no tools: a host merging directories must never route a session's call here"
+        assert prompts == []
+        assert result.isError, "a call that reaches it anyway is refused, in words"
+        assert "no project" in _text(result) and "--project" in _text(result), _text(result)
+        assert "no project" in (init.instructions or ""), "and the model is told why from the start"
+        assert _started_here() == [], "there is no project to start"
 
 
 class TestAStaleCacheCorrectsItself:

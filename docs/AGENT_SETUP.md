@@ -323,11 +323,16 @@ that project:
 
 - the project is resolved the way `--project-from-cwd` did it, Serena's own rule — the nearest
   `.serena/project.yml` or `.git` above the working directory. `--project /path` names one instead;
+- **outside any project, it stays up with no tools** (0.3.9). opencode 2 starts every MCP server once
+  in its own service's directory — `$HOME` — as well as once per session, and a relay that exited
+  there made opencode fail the server in every directory. It now answers, offers nothing, and tells
+  any call that reaches it to open the host in a project or pass `--project`;
 - **opening a session starts nothing.** A host launches one relay per registered project the moment
   it starts, and starting each project with it cost 23 instances, 55 language servers and 4.16 GB
-  on one machine, for projects nobody had opened. What a host asks at start-up — the instructions
-  and the tool list — is answered from a file recorded by whichever session last had a live
-  instance, keyed by JUNON version;
+  on one machine, for projects nobody had opened. What a host asks while a session opens is answered
+  from a file recorded by whichever session last had a live instance, keyed by JUNON version — and
+  what it asks is measured per host, not assumed: `initialize` and `tools/list` for opencode 1,
+  those and `prompts/list` for opencode 2 (0.3.9; 0.3.8 started the project for that one);
 - the **first request that is really about the project** uses the live instance for that root, or
   starts one and waits until it answers. Two sessions starting together take a lock per root, so
   they end up on one instance — twenty at the same instant, measured, still one;

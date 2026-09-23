@@ -491,6 +491,11 @@ async def relay(
         if session is not None:
             await session.send_tool_list_changed()
 
+    async def prompts_may_have_changed() -> None:
+        session = downstream.get("session")
+        if session is not None:
+            await session.send_prompt_list_changed()
+
     upstream = Upstream(
         root,
         on_upstream_message,
@@ -504,9 +509,19 @@ async def relay(
     # immediately started the project's instance and its language servers, whether or not anyone
     # would ever touch it: 23 instances, 55 language servers, 4.16 GB, measured on 2026-09-21.
     #
-    # So the two things a host asks at start-up are answered from a file recorded by whichever relay
+    # So what a host asks while a session opens is answered from a file recorded by whichever relay
     # last had a live instance, and the instance itself is started by the first request that is
     # genuinely about the project. With nothing recorded, this behaves exactly as it did before.
+    #
+    # *What a host asks* is measured, not assumed — assuming it is how 0.3.8 shipped half a fix. A
+    # stdio tap between each host and this relay, 2026-09-23:
+    #
+    #   opencode 1.18   initialize, tools/list
+    #   opencode 2.0    initialize, tools/list, prompts/list      (on every relay it opens)
+    #
+    # 0.3.8 answered the first two from the file and opened the instance for `prompts/list`, so under
+    # opencode 2 every session start still started its project. All three are answered from the file
+    # now; `prompts/get` and `tools/call` are what start an instance.
     def record(handshake: handshake_cache.Handshake) -> None:
         # Recording is an optimisation for the *next* session. A full disk, a read-only home, a
         # registry someone chmod'd — none of those are reasons for this session to fail.
@@ -516,31 +531,57 @@ async def relay(
             log.warning("the handshake could not be recorded (%s); sessions will keep starting "
                         "their project at open", error)
 
+    async def live_handshake() -> handshake_cache.Handshake:
+        """What the instance itself answers to everything a session asks at open."""
+        tools = (await upstream.call(ClientSession.list_tools)).tools
+        prompts = None
+        if handshake_cache.offers_prompts(upstream.init):
+            try:
+                prompts = (await upstream.call(ClientSession.list_prompts)).prompts
+            except Exception as error:  # noqa: BLE001 - an unrecorded list is 0.3.8's behaviour, not a failure
+                log.warning("the prompt list of %s could not be read (%s); it is left unrecorded", root, error)
+        return handshake_cache.capture(upstream.init, tools, root, prompts)
+
     recorded = handshake_cache.read()
     if recorded is None:
         await upstream.open()
-        record(handshake_cache.capture(
-            upstream.init, (await upstream.call(ClientSession.list_tools)).tools, root
-        ))
+        record(await live_handshake())
         recorded = handshake_cache.read()
 
     async def ensure_upstream() -> None:
         """Starts the instance the first time something really needs it, and reconciles the cache."""
+        nonlocal recorded
         if upstream.session is not None or upstream.instance is not None:
             return
         await upstream.open()
-        live = handshake_cache.capture(
-            upstream.init, (await upstream.call(ClientSession.list_tools)).tools, root
+        live = await live_handshake()
+        tools_differ = recorded is None or live.tool_names() != recorded.tool_names()
+        # Only a *recorded* list can be wrong. One that was never recorded — a file written by
+        # 0.3.8 — is simply filled in, and the host is not told anything changed, because nothing did.
+        prompts_differ = (
+            recorded is not None
+            and recorded.prompt_names() is not None
+            and live.prompt_names() is not None
+            and live.prompt_names() != recorded.prompt_names()
         )
-        if recorded is None or live.tool_names() != recorded.tool_names():
+        unrecorded = recorded is not None and recorded.prompt_list is None and live.prompt_list is not None
+        if tools_differ or prompts_differ or unrecorded:
+            record(live)
+            recorded = live
+        if tools_differ:
             # The file was answering for a toolset this instance does not have. Rewritten, and the
             # host told to ask again — the notification it already honours.
-            record(live)
             log.warning(
                 "the recorded toolset did not match %s; it has been rewritten and the host notified",
                 root,
             )
             await tools_may_have_changed()
+        if prompts_differ:
+            log.warning(
+                "the recorded prompts did not match %s; they have been rewritten and the host notified",
+                root,
+            )
+            await prompts_may_have_changed()
 
     try:
         instructions = recorded.instructions if recorded else (upstream.init.instructions if upstream.init else None)
@@ -578,19 +619,82 @@ async def relay(
 
             @server.list_prompts()
             async def list_prompts() -> list[types.Prompt]:
+                downstream["session"] = server.request_context.session
+                if upstream.session is None and recorded is not None and recorded.prompt_list is not None:
+                    # opencode 2 asks this on every relay it opens: answered without a project.
+                    return [types.Prompt.model_validate(prompt) for prompt in recorded.prompt_list]
                 await ensure_upstream()
                 return (await upstream.call(ClientSession.list_prompts)).prompts
 
             @server.get_prompt()
             async def get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+                downstream["session"] = server.request_context.session
                 await ensure_upstream()
                 return await upstream.call(ClientSession.get_prompt, name, arguments)
 
-        options = server.create_initialization_options(NotificationOptions(tools_changed=True))
+        options = server.create_initialization_options(
+            NotificationOptions(tools_changed=True, prompts_changed=True)
+        )
         async with stdio_server() as (stdio_read, stdio_write):
             await server.run(stdio_read, stdio_write, options)
     finally:
         await upstream.close()
+
+
+#: What a session opened outside any project is told — by the instructions, and by any call that
+#: reaches this relay anyway. Worded for the model, which reads it, and for the person it will tell.
+_NO_PROJECT = (
+    "This JUNON has no project: the agent host started it in {cwd}, which is not inside one — no "
+    ".serena/project.yml or .git above it — so it offers no tools and nothing was run. Open the host "
+    "in a project directory, or give this server an explicit root with "
+    "`junon attach --project /path/to/project`."
+)
+
+
+async def relay_without_project(cwd: str) -> None:
+    """Serves MCP for a host that started this relay outside any project, instead of exiting.
+
+    Exiting was the obvious answer and the wrong one. opencode 2 starts every MCP server once in the
+    directory its own service runs in, as well as once per session — and its service runs in $HOME,
+    which is not a project. The relay exited there with status 2, and opencode marked the whole
+    server failed: measured on 2026-09-23, `Connection closed` in every directory, real projects
+    included, so JUNON had gone from every session. Reproduced on an isolated server: launched outside
+    a project, every session's relay was closed straight after `initialize`; launched inside one,
+    every relay completed its opening. A plain `serena --project-from-cwd` never exited in that
+    position, which is why this surfaced only once the configuration moved to `junon attach`.
+
+    So it stays up, and it offers **no tools**. Not the recorded ones: a host that merges what one
+    server offers in several directories could route a session's call, by name, to this relay — which
+    can only refuse it. Nothing is started, since there is no project to start.
+    """
+    from mcp import types
+    from mcp.server import NotificationOptions, Server
+    from mcp.server.stdio import stdio_server
+
+    explanation = _NO_PROJECT.format(cwd=cwd)
+    server: Server = Server("junon", instructions=explanation)
+
+    @server.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        return []
+
+    @server.call_tool(validate_input=False)
+    async def call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        return types.CallToolResult(content=[types.TextContent(type="text", text=explanation)], isError=True)
+
+    # Prompts are offered, empty, because opencode 2 asks for them at every open and a server that
+    # answered "method not found" to an opening request is one more thing a host may hold against it.
+    @server.list_prompts()
+    async def list_prompts() -> list[types.Prompt]:
+        return []
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+        raise ValueError(explanation)
+
+    options = server.create_initialization_options(NotificationOptions())
+    async with stdio_server() as (stdio_read, stdio_write):
+        await server.run(stdio_read, stdio_write, options)
 
 
 # --- the command -------------------------------------------------------------------------------
@@ -614,12 +718,14 @@ def run(argv: list[str]) -> int:
     options, passthrough = parse(argv)
     root = resolve_root(options.project)
     if root is None:
+        # Not an exit: see `relay_without_project` for what exiting here did under opencode 2.
         print(
             "junon attach: no project here — no .serena/project.yml or .git above the working "
-            "directory. Pass --project.",
+            "directory. Serving no tools; open the host in a project, or pass --project.",
             file=sys.stderr,
         )
-        return 2
+        asyncio.run(relay_without_project(os.getcwd()))
+        return 0
     if not Path(root).is_dir():
         print(f"junon attach: {root} is not a directory", file=sys.stderr)
         return 2

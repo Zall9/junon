@@ -1,6 +1,7 @@
 # Starting a session must not start a project
 
-**Status:** done — released as 0.3.8 on 2026-09-21. See the [update log](#7-update-log).
+**Status:** done — released as 0.3.8 on 2026-09-21, reopened and completed as 0.3.9 on 2026-09-23
+([Phase 6](#phase-6--reopened-what-opencode-2-actually-asks)). See the [update log](#7-update-log).
 
 ## 1. Why
 
@@ -217,19 +218,78 @@ GoLand and PhpStorm were running, so their plugins are still 0.3.7 — no script
 running IDE. Quitting them and pressing install, or running the script again, finishes it. Agent
 hosts pick up 0.3.8 when they next start, since JUNON is imported at start-up.
 
+### Phase 6 — Reopened: what opencode 2 actually asks
+
+**Status:** built and proved 2026-09-23; released as 0.3.9.
+
+0.3.8 was proved against a client that sent `initialize` and `tools/list`, because that is what a
+host was *assumed* to send. §6 even listed the risk — *a host that calls something else at start-up*
+— and accepted it without measuring it. Two days later the machine moved to opencode 2, and the
+assumption was false.
+
+**Measured, not assumed.** A stdio tap between each host and `junon attach` writes down every
+JSON-RPC message. Both hosts run isolated — their own config and data directories, a scripted local
+model instead of a provider, the probe's own JUNON registry — so nothing of the user's is read or
+written:
+
+| Host | Sent while a session opens | Instances started, handshake recorded |
+| --- | --- | --- |
+| opencode 1.18.31 (`mcp list`, and a real `run`) | `initialize`, `tools/list` | **0** |
+| opencode 2.0.12 | `initialize`, `tools/list`, **`prompts/list`** — on every relay | **1 per relay** |
+
+The relay answered the first two from the file and opened the instance for `prompts/list`. So under
+opencode 2 every session start still started its project — to return, it turned out, an empty list:
+Serena advertises prompts and has none.
+
+**A second defect, found by running opencode 2 the way it really runs.** It starts every MCP server
+once in its own service's directory as well as once per session, and the service runs in `$HOME`,
+which is not a project. `junon attach` exited there with status 2, and opencode 2 then marked the
+whole server failed — every relay of that server closed straight after `initialize`, real projects
+included. On the machine: `serena failed: Connection closed` in `$HOME`, moneta, vod/core and
+site-api-radios alike. This one was made visible by moving the configuration from a plain
+`serena --project-from-cwd`, which never exited in that position, to `junon attach`.
+
+**The fixes.**
+
+- The handshake records the prompt list too, and `prompts/list` is answered from it. Absent is kept
+  distinct from empty: a file written by 0.3.8 has no list, and that makes the relay ask the
+  instance exactly as 0.3.8 did, then fill the list in — without telling the host anything changed,
+  because nothing did.
+- Outside any project, the relay no longer exits. It stays up, offers **no tools** — not the recorded
+  ones, since a host merging what one server offers in several directories could route a session's
+  call by name to a relay that can only refuse it — and answers any call that reaches it with a
+  sentence saying what to do.
+
+**Proved.**
+
+| What | Result |
+| --- | --- |
+| Each host's measured opening, replayed against a real relay with a recorded file | 0 instances for both |
+| A 0.3.8 file | answered by the instance once, filled in, no notification |
+| opencode 2, isolated, service outside any project, three passes | relays stay up, `connected`, 1 then **0** and **0** instances — the first pass filling in a 0.3.8 file |
+| opencode 1, in a project and outside one | `connected`, 0 instances |
+| The user's real service, relays reconnected in place | `connected` in `$HOME`, moneta, vod/core, site-api-radios; no instance started |
+
+Five mutations, on a copy with a green control first: answering `prompts/list` from the instance
+again turns the opencode 2 case red **and leaves the opencode 1 case green** — the test tells the
+two hosts apart; priming without the prompt list, not filling in a 0.3.8 file, reading an absent list
+as empty, and exiting outside a project each turn their own test red.
+
 ## 6. Risks
 
 | Risk | Decision |
 | --- | --- |
 | A cached tool list that no longer matches | Compared on first use, `tools/list_changed` sent; one refresh, never a wrong answer |
 | Cached instructions going stale | Same key as the tools; a release changes the key. Accepted and stated |
-| A host that calls something else at start-up | Anything not `initialize`/`tools/list` starts the instance, as today |
+| A host that calls something else at start-up | **Materialised** under opencode 2 (`prompts/list`), accepted here without being measured. Closed in Phase 6 by measuring each host's opening with a tap rather than assuming it |
+| A relay started outside any project | Found in Phase 6: exiting made opencode 2 fail the server everywhere. It now stays up with no tools |
 | Lazy start hiding a broken project until the first call | The first call reports the failure the same way the open would have |
 
 ## 7. Update log
 
 | When | What |
 | --- | --- |
+| 2026-09-23 | Reopened as Phase 6 after the machine moved to opencode 2. Measured with a stdio tap: opencode 2 asks `prompts/list` on every relay, which 0.3.8 answered by starting the project. And a relay started outside any project exited, which made opencode 2 fail the server in every directory — JUNON was gone from every session on the machine, found by asking the live service. Both fixed and proved against both real hosts. |
 | 2026-09-21 | Plan written after measuring 23 instances / 55 language servers / 4.16 GB at opencode start-up, caused by `attach` starting its instance eagerly. |
 | 2026-09-21 | Phase 5 done: 0.3.8 pushed and installed. Measured on the machine with the installed binary and the real registry — six sessions on six real projects started nothing. One more defect found by doing it for real: the update script could not see a daemon it had not started itself, so it left the machine on the previous build while saying a step had failed. |
 | 2026-09-21 | Phase 4 done: the nine behaviours run one by one, twenty simultaneous attaches accepted, four mutations probed on a copy. Two defects found and fixed — tests that counted (and killed) instances belonging to the user's own sessions, and three unsafe edges in the relay found by reading the diff. |
