@@ -15,6 +15,27 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.9
+
+- **JUNON works in opencode 2 sessions again.** opencode 2 starts every MCP server once in the
+  directory its own service runs in — `$HOME` — as well as once per session. `junon attach` exited
+  there, because `$HOME` is not a project, and opencode 2 then marked the whole server failed in
+  every directory, real projects included: `serena failed: Connection closed` everywhere on the
+  machine it was measured on. Outside any project the relay now stays up, offers no tools, and
+  answers any call that reaches it with what to do — open the host in a project, or pass
+  `--project`.
+- **Opening an opencode 2 session no longer starts the project.** 0.3.8 answered what a host asks
+  at open from a recorded handshake — but what a host asks had been *assumed*. Measured with a tap
+  between each host and the relay: opencode 1 asks `initialize` and `tools/list`; opencode 2 asks
+  those **and `prompts/list`**, on every relay. 0.3.8 started the project to answer that one — for
+  an empty list, since Serena advertises prompts and has none. The prompt list is recorded now.
+  Proved against both real hosts: no instance starts at open under either.
+- **Backward compatible.** A handshake written by 0.3.8 has no prompt list; it is still read, the
+  instance is asked once, as 0.3.8 did, and the list is filled in without telling the host anything
+  changed. opencode 1, Claude Code and any other host see exactly what they saw before.
+- **What you have to do about it:** nothing beyond the usual update. If your agent host shows the
+  `serena` server as failed, reconnect it or restart the host once.
+
 ## 0.3.8
 
 - **Opening a session no longer starts a project.** An agent host launches one MCP server per
