@@ -15,8 +15,22 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
-## Unreleased
+## 0.3.11
 
+- **The gate follows JUNON, however JUNON was updated.** Until now only `update-all.sh` and the
+  install button installed the agent hosts' file-tool gate; a `git pull` on an editable install — the
+  usual way this machine gets new code — updated JUNON and left the gate behind, and so did
+  `pipx upgrade`. Every `junon serve` instance now refreshes it when it starts: in the background,
+  under a lock so that instances starting together write it once, written whole and renamed into
+  place, the previous copy kept. `JUNON_AGENT_GATE_AUTO=0` turns that off.
+- **One installer.** The shell command, the install button and the starting instance all go through
+  `junon/agent_gates.py`, reading one list, `integrations/agent-hosts/manifest.json`, which
+  `ide-bridge doctor` reads too. A non-editable install carries the gate and the manifest inside the
+  package, so it needs no checkout.
+- **Visible.** `ide-bridge doctor` has an `agent-gates` check, and the dashboard's IDE Bridge card has
+  a line for the gate — shown when current as well as when not.
+- **A Changelog tab in the dashboard**: the last three releases, from the notes that ship with the
+  running JUNON, and a link to this file for the rest. The notes are escaped before they are rendered.
 - **`junon-usage.py` reads opencode 2.** It read only opencode 1's `message` and `part` tables and
   counted JUNON by tool name, so on a machine that had moved to opencode 2 it reported nothing about
   the sessions actually being run — and opencode 2 has no `serena_*` tools to count. It now reads
@@ -24,6 +38,8 @@ tells the agent — and through it, you.
   `refused` column, which is the question it was recommended for — whether the gate does anything.
 - **[docs/OPENCODE.md](docs/OPENCODE.md)**: what differs between opencode 1 and 2 for JUNON, every row
   measured, and how to test against both. `AGENT_SETUP.md` gives the configuration for each.
+- **What you have to do about it:** the usual update. From this release on, the gate needs nothing
+  more: the next JUNON session to start brings it up to date.
 
 ## 0.3.10
 
