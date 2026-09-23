@@ -1,6 +1,6 @@
 # The gate follows JUNON, and the dashboard says what changed
 
-**Status:** in progress — see the [update log](#update-log).
+**Status:** done — released in 0.3.11; see the [update log](#update-log).
 
 ## Why
 
@@ -98,13 +98,23 @@ page's text escaped rather than trusted.
 
 ### Phase 5 — release
 
-**Status:** pending
+**Status:** done 2026-09-23 — 0.3.11 released (`d96de4a`, `2cbeb8d`).
 
-Three suites, mutations on a copy, then 0.3.11 — and the machine checked after the update.
+460 Python, 509 TypeScript and 301 Kotlin tests passed; `typecheck` and `lint` report only the
+unused `version` in `scripts/make-update-repository.ts`, which predates this work. After
+`update-all.sh` the machine answers from 0.3.11: `doctor` reports `agent-gates: pass, current`,
+`install-agent-gate.sh --check` exits 0, and a private instance started from the installed `junon`
+shows 0.3.11 marked *installed*, then 0.3.10 and 0.3.9 and the link to GitHub, with the gate line
+on the IDE Bridge card. The machine's gate was byte-identical before and after (the probe ran with
+the refresh off), and no backup was added. PhpStorm stayed on the 0.3.10 plugin because it was
+open; `doctor` names it, as it should.
+
+**Acceptance:** three suites green, 0.3.11 pushed, and the machine checked after the update.
 
 ## Update log
 
 | When | What |
 | --- | --- |
+| 2026-09-23 | Phase 5 done: 0.3.11 released and checked on the machine — `doctor` pass, `--check` 0, the Changelog tab and the gate line seen in a private instance of the installed `junon`. |
 | 2026-09-23 | Phases 0–4 done. Mutations on copies, controls green first: eight on the Python side (the instance refresh, the lock, the kept copy, the opt-out, escaping, three versions, Unreleased, the card's line) and three on `doctor`, all red. The machine's gate untouched throughout, checked by hash. |
 | 2026-09-23 | Plan written. |
