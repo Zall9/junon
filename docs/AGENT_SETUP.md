@@ -277,21 +277,48 @@ a schema, so each is given in full rather than as a shape to adapt.
 }
 ```
 
-**opencode** — `~/.config/opencode/opencode.json`, under `mcp`. Note the difference: `type` is
-`local`, and `command` is an **array** that carries the arguments. The Claude Code block above does
-not work here:
+**opencode** — `~/.config/opencode/opencode.json`. `type` is `local`, and `command` is an **array**
+that carries the arguments, so the Claude Code block above does not work here. **opencode 1 and 2 do
+not share a schema either**, and they differ for JUNON in more than configuration — how a model
+reaches MCP tools at all, what they ask a server at open, where they start it. All of that, measured,
+is in **[OPENCODE.md](OPENCODE.md)**; read it before configuring or debugging either.
+
+opencode 2 — under `mcp.servers`:
 
 ```json
 {
-  "serena": {
-    "type": "local",
-    "command": ["junon", "attach"],
-    "cwd": ".",
-    "enabled": true,
-    "timeout": 60000
+  "mcp": {
+    "servers": {
+      "serena": {
+        "type": "local",
+        "command": ["junon", "attach"],
+        "cwd": ".",
+        "disabled": false,
+        "timeout": { "startup": 60000, "catalog": 60000, "execution": 60000 }
+      }
+    }
   }
 }
 ```
+
+opencode 1 — directly under `mcp`:
+
+```json
+{
+  "mcp": {
+    "serena": {
+      "type": "local",
+      "command": ["junon", "attach"],
+      "cwd": ".",
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
+}
+```
+
+A `~/opencode.json` in your home directory overrides these for **every** project under it — see
+[OPENCODE.md](OPENCODE.md#configuration-traps) before assuming the global file is the one in effect.
 
 **Cursor** — `~/.cursor/mcp.json` globally, or `.cursor/mcp.json` in a project, under `mcpServers`;
 the shape is Claude Code's:
@@ -305,10 +332,10 @@ the shape is Claude Code's:
 }
 ```
 
-The first two are copied from what is running on the machine this was written on. **The Cursor one is
-not**: Cursor is not installed here, so it comes from Cursor's own documentation and has not been
-watched working. Check it with `get_current_config` — `ide_*` tools in the active list mean JUNON
-answered — before believing it.
+The Claude Code and both opencode blocks are copied from what ran on the machine this was written on.
+**The Cursor one is not**: Cursor is not installed here, so it comes from Cursor's own documentation
+and has not been watched working. Check it with `get_current_config` — `ide_*` tools in the active
+list mean JUNON answered — before believing it.
 
 ### What `attach` does, and what it replaced
 
@@ -377,10 +404,11 @@ So the whole recipe is: `junon instances --stop`, quit the agent hosts, restart 
 each IDE. Nothing needs starting again by hand — the next session starts the instance it needs, on
 the installed JUNON.
 
-**Keeping the server named `serena` is deliberate**, in all three. The tools take the server's name,
-so `serena_find_symbol` and `serena_ide_read_symbol` are what an agent sees, and every prompt, memory
-and habit that already says `serena_*` keeps working. A server renamed `junon` would rename all of
-them.
+**Keeping the server named `serena` is deliberate**, in all three. The tools take the server's name —
+`mcp__serena__ide_read_symbol` in Claude Code, `serena_ide_read_symbol` in opencode 1,
+`tools.serena.ide_read_symbol(...)` inside `execute` in opencode 2 ([OPENCODE.md](OPENCODE.md)) — and
+every prompt, memory and habit that already says `serena` keeps working. A server renamed `junon`
+would rename all of them.
 
 The file-tool gate (§7) covers **opencode and Claude Code only**: one is a plugin, the other a hook,
 and Cursor has neither. JUNON itself works identically in all three — it is an MCP server, and
@@ -559,7 +587,7 @@ searched across a tree is a symbol question; the same pattern pointed at a `.log
 
 The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
 `ide_read_document` — **in the asking host's own terms**, because the two opencodes do not expose
-MCP tools the same way. opencode 1 has a tool per MCP tool, so it is told
+MCP tools the same way ([OPENCODE.md](OPENCODE.md)). opencode 1 has a tool per MCP tool, so it is told
 `serena_find_symbol({ name_path_pattern: "X" })`. opencode 2 has none: a model reaches MCP tools only
 through the `execute` meta-tool, as code — measured in real sessions — so it is told
 `execute → await tools.serena.find_symbol({ name_path_pattern: "X" })`, and that `search` loads
@@ -633,7 +661,7 @@ Three causes account for nearly all of it, and **only the first is visible in a 
 | --- | --- | --- |
 | The host launches `serena` instead of `junon` | no `ide_*` tools anywhere | correct the MCP entry, then restart the host |
 | The host was fixed but never restarted | the config reads `junon`, the running process is `serena` | restart the host **application**, not the session — MCP servers are launched at start-up and keep the command they started with |
-| It *is* JUNON | tools named `serena_ide_read_symbol` and the like | nothing is wrong: the prefix is the MCP server's name, and `ide_*` tools exist only under JUNON |
+| It *is* JUNON | tools named `serena_ide_read_symbol` and the like — or, in opencode 2, `tools.serena.ide_*` found by `search` inside `execute` | nothing is wrong: the prefix is the MCP server's name, and `ide_*` tools exist only under JUNON |
 
 **Since 0.2.6 the page tells you itself.** When JUNON runs but its dashboard files are missing — an
 install that did not carry its resources, a checkout without the front end — the served page carries a
@@ -796,7 +824,8 @@ module it imported at start-up.
 | `ide_*` tools exist but every call refuses | No adapter connected, or the workspace is not the one the IDE has open. The refusal names the language-server tool that answers without an IDE — see §4 |
 | Empty symbol results on a real project | The project declares no source roots; the adapter reports this rather than guessing |
 | Serena's dashboard is served, not JUNON's | Read the banner at the top of that page if there is one — it names the missing directory. Otherwise `scripts/diagnose-dashboard.sh`: usually a host never restarted after its config was corrected |
-| Tools are named `serena_*` and it looks like plain Serena | That is the MCP server's name. If `serena_ide_*` tools exist, it is JUNON |
+| Tools are named `serena_*` and it looks like plain Serena | That is the MCP server's name. If `serena_ide_*` tools exist — `tools.serena.ide_*` in opencode 2's `execute` — it is JUNON |
+| opencode 2 shows no `serena_*` tool at all | Expected: opencode 2 offers MCP tools only through `execute`. See [OPENCODE.md](OPENCODE.md) |
 | No JUNON dashboard link in the JetBrains panel | Nothing published one — the panel now says so in place of the link |
 | A source change has no effect anywhere | Nothing was redeployed. Step 9 — the plugin is a built jar, and the editable install may point at a different checkout |
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |

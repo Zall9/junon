@@ -15,6 +15,16 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## Unreleased
+
+- **`junon-usage.py` reads opencode 2.** It read only opencode 1's `message` and `part` tables and
+  counted JUNON by tool name, so on a machine that had moved to opencode 2 it reported nothing about
+  the sessions actually being run — and opencode 2 has no `serena_*` tools to count. It now reads
+  both histories, separately; counts an `execute` calling `tools.serena` as JUNON; and adds a
+  `refused` column, which is the question it was recommended for — whether the gate does anything.
+- **[docs/OPENCODE.md](docs/OPENCODE.md)**: what differs between opencode 1 and 2 for JUNON, every row
+  measured, and how to test against both. `AGENT_SETUP.md` gives the configuration for each.
+
 ## 0.3.10
 
 - **The file-tool gate speaks both opencodes.** opencode 1 exposes each MCP tool as a tool of its

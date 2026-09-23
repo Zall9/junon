@@ -203,9 +203,11 @@ To cut a release, see [docs/RELEASING.md](docs/RELEASING.md).
 This repository builds JUNON, and the fastest way to find its defects is to work through it. When an
 IDE is connected, prefer the `ide_*` tools over `read`, `grep` and `glob`.
 
-They are served by the MCP named **`serena`**, which is started as `junon start-mcp-server` — plain
-`serena` publishes none of them. `ide_status` says whether an IDE is connected and what it has open;
-call it first, because every other `ide_*` tool refuses without one.
+They are served by the MCP named **`serena`**, which is started as `junon attach` — plain `serena`
+publishes none of them. How a host names them differs: `mcp__serena__ide_status` in Claude Code,
+`serena_ide_status` in opencode 1, `await tools.serena.ide_status()` inside `execute` in opencode 2
+([docs/OPENCODE.md](docs/OPENCODE.md)). `ide_status` says whether an IDE is connected and what it has
+open; call it first, because every other `ide_*` tool refuses without one.
 
 | Instead of                         | Use                                                                               |
 | ---------------------------------- | --------------------------------------------------------------------------------- |

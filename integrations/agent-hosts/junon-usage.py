@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""How much your agents actually use JUNON/Serena, per host and per agent.
+"""How much your agents actually use JUNON/Serena, per host and per agent — and what the gate refused.
 
 Run it before and after changing anything. The reason this script exists is that two rounds of prompt
 edits were made on the strength of an impression, and the measurement afterwards showed one agent had
@@ -10,6 +10,13 @@ gone from 10.8% symbolic calls to zero — the opposite of the intent, invisible
 
 Reads two histories, both local: opencode's SQLite database and Claude Code's JSONL transcripts.
 Nothing is sent anywhere.
+
+**Both opencodes.** opencode 1 keeps its sessions in the `message` and `part` tables, and names an MCP
+call after its tool: `serena_find_symbol`. opencode 2 keeps them in `session_message`, and has no MCP
+tools at all — a model reaches them through `execute`, as code: `await tools.serena.find_symbol(...)`.
+Until 0.3.10 this read only opencode 1's tables and counted by name, so on a machine that had moved to
+opencode 2 it reported nothing about the sessions actually being run. Measured, not supposed: see
+docs/OPENCODE.md in the IDE Bridge repository.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ import collections
 import glob
 import json
 import os
+import re
 import sqlite3
 import time
 
@@ -27,13 +35,24 @@ FILE_TOOLS = {
     "Read", "Grep", "Glob", "LS", "Edit", "Write", "NotebookEdit",
 }
 
+#: `tools.serena.x` or `tools["serena"].x` inside an opencode 2 `execute`.
+SERENA_IN_CODE = re.compile(r"\btools\s*(?:\.\s*serena\b|\[\s*[\"']serena[\"']\s*\])")
+
+#: What the file-tool gate's refusals say, in every form it has had.
+REFUSED = "was not run"
+
+#: The keys a counter uses beside tool names.
+EXECUTE_SERENA = "execute → tools.serena"
+REFUSALS = "(refused by the gate)"
+
 
 def symbolic(name: str) -> bool:
     """A call answered by an index or an IDE rather than by re-reading the disk."""
-    return name.startswith("serena_") or "ide_" in name or "mcp__serena__" in name
+    return name == EXECUTE_SERENA or name.startswith("serena_") or "ide_" in name or "mcp__serena__" in name
 
 
 def summarise(label: str, counter: collections.Counter) -> None:
+    refused = counter.pop(REFUSALS, 0)
     total = sum(counter.values())
     if not total:
         print(f"  {label:24} —")
@@ -42,43 +61,86 @@ def summarise(label: str, counter: collections.Counter) -> None:
     files = sum(count for name, count in counter.items() if name in FILE_TOOLS)
     print(
         f"  {label:24} {total:6} calls   junon {junon:5} ({junon / total:5.1%})"
-        f"   file {files:5} ({files / total:5.1%})"
+        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}"
     )
 
 
-def opencode(since_ms: float) -> None:
-    path = os.path.expanduser("~/.local/share/opencode/opencode.db")
+def tool_key(name: str, arguments: object) -> str:
+    """The counter key for one call: opencode 2's `execute` is split by whether it calls serena."""
+    if name == "execute" and SERENA_IN_CODE.search(json.dumps(arguments)):
+        return EXECUTE_SERENA
+    return name
+
+
+def was_refused(state: object) -> bool:
+    return REFUSED in json.dumps(state) if state else False
+
+
+def opencode_1(connection: sqlite3.Connection, since_ms: float) -> dict[str, collections.Counter]:
+    """`message` + `part`: one row per message, one per part; a tool part names its `tool`."""
+    per_agent: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    try:
+        agent_of: dict[str, str] = {}
+        for message_id, data in connection.execute("select id, data from message where time_created > ?", (since_ms,)):
+            try:
+                parsed = json.loads(data)
+            except ValueError:
+                continue
+            if parsed.get("role") == "assistant":
+                agent_of[message_id] = parsed.get("agent") or parsed.get("mode") or "?"
+        for message_id, data in connection.execute("select message_id, data from part where time_created > ?", (since_ms,)):
+            try:
+                parsed = json.loads(data)
+            except ValueError:
+                continue
+            if parsed.get("type") != "tool":
+                continue
+            state = parsed.get("state") or {}
+            counter = per_agent[agent_of.get(message_id, "?")]
+            counter[tool_key(parsed.get("tool") or "?", state.get("input"))] += 1
+            if was_refused(state.get("error") or state.get("output")):
+                counter[REFUSALS] += 1
+    except sqlite3.OperationalError:
+        pass  # a database that never held opencode 1 sessions
+    return per_agent
+
+
+def opencode_2(connection: sqlite3.Connection, since_ms: float) -> dict[str, collections.Counter]:
+    """`session_message`: one row per message; its `content` holds the tool parts."""
+    per_agent: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    try:
+        rows = connection.execute(
+            "select data from session_message where type = 'assistant' and time_created > ?", (since_ms,)
+        )
+        for (data,) in rows:
+            try:
+                parsed = json.loads(data)
+            except ValueError:
+                continue
+            counter = per_agent[parsed.get("agent") or "?"]
+            for part in parsed.get("content") or []:
+                if not isinstance(part, dict) or part.get("type") != "tool":
+                    continue
+                state = part.get("state") or {}
+                counter[tool_key(part.get("name") or "?", state.get("input"))] += 1
+                if was_refused(state.get("error")):
+                    counter[REFUSALS] += 1
+    except sqlite3.OperationalError:
+        pass  # a database from before opencode 2
+    return per_agent
+
+
+def opencode(since_ms: float, path: str) -> None:
     if not os.path.exists(path):
         print("\nopencode: no database")
         return
     connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-
-    agent_of: dict[str, str] = {}
-    for message_id, data in connection.execute(
-        "select id, data from message where time_created > ?", (since_ms,)
-    ):
-        try:
-            parsed = json.loads(data)
-        except ValueError:
-            continue
-        if parsed.get("role") == "assistant":
-            agent_of[message_id] = parsed.get("agent") or parsed.get("mode") or "?"
-
-    per_agent: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
-    for message_id, data in connection.execute(
-        "select message_id, data from part where time_created > ?", (since_ms,)
-    ):
-        try:
-            parsed = json.loads(data)
-        except ValueError:
-            continue
-        if parsed.get("type") != "tool":
-            continue
-        per_agent[agent_of.get(message_id, "?")][parsed.get("tool") or "?"] += 1
-
-    print("\nopencode, per agent:")
-    for agent, counter in sorted(per_agent.items(), key=lambda item: -sum(item[1].values()))[:12]:
-        summarise(agent, counter)
+    for label, per_agent in (("opencode 2", opencode_2(connection, since_ms)), ("opencode 1", opencode_1(connection, since_ms))):
+        print(f"\n{label}, per agent:")
+        if not per_agent:
+            print("  no sessions in this period")
+        for agent, counter in sorted(per_agent.items(), key=lambda item: -sum(item[1].values()))[:12]:
+            summarise(agent, counter)
 
 
 def claude_code(since: float) -> None:
@@ -108,13 +170,17 @@ def claude_code(since: float) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--days", type=float, default=14)
-    days = parser.parse_args().days
-    since = time.time() - days * 86_400
-    print(f"Tool use over the last {days:g} days")
-    claude_code(since)
-    opencode(since * 1000)
+    parser.add_argument("--db", default=os.path.expanduser("~/.local/share/opencode/opencode.db"),
+                        help="opencode's database (default: the one opencode 1 and 2 both use)")
+    parser.add_argument("--no-claude-code", action="store_true", help="skip Claude Code's transcripts")
+    options = parser.parse_args()
+    since = time.time() - options.days * 86_400
+    print(f"Tool use over the last {options.days:g} days")
+    if not options.no_claude_code:
+        claude_code(since)
+    opencode(since * 1000, options.db)
 
 
 if __name__ == "__main__":
