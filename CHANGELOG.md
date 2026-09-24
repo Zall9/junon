@@ -15,6 +15,37 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.12
+
+- **A large source file is never read whole.** A `read` with no range of a source file of 300 lines or
+  more, inside the session's project, used to be refused once and then let through; so was `cat` of
+  it. Measured over the 21 hours after 0.3.10: after a refusal agents went to `sed`, `cat` and other
+  file tools 67 times, to serena 28, and simply repeated the call 18 times. It is now refused **every
+  time**, by `read`, `cat`, `bat`, `less`, `more` or `nl`, and that rule does not give up on a session.
+  The way out is a range — `offset`/`limit`, `sed -n`, `head` — which every agent has, so nothing
+  becomes unreachable.
+- **Under opencode 2 that read is answered, not refused.** The gate turns it into an `execute` that
+  asks JUNON for the file's outline — the IDE's, with the first and last line of every declaration,
+  else serena's language server's — and the model gets that back as the result of its `read`, ready to
+  read the one range it needs. When no outline can be made, the refusal comes back instead, saying
+  why. opencode 1 and Claude Code cannot change which tool a hook lets run, so there the read is
+  refused, with the same advice.
+- **The gate no longer gives up on the agents it was written for.** After three ignored refusals it
+  went quiet for a session that had never used serena — meant for agents without serena, it had
+  switched itself off for 8 of the 10 sessions that never used serena, all of them agents that have it.
+  The guesses still give up; the large-file rule does not.
+- **Fewer refusals with nothing behind them.** A file outside the session's project is never touched —
+  JUNON cannot answer about it. `grep -E "a|b"` is a regex, not `grep a`: separators inside quotes no
+  longer split a command. A `grep` fed by a pipe filters output, not files, and `cat x | wc -l` prints
+  nothing whole; both pass.
+- **The Claude Code gate** has the same rules, advises `relative_path` with a project-relative path —
+  it gave `ide_read_document` a `path=` argument it does not have — and has tests of its own, which it
+  never had.
+- **`junon-usage.py`** counts outlines in their own column: they are recorded as the `read` the model
+  made, and are neither a file entering the context nor the agent choosing serena.
+- **What you have to do about it:** the usual update, then restart opencode and Claude Code — both read
+  the gate once, at start-up.
+
 ## 0.3.11
 
 - **The gate follows JUNON, however JUNON was updated.** Until now only `update-all.sh` and the
