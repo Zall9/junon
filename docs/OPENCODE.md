@@ -28,6 +28,8 @@ to when the answer depends on which opencode is running.
 | Plugin entry point | `default.server` — or exported functions if there is no default | `default.setup` |
 | Tool hook | `"tool.execute.before"(input, output)` | `ctx.tool.hook("execute.before", event)` |
 | The hook knows which agent asks | no | yes, `event.agent` |
+| A hook can change which tool runs | no | yes — `event.tool` and `event.input` |
+| `edit` needs a prior `read` of the file | a ranged `read` is enough | no |
 
 ## MCP tools are not tools in opencode 2
 
@@ -41,9 +43,15 @@ gets one meta-tool, `execute`, runs code in it, and reaches MCP tools as `tools.
 `search`:
 
 ```js
-await search({ query: "serena" })
+search({ query: "serena" })
 return await tools.serena.find_symbol({ name_path_pattern: "UploadService/startWorkflow", include_body: true })
 ```
+
+`search` is synchronous — opencode 2's own instructions to the model say to call it without `await`
+(an `await` on it does no harm). The catalog `execute` is given is **fixed for the turn**: measured,
+serena can be missing from a session's first turn while `ctx.mcp.list()` already reports it
+`connected`, and present from the next. A server missing from the catalog still appears as
+`tools.serena`; calling through it throws `Unknown tool 'serena.…'`. The sandbox has no `setTimeout`.
 
 That is what the user's own opencode 2 sessions do, read back from `opencode.db` — including
 `tools.serena.ide_status()` and `tools.serena.ide_symbols_overview(...)`.
@@ -124,7 +132,13 @@ export default {
 - Refuse a call by throwing from the hook, in both hosts.
 - opencode 2 also lets a hook **rewrite** a call: `event.tool` and `event.input` are mutable, and what
   `execute.after` reports is what ran (proved: `read` rewritten into `glob`, and into `execute`).
-  `ctx.tool.transform` edits the tool list the model is offered.
+  The model gets the new call's output as the answer to the call it made, and **the database records
+  the call it made** — a `read`, with its original input — holding the new call's output; the inner
+  calls of a rewritten `execute` are in the part's `metadata.toolCalls`. `ctx.tool.transform` edits
+  the tool list the model is offered.
+- opencode 1 lets a hook change a call's arguments (`output.args`), not which tool runs.
+- A plugin's `ctx.location.directory` is the session's project directory: opencode 2 sets a plugin up
+  per location.
 
 `integrations/agent-hosts/opencode/junon-first.ts` is the working example, and its tests go through
 each host's entry point.
@@ -159,3 +173,4 @@ real service — `opencode.db` records every `execute` and its code — and ever
 | --- | --- |
 | 0.3.9 | `prompts/list` answered from the recorded handshake; the relay stays up outside a project |
 | 0.3.10 | the file-tool gate advises in each host's terms, loads under both, and every update installs it |
+| 0.3.12 | a whole read of a large source file is never let through; opencode 2 answers it with the file's outline, by rewriting the `read` into an `execute` |

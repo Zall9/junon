@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sends Read and Grep to JUNON/Serena once per target, then gets out of the way.
+"""Sends Read and Grep to JUNON/Serena — once for a guess, always for a whole large source file.
 
 Measured, not assumed. Claude Code's own history over the last fortnight: 8 398 tool calls, of which
 305 (3.6%) went to serena and 5 041 (60%) to the file tools. opencode's database says the same thing
@@ -8,11 +8,19 @@ on the symbolic tools, and **none** of them was a serena call.
 
 So this is not written in a prompt. A prompt is advice; this is the tool call not happening.
 
-**It refuses once per distinct target, then allows it.** `~/.claude/hooks/cbm-code-discovery-gate`
-already blocks the first file-tool call of a session for codebase-memory; this is narrower on
-purpose — it fires only where the symbolic route genuinely answers better, and it names the call that
-does it. Repeating the same call runs it, so nothing is ever unreachable: a log file, a real text
-search, a file outside any project all pass on the second attempt, and most pass on the first.
+**A guess is refused once per target, then allowed.** A bare-identifier Grep, a short file, one file
+too many: repeating the same call runs it, so a log file, a real text search and a config all pass on
+the second attempt, and most pass on the first. `~/.claude/hooks/cbm-code-discovery-gate` already
+blocks the first file-tool call of a session for codebase-memory; this is narrower on purpose.
+
+**A whole read of a large source file inside the project is never allowed** — not on the second try,
+not through `cat`. Measured on 2026-09-24 in opencode, which runs the same rules: retrying was the
+cheapest way around the gate, and after a refusal agents reached for `sed`, `cat` and the next file
+more than twice as often as for serena. The way out is `offset`/`limit`, which every agent has, so
+nothing becomes unreachable. Claude Code cannot change which tool a hook lets run, so where opencode 2
+answers that read with the file's outline, this refuses it and says how to read a range.
+
+Only inside the session's project: JUNON has nothing to say about a file outside it.
 
 Fails open. Every unexpected condition ends in exit 0, because a hook that blocks the agent when its
 own logic breaks is worse than no hook.
@@ -37,7 +45,8 @@ CODE = re.compile(
 #: A bare name — what someone types looking for a definition, not for text.
 IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]{2,}$")
 
-#: Under this, the whole file is the cheaper answer and a nudge would be noise.
+#: Under this, the whole file is the cheaper answer and a nudge would be noise. At or over it, a
+#: whole read is never let through.
 WHOLE_FILE_IS_FINE = 300
 
 #: Whole-file reads of code allowed per session before the next one is refused.
@@ -53,22 +62,26 @@ WHOLE_FILE_BUDGET = 5
 #: someone who has not.
 WHOLE_FILE_BUDGET_UNPROVEN = 3
 
-MARKERS = Path("/tmp")
+#: Where the per-session memory lives: each hook call is its own process. Overridable so a test
+#: never shares state with the session running it.
+MARKERS = Path(os.environ.get("JUNON_GATE_MARKERS") or "/tmp")
 
 #: Commands that answer a question the index answers better. Matched on the first word of each
 #: `&&`/`;`/`|` segment — not a shell parser, and not trying to be. It catches
 #: `cd /somewhere && grep -rn thing .`, which is the shape an agent used to walk around this gate on
-#: the first day it ran; it misses quoting, subshells and aliases, deliberately, because a gate that
-#: tries to understand shell is a gate that breaks builds at night.
+#: the first day it ran; it misses subshells and aliases, deliberately, because a gate that tries to
+#: understand shell is a gate that breaks builds at night.
 SEARCH_COMMANDS = {"grep", "rg", "ag", "ack"}
-READ_COMMANDS = {"cat", "bat"}
 
-#: Refusals a session may ignore before the gate stops spending round-trips on it.
+#: Commands that print a whole file. `sed -n`, `head` and `tail` print a range and are not here: a
+#: range is what the gate asks for.
+READ_COMMANDS = {"cat", "bat", "less", "more", "nl"}
+
+#: Refusals a session may ignore before the gate stops spending round-trips on its guesses.
 #:
 #: Some agents have no serena at all — three of the first five refusals went to one of them, naming a
 #: tool it could not call. Which agent is asking is not in the hook's input, but what the session has
-#: done is: a session that has never used a symbolic tool and has now ignored two refusals is one the
-#: gate cannot help.
+#: done is. The large-file rule does not give up: its way out is a range, not serena.
 GIVE_UP_AFTER = 3
 
 
@@ -167,6 +180,26 @@ def worth_nudging(session: str) -> bool:
     return uses_symbolic_tools(session) or unheeded_count(session) < GIVE_UP_AFTER
 
 
+def masked(command: str) -> str:
+    """The command with `|`, `;` and `&` inside quotes masked.
+
+    So `grep -E "tool|error" x.log` stays one search for a regex — split naively, it read as
+    `grep "tool`, a bare identifier, and was refused.
+    """
+    quote = ""
+    out = []
+    for char in command:
+        if quote:
+            if char == quote:
+                quote = ""
+            out.append("\x01" if char in "|;&" else char)
+        else:
+            if char in "'\"":
+                quote = char
+            out.append(char)
+    return "".join(out)
+
+
 def first_words(command: str) -> list[str]:
     """The first word of each `&&`, `;` or `|` separated segment."""
     words = []
@@ -181,16 +214,76 @@ def first_words(command: str) -> list[str]:
 NOT_SOURCE = re.compile(r"\.(log|ya?ml|json|toml|ini|conf|cfg|lock|txt|csv|md|env)$", re.IGNORECASE)
 
 
-def segment_for(command: str, commands: set[str]) -> str:
-    """The `&&`-separated segment whose first word is one of `commands`."""
-    for segment in re.split(r"&&|\|\||;|\|", command):
-        parts = segment.strip().split()
-        if parts and parts[0] in commands:
-            return segment.strip()
+def absolute(path: str, root: str) -> str:
+    """Where a path argument points, resolved against the session's directory when relative."""
+    return path if os.path.isabs(path) or not root else os.path.join(root, path)
+
+
+def within_project(path: str, root: str) -> str | None:
+    """The path relative to the project, or None when it lies outside — where JUNON has nothing to
+    say, so neither has the gate. An unknown project counts as containing everything.
+
+    Compared as written and then resolved: a path that does not exist has no real form, and
+    comparing it with the project's real one would put every such path outside.
+    """
+    if not root:
+        return path
+    for base, target in ((root, path), (os.path.realpath(root), os.path.realpath(path))):
+        inside = os.path.relpath(target, base)
+        if inside == ".":
+            return "."
+        if not inside.startswith("..") and not os.path.isabs(inside):
+            return inside
+    return None
+
+
+def line_count(path: str) -> int:
+    try:
+        with open(path, "rb") as handle:
+            return sum(1 for _ in handle)
+    except OSError:
+        return 0
+
+
+def segment_for(command: str, commands: set[str], unpiped: bool) -> str:
+    """The first stage of a statement whose first word is one of `commands`.
+
+    Only a first stage: a grep fed by a pipe filters output, not files. And a whole-file reader only
+    when nothing follows it — `cat Big.php | wc -l` prints nothing whole.
+    """
+    for statement in re.split(r"&&|\|\||;", command):
+        stages = statement.split("|")
+        parts = stages[0].strip().split()
+        if not parts or parts[0] not in commands:
+            continue
+        if unpiped and len(stages) > 1:
+            continue
+        return stages[0].strip()
     return ""
 
 
-def asks_about_symbols(segment: str, searching: bool) -> bool:
+def large_whole_file_read(command: str, root: str) -> tuple[str, int] | None:
+    """The first large source file inside the project a command prints whole: `cat Big.php`."""
+    for statement in re.split(r"&&|\|\||;", command):
+        if "|" in statement:
+            continue
+        tokens = statement.strip().split()
+        if not tokens or tokens[0] not in READ_COMMANDS:
+            continue
+        for token in tokens[1:]:
+            bare = token.strip("\"'")
+            if bare.startswith("-") or not CODE.search(bare):
+                continue
+            path = absolute(bare, root)
+            if within_project(path, root) is None:
+                continue
+            lines = line_count(path)
+            if lines >= WHOLE_FILE_IS_FINE:
+                return bare, lines
+    return None
+
+
+def asks_about_symbols(segment: str, searching: bool, root: str) -> bool:
     """Whether one shell segment asks something the index answers.
 
     Scoped to the segment, because judging the whole line let `cd /tmp && grep -rn thing .` through —
@@ -200,11 +293,15 @@ def asks_about_symbols(segment: str, searching: bool) -> bool:
     tokens = segment.split()
     rest = [token for token in tokens[1:] if not token.startswith("-")]
     bare = [token.strip("\"'") for token in rest]
+
+    def inside(token: str) -> bool:
+        return within_project(absolute(token, root), root) is not None
+
     if searching:
         if not bare or not IDENTIFIER.match(bare[0]):
             return False
-        return not any(NOT_SOURCE.search(target) for target in bare[1:])
-    return any(CODE.search(token) for token in bare)
+        return not any(NOT_SOURCE.search(target) or not inside(target) for target in bare[1:])
+    return any(CODE.search(token) and inside(token) for token in bare)
 
 
 def refuse(reason: str) -> int:
@@ -221,6 +318,7 @@ def main() -> int:
     tool = str(event.get("tool_name") or "")
     arguments = event.get("tool_input") or {}
     session = str(event.get("session_id") or os.getppid())
+    root = str(event.get("cwd") or "")
     prune()
 
     # Never refused — observed. This is the only way a per-call process can learn that the session
@@ -229,11 +327,23 @@ def main() -> int:
         note_symbolic_call(session)
         return 0
 
-    if not worth_nudging(session):
-        return 0
-
     if tool == "Bash":
-        command = str(arguments.get("command") or "")
+        command = masked(str(arguments.get("command") or ""))
+        # Ahead of the give-up: this is not a guess about intent, and a range is always there instead.
+        large = large_whole_file_read(command, root)
+        if large:
+            unheeded_count(session, increment=True)
+            name, lines = large
+            return refuse(
+                f"That command was not run, and will not be on another try: it prints {name} "
+                f"({lines} lines) whole, and a source file this size is not read whole by any route.\n"
+                f'  mcp__serena__ide_symbols_overview(relative_path="…")   its declarations, with their lines\n'
+                f"  mcp__serena__find_symbol(name_path_pattern=..., include_body=True)   one declaration\n"
+                f"For the text itself, print a range — `sed -n '120,180p' {name}` — or Read it with "
+                f"offset and limit. A range is never refused."
+            )
+        if not worth_nudging(session):
+            return 0
         words = first_words(command)
         searching = next((word for word in words if word in SEARCH_COMMANDS), "")
         reading = next((word for word in words if word in READ_COMMANDS), "")
@@ -241,8 +351,12 @@ def main() -> int:
             return 0
         # What it is aimed at, not just what it is: judging the verb alone refused
         # `cat .serena/project.yml`, a config file this rule's own message promises to let through.
-        segment = segment_for(command, SEARCH_COMMANDS if searching else READ_COMMANDS)
-        if not segment or not asks_about_symbols(segment, bool(searching)):
+        segment = (
+            segment_for(command, SEARCH_COMMANDS, unpiped=False)
+            if searching
+            else segment_for(command, READ_COMMANDS, unpiped=True)
+        )
+        if not segment or not asks_about_symbols(segment, bool(searching), root):
             return 0
         if already_nudged(session, "bash", command[:120]):
             return 0
@@ -259,10 +373,15 @@ def main() -> int:
         )
 
     if tool == "Grep":
+        if not worth_nudging(session):
+            return 0
         pattern = str(arguments.get("pattern") or "")
         # A regex is a text search and this has no opinion about it. A bare identifier is a question
         # about a symbol, which grep answers with every comment and string that contains the name.
         if not IDENTIFIER.match(pattern):
+            return 0
+        where = str(arguments.get("path") or "")
+        if where and within_project(absolute(where, root), root) is None:
             return 0
         if already_nudged(session, "grep", pattern):
             return 0
@@ -285,49 +404,50 @@ def main() -> int:
     # A range means the caller already knows what they want.
     if arguments.get("offset") is not None or arguments.get("limit") is not None:
         return 0
+    path = absolute(path, root)
+    relative = within_project(path, root)
+    if relative is None:
+        return 0
+    lines = line_count(path)
 
-    try:
-        with open(path, "rb") as handle:
-            lines = sum(1 for _ in handle)
-    except OSError:
+    # Not a guess, so ahead of the give-up and never let through on a second try: the way out is a
+    # range, which every agent has.
+    if lines >= WHOLE_FILE_IS_FINE:
+        unheeded_count(session, increment=True)
+        return refuse(
+            f"Read of {path} ({lines} lines) was not run, and will not be on another try — the whole "
+            f"file would enter the context to answer a question about part of it:\n"
+            f'  mcp__serena__ide_symbols_overview(relative_path="{relative}")   its declarations, with their lines\n'
+            f'  mcp__serena__get_symbols_overview(relative_path="{relative}", depth=1)   the same from serena\'s language server\n'
+            f'  mcp__serena__find_symbol(name_path_pattern=..., relative_path="{relative}", include_body=True)   one declaration\n'
+            f"For the text itself, pass offset and limit — a range is never refused."
+        )
+
+    if not worth_nudging(session):
         return 0
     used = spend(session)
-    over_budget = used > budget_for(session)
-    if lines < WHOLE_FILE_IS_FINE and not over_budget:
+    if used <= budget_for(session):
         if not small_file_nudge_owed(session):
             return 0
         unheeded_count(session, increment=True)
         return refuse(
             f"Read of {path} was not run — this session has not asked the index anything yet, and a "
             f"short file is still a file read whole:\n"
-            f"  mcp__serena__ide_read_symbol(...)    one declaration, from the running IDE\n"
-            f"  mcp__serena__find_symbol(name_path_pattern=..., include_body=True)\n"
+            f'  mcp__serena__ide_read_symbol(name=..., relative_path="{relative}")    one declaration, from the running IDE\n'
+            f'  mcp__serena__find_symbol(name_path_pattern=..., relative_path="{relative}", include_body=True)\n'
             f"Said once per session. Run the same Read again and it will go through, as will every "
             f"short file after it."
         )
     if already_nudged(session, "read", path):
         return 0
     unheeded_count(session, increment=True)
-
-    if over_budget and lines < WHOLE_FILE_IS_FINE:
-        return refuse(
-            f"Read of {path} was not run — that is {used} whole files opened in this session. Reading "
-            f"them one after another to find something is the search the index does in one call:\n"
-            f"  mcp__serena__find_symbol(name_path_pattern=...)        where it is defined\n"
-            f"  mcp__serena__find_referencing_symbols(...)             who uses it\n"
-            f"  mcp__serena__search_for_pattern(substring_pattern=...) text, but scoped\n"
-            f"Run the same Read again and it will go through."
-        )
-
     return refuse(
-        f"Read of {path} ({lines} lines) was not run — the whole file would enter the context to "
-        f"answer a question about part of it:\n"
-        f'  mcp__serena__get_symbols_overview(relative_path="{path}")            what is in it\n'
-        f"  mcp__serena__find_symbol(name_path_pattern=..., include_body=True)   one declaration\n"
-        f'  mcp__serena__ide_read_document(path="{path}")                        the file as the editor\n'
-        f"      holds it, unsaved edits included — which the disk does not have\n"
-        f"If you do need the raw file, pass offset/limit, or run the same Read again and it will go "
-        f"through."
+        f"Read of {path} was not run — that is {used} whole files opened in this session. Reading "
+        f"them one after another to find something is the search the index does in one call:\n"
+        f"  mcp__serena__find_symbol(name_path_pattern=...)        where it is defined\n"
+        f"  mcp__serena__find_referencing_symbols(...)             who uses it\n"
+        f"  mcp__serena__search_for_pattern(substring_pattern=...) text, but scoped\n"
+        f"Run the same Read again and it will go through."
     )
 
 

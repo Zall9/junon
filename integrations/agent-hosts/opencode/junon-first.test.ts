@@ -56,6 +56,21 @@ const asV1 = (tool: string, session: string, args: Record<string, unknown>, call
 const asV2 = (tool: string, session: string, input: Record<string, unknown>, id = "c") =>
   v2({ tool, sessionID: session, input, id } as never);
 
+/** The call opencode 2 would run after the hook: the event, as the hook left it. */
+async function afterV2(tool: string, session: string, input: Record<string, unknown>) {
+  const event = { tool, sessionID: session, input, id: "c" };
+  await v2(event as never);
+  return event as { tool: string; input: Record<string, unknown> };
+}
+
+/** Runs an outline program the way `execute` does: an async body with `tools` and `search` in scope. */
+async function runOutline(code: string, tools: Record<string, unknown>): Promise<string> {
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+    ...args: string[]
+  ) => (tools: unknown, search: unknown) => Promise<string>;
+  return new AsyncFunction("tools", "search", code)(tools, async () => ({ items: [] }));
+}
+
 describe("one file, loadable by both hosts", () => {
   it("one default export: `server` for opencode 1, `setup` for opencode 2, and nothing else", () => {
     // opencode 1.18 ignores named exports once a default exists, so a named plugin here would be
@@ -78,22 +93,23 @@ describe("advice is written in the asking host's dialect", () => {
     const refusal = await asV2("grep", "v2-grep", { pattern: "compose" }).catch((error: Error) => error.message);
 
     expect(refusal).toMatch(/execute → await tools\.serena\.find_symbol\(\{ name_path_pattern: "compose" \}\)/);
-    expect(refusal).toMatch(/await search\(\{ query: "serena" \}\)/);
+    // opencode 2's own instructions: `search` is synchronous, "call it without await".
+    expect(refusal).toMatch(/`search\(\{ query: "serena" \}\)` finds it/);
     expect(refusal).not.toMatch(/serena_find_symbol/);
   });
 
-  it("the argument an IDE read takes is relative_path, relative to the project", async () => {
-    const refusal = await asV2("read", "v2-large", { path: largeFile }).catch((error: Error) => error.message);
+  it("the argument an IDE tool takes is relative_path, relative to the project", async () => {
+    const refusal = await asV1("read", "v1-large", { filePath: largeFile }).catch((error: Error) => error.message);
 
-    expect(refusal).toMatch(/tools\.serena\.ide_read_document\(\{ relative_path: "src-large\.ts" \}\)/);
-    expect(refusal).not.toMatch(/ide_read_document\(\{ path:/);
+    expect(refusal).toMatch(/serena_ide_symbols_overview\(\{ relative_path: "src-large\.ts" \}\)/);
+    expect(refusal).not.toMatch(/\{ path:/);
   });
 });
 
 describe("each host's own argument and tool names", () => {
   it("opencode 1 reads with filePath, opencode 2 with path — both are gated", async () => {
     await expect(asV1("read", "v1-path", { filePath: largeFile })).rejects.toThrow(/was not run/);
-    await expect(asV2("read", "v2-path", { path: largeFile })).rejects.toThrow(/was not run/);
+    expect((await afterV2("read", "v2-path", { path: largeFile })).tool).toBe("execute");
   });
 
   it("the shell is bash in opencode 1 and shell in opencode 2 — both are gated", async () => {
@@ -140,6 +156,159 @@ describe("a session that uses serena is recognised under both hosts", () => {
   it("opencode 1: a serena_ tool call counts, as it always did", async () => {
     await asV1("serena_find_symbol", "v1-proven", { name_path_pattern: "x" });
     await expect(asV1("read", "v1-proven", { filePath: smallFile })).resolves.toBeUndefined();
+  });
+});
+
+describe("a whole read of a large source file is never let through", () => {
+  // Measured 2026-09-24: repeating the call was the cheapest way around the gate, and eight of the
+  // ten sessions that never used serena were ones the gate had given up on.
+  it("opencode 1 refuses it on every try, and a range always passes", async () => {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await expect(asV1("read", "v1-strict", { filePath: largeFile })).rejects.toThrow(/will not be on another try/);
+    }
+    await expect(asV1("read", "v1-strict", { filePath: largeFile, offset: 1, limit: 80 })).resolves.toBeUndefined();
+  });
+
+  it("opencode 2 answers it with the outline on every try, and leaves a range alone", async () => {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const call = await afterV2("read", "v2-strict", { path: largeFile });
+      expect(call.tool).toBe("execute");
+      expect(String(call.input.code)).toContain('const relative = "src-large.ts"');
+    }
+    const ranged = await afterV2("read", "v2-strict", { path: largeFile, offset: 1, limit: 80 });
+    expect(ranged).toMatchObject({ tool: "read", input: { path: largeFile, offset: 1, limit: 80 } });
+  });
+
+  it("does not give up on a session that ignored the other nudges", async () => {
+    // Three ignored refusals switch the guesses off for a session that never used serena. The
+    // large-file rule is not a guess, and a range is always there to take instead.
+    for (const pattern of ["alphaThing", "betaThing", "gammaThing", "deltaThing"]) {
+      await asV1("grep", "v1-given-up", { pattern }).catch(() => undefined);
+    }
+    await expect(asV1("grep", "v1-given-up", { pattern: "epsilonThing" })).resolves.toBeUndefined();
+    await expect(asV1("read", "v1-given-up", { filePath: largeFile })).rejects.toThrow(/was not run/);
+    await expect(asV1("bash", "v1-given-up", { command: `cat ${largeFile}` })).rejects.toThrow(/was not run/);
+  });
+
+  it("leaves a file outside the project alone — JUNON has nothing to say about it", async () => {
+    const elsewhere = join(mkdtempSync(join(tmpdir(), "junon-gate-elsewhere-")), "outside.ts");
+    writeFileSync(elsewhere, "export const line = 1\n".repeat(400));
+
+    await expect(asV1("read", "v1-outside", { filePath: elsewhere })).resolves.toBeUndefined();
+    expect(await afterV2("read", "v2-outside", { path: elsewhere })).toMatchObject({ tool: "read" });
+    await expect(asV2("shell", "v2-outside", { command: `cat ${elsewhere}` })).resolves.toBeUndefined();
+  });
+
+  it("resolves a path relative to the project", async () => {
+    expect((await afterV2("read", "v2-relative", { path: "src-large.ts" })).tool).toBe("execute");
+  });
+});
+
+describe("the shell reads a whole file the same way", () => {
+  it("cat, nl and friends of a large file are refused on every try, under both hosts", async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(asV1("bash", "v1-cat", { command: `cat ${largeFile}` })).rejects.toThrow(/will not be on another try/);
+      await expect(asV2("shell", "v2-cat", { command: "cat src-large.ts" })).rejects.toThrow(/will not be on another try/);
+    }
+    await expect(asV2("shell", "v2-nl", { command: `cd /tmp && nl ${largeFile}` })).rejects.toThrow(/prints/);
+  });
+
+  it("a range or a pipeline is not a whole read", async () => {
+    await expect(asV2("shell", "v2-range", { command: `sed -n '1,80p' ${largeFile}` })).resolves.toBeUndefined();
+    await expect(asV2("shell", "v2-head", { command: `head -50 ${largeFile}` })).resolves.toBeUndefined();
+    await expect(asV2("shell", "v2-pipe", { command: `cat ${largeFile} | wc -l` })).resolves.toBeUndefined();
+  });
+
+  it("a grep fed by a pipe filters output, not source files", async () => {
+    await expect(asV2("shell", "v2-filter", { command: "git log --oneline | grep startWorkflow" })).resolves.toBeUndefined();
+    // Control: the same grep over the files is still a question about a symbol.
+    await expect(asV2("shell", "v2-filter", { command: "grep -rn startWorkflow src" })).rejects.toThrow(/was not run/);
+  });
+
+  it("a regex alternation inside quotes is one pattern, not a pipe", async () => {
+    await expect(asV2("shell", "v2-alternation", { command: 'grep -rnE "startWorkflow|compose" src' })).resolves.toBeUndefined();
+    await expect(asV2("shell", "v2-alternation", { command: "grep -iE 'tool|error' server.log" })).resolves.toBeUndefined();
+  });
+
+  it("a grep aimed outside the project is left alone", async () => {
+    const elsewhere = mkdtempSync(join(tmpdir(), "junon-gate-grep-"));
+    await expect(asV2("grep", "v2-grep-outside", { pattern: "startWorkflow", path: elsewhere })).resolves.toBeUndefined();
+    await expect(asV2("grep", "v2-grep-inside", { pattern: "startWorkflow", path: project })).rejects.toThrow(/was not run/);
+  });
+});
+
+describe("the outline opencode 2 runs instead", () => {
+  const symbols = {
+    symbols: [
+      {
+        locator: { name: "Ledger", kind: "class" },
+        range: { start: { line: 0 }, end: { line: 304 } },
+        children: [{ locator: { name: "entry0", kind: "method" }, range: { start: { line: 2 }, end: { line: 5 } }, children: [] }],
+      },
+    ],
+  };
+  const program = async () => String((await afterV2("read", "v2-program", { path: largeFile })).input.code);
+
+  it("lists the IDE's declarations with their lines, one level deep", async () => {
+    const answer = await runOutline(await program(), {
+      serena: { ide_symbols_overview: async () => ({ result: JSON.stringify(symbols) }) },
+    });
+
+    expect(answer).toContain("answered with its outline by JUNON");
+    expect(answer).toContain("1-305  class Ledger");
+    expect(answer).toContain("  3-6  method entry0");
+  });
+
+  it("falls back to serena's language server when the IDE explains instead of answering", async () => {
+    const answer = await runOutline(await program(), {
+      serena: {
+        ide_symbols_overview: async () => ({ result: "No IDE has this project open." }),
+        get_symbols_overview: async () => ({ result: JSON.stringify({ Class: ["Ledger"] }) }),
+      },
+    });
+
+    expect(answer).toContain("From serena's language server");
+    expect(answer).toContain('{"Class":["Ledger"]}');
+  });
+
+  it("answers with the refusal, as the read's result, when serena is not configured", async () => {
+    const answer = await runOutline(await program(), { browser: {} });
+
+    expect(answer).toMatch(/was not run/);
+    expect(answer).toContain("serena is not in this turn's tool catalog");
+    expect(answer).not.toContain("answered with its outline");
+  });
+
+  it("does the same when serena is missing from the turn's catalog, which shows only when called", async () => {
+    // Measured in opencode 2's sandbox: a session's first turn can lack serena while it is connected,
+    // and `tools.serena` still exists — calling through it throws "Unknown tool".
+    const missing = new Proxy(
+      {},
+      {
+        get: (_target, name) => async () => {
+          throw new Error(`Unknown tool 'serena.${String(name)}'. Did you mean tools.browser.files.get?`);
+        },
+      },
+    );
+    const answer = await runOutline(await program(), { browser: {}, serena: missing });
+
+    expect(answer).toMatch(/was not run/);
+    expect(answer).toContain("serena is not in this turn's tool catalog");
+  });
+
+  it("says what each one answered when neither can outline it", async () => {
+    const answer = await runOutline(await program(), {
+      serena: {
+        ide_symbols_overview: async () => ({ result: "No IDE has this project open." }),
+        get_symbols_overview: async () => {
+          throw new Error("language server terminated");
+        },
+      },
+    });
+
+    expect(answer).toMatch(/was not run/);
+    expect(answer).toContain("the IDE: No IDE has this project open.");
+    expect(answer).toContain("serena: Error: language server terminated");
   });
 });
 

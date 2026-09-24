@@ -39,6 +39,10 @@ def build(path: Path) -> None:
         {"type": "tool", "name": "execute", "state": {"status": "completed", "input": {"code": 'return await tools.serena.find_symbol({ name_path_pattern: "x" })'}}},
         {"type": "tool", "name": "execute", "state": {"status": "completed", "input": {"code": 'return await tools["basic-memory-remote"].search_notes({})'}}},
         {"type": "tool", "name": "grep", "state": {"status": "error", "input": {"pattern": "compose"}, "error": {"type": "unknown", "message": 'grep "compose" was not run. Ask the index instead'}}},
+        # The gate answered a whole read with an outline: recorded as the `read` the model made.
+        {"type": "tool", "name": "read", "state": {"status": "completed", "input": {"path": "/c.ts"}, "content": [{"type": "text", "text": "read of /c.ts (812 lines) answered with its outline by JUNON, not with its text"}]}},
+        # ...and one it could not outline: the refusal came back as the read's result, not an error.
+        {"type": "tool", "name": "read", "state": {"status": "completed", "input": {"path": "/d.ts"}, "content": [{"type": "text", "text": "read of /d.ts (500 lines) was not run ...\n(No outline: serena is not in this turn's tool catalog)"}]}},
         {"type": "text", "text": "done"},
     ]
     db.execute("insert into session_message values ('sm1', 's2', 'assistant', 1, ?, ?, ?)", (NOW, NOW, json.dumps({"agent": "orchestrator", "content": content})))
@@ -80,9 +84,11 @@ class TestBothOpencodes:
 
         line = line_for(report(db), "opencode 2", "orchestrator")
 
-        assert count(line, "calls") == 3
+        assert count(line, "calls") == 5
         assert count(line, "junon") == 1, line    # the execute that calls tools.serena
-        assert count(line, "refused") == 1, line  # the gate's refusal, found in the error
+        assert count(line, "refused") == 2, line  # the grep, and the read no outline could answer
+        assert count(line, "outlined") == 1, line
+        assert count(line, "file") == 2, line     # an outlined read is not a file entering the context
 
     def test_opencode_1_sessions_are_still_read_as_before(self, tmp_path: Path) -> None:
         db = tmp_path / "opencode.db"

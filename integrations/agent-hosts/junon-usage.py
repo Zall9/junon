@@ -41,9 +41,16 @@ SERENA_IN_CODE = re.compile(r"\btools\s*(?:\.\s*serena\b|\[\s*[\"']serena[\"']\s
 #: What the file-tool gate's refusals say, in every form it has had.
 REFUSED = "was not run"
 
+#: What an opencode 2 `read` answered with an outline instead of the file says, and what one says when
+#: no outline could be made and the refusal came back as its result. The database records both as a
+#: `read` with its original input: only the output tells them apart from a read that ran.
+OUTLINED = "answered with its outline by JUNON"
+NO_OUTLINE = "(No outline:"
+
 #: The keys a counter uses beside tool names.
 EXECUTE_SERENA = "execute → tools.serena"
 REFUSALS = "(refused by the gate)"
+OUTLINES = "(read answered with an outline)"
 
 
 def symbolic(name: str) -> bool:
@@ -57,11 +64,14 @@ def summarise(label: str, counter: collections.Counter) -> None:
     if not total:
         print(f"  {label:24} —")
         return
+    # An outline is JUNON answering in the agent's place, so it is neither the agent choosing serena
+    # nor a file entering the context: its own column.
+    outlined = counter.get(OUTLINES, 0)
     junon = sum(count for name, count in counter.items() if symbolic(name))
     files = sum(count for name, count in counter.items() if name in FILE_TOOLS)
     print(
         f"  {label:24} {total:6} calls   junon {junon:5} ({junon / total:5.1%})"
-        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}"
+        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}   outlined {outlined:4}"
     )
 
 
@@ -122,8 +132,13 @@ def opencode_2(connection: sqlite3.Connection, since_ms: float) -> dict[str, col
                 if not isinstance(part, dict) or part.get("type") != "tool":
                     continue
                 state = part.get("state") or {}
-                counter[tool_key(part.get("name") or "?", state.get("input"))] += 1
-                if was_refused(state.get("error")):
+                name = part.get("name") or "?"
+                output = json.dumps(state.get("content") or "")
+                if name == "read" and OUTLINED in output:
+                    counter[OUTLINES] += 1
+                    continue
+                counter[tool_key(name, state.get("input"))] += 1
+                if was_refused(state.get("error")) or (name == "read" and NO_OUTLINE in output):
                     counter[REFUSALS] += 1
     except sqlite3.OperationalError:
         pass  # a database from before opencode 2

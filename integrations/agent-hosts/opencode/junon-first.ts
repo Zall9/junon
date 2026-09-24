@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, realpathSync } from "node:fs"
+import { isAbsolute, relative as relativeTo, resolve } from "node:path"
 
 /**
- * Sends the file tools to JUNON/Serena once, then gets out of the way.
+ * Sends the file tools to JUNON/Serena — once for a guess, always for a whole large file.
  *
  * Prose did not work. Measured from opencode's own database on 2026-08-20, over the two days after
  * the subagent prompts were rewritten to insist on the symbolic tools:
@@ -14,11 +15,15 @@ import { readFileSync } from "node:fs"
  * prefer them. A rule that is read and not followed is not a rule, so this one is not written in a
  * prompt.
  *
- * **It refuses once per distinct call, then allows it.** Not a ban: `read` and `grep` are the right
- * answer often enough — a file outside any project, a genuine text search, a log — and an agent that
- * cannot fall back is an agent that loops. The first attempt comes back with the symbolic call that
- * answers the same question better; repeating the call runs it. The cost of being wrong here is one
- * round-trip, and the cost of being right is a whole file that never enters the context.
+ * **A guess is refused once, then allowed.** A bare-identifier `grep`, a short file, one file too many:
+ * `read` and `grep` are the right answer often enough — a genuine text search, a log — and an agent
+ * that cannot fall back is an agent that loops. Repeating the call runs it.
+ *
+ * **A whole read of a large source file is never allowed** — measured, 2026-09-24: repeating the call
+ * was the cheapest way around the gate, and after a refusal agents went to `sed`, `cat` and the next
+ * file more than twice as often as to serena. The way out is a range, which every agent has, so nothing
+ * becomes unreachable. opencode 2 goes further and answers that read with the file's outline, from
+ * JUNON, instead of refusing it (see `outlineProgram`).
  *
  * Every agent that this touches — explorer, fixer, orchestrator, oracle — already has serena in its
  * `mcps` list, so nothing is being asked of them that they cannot do.
@@ -112,7 +117,12 @@ function worthNudging(session: string): boolean {
 
 /** Commands that answer a question the symbol index answers better. */
 const SEARCH_COMMANDS = new Set(["grep", "rg", "ag", "ack"])
-const READ_COMMANDS = new Set(["cat", "bat"])
+
+/**
+ * Commands that print a whole file. `sed -n`, `head` and `tail` print a range and are not here: a
+ * range is what the gate asks for.
+ */
+const READ_COMMANDS = new Set(["cat", "bat", "less", "more", "nl"])
 
 /**
  * The first word of each `&&`, `;` or `|` separated segment.
@@ -122,10 +132,30 @@ const READ_COMMANDS = new Set(["cat", "bat"])
  * around this gate on the first day it ran.
  */
 function firstWords(command: string): string[] {
+  command = masked(command)
   return command
     .split(/&&|\|\||;|\|/)
     .map((segment) => segment.trim().split(/\s+/)[0] ?? "")
     .filter(Boolean)
+}
+
+/**
+ * The command with `|`, `;` and `&` inside quotes masked, so `grep -E "tool|error" x.log` stays one
+ * search for a regex — split naively, it read as `grep "tool`, a bare identifier, and was refused.
+ */
+function masked(command: string): string {
+  let quote = ""
+  let out = ""
+  for (const char of command) {
+    if (quote) {
+      if (char === quote) quote = ""
+      out += "|;&".includes(char) ? "\u0001" : char
+    } else {
+      if (char === "'" || char === '"') quote = char
+      out += char
+    }
+  }
+  return out
 }
 
 function lineCount(path: string): number {
@@ -156,27 +186,36 @@ const NOT_SOURCE = /\.(log|ya?ml|json|toml|ini|conf|cfg|lock|txt|csv|md|env)$/i
  * pass. A missed nudge costs nothing anybody notices; a refusal with no business happening is how a
  * gate gets deleted.
  */
-function segmentAsksAboutSymbols(segment: string, searching: boolean): boolean {
+function segmentAsksAboutSymbols(segment: string, searching: boolean, directory: string | undefined): boolean {
   const tokens = segment.split(/\s+/).filter(Boolean)
   const rest = tokens.slice(1).filter((token) => !token.startsWith("-"))
   const bare = (token: string) => token.replace(/^["']|["']$/g, "")
+  const inside = (token: string) => withinProject(absolute(token, directory), directory) !== undefined
 
   if (searching) {
     const pattern = rest.length > 0 ? bare(rest[0]!) : ""
     if (!IDENTIFIER.test(pattern)) return false
     // Where it is being searched decides what kind of question it is.
     const targets = rest.slice(1).map(bare)
-    if (targets.some((target) => NOT_SOURCE.test(target))) return false
+    if (targets.some((target) => NOT_SOURCE.test(target) || !inside(target))) return false
     return true
   }
-  return rest.map(bare).some((token) => CODE.test(token))
+  return rest.map(bare).some((token) => CODE.test(token) && inside(token))
 }
 
-/** The segment whose first word is one of `commands`, if any. */
-function segmentFor(command: string, commands: Set<string>): string {
-  for (const segment of command.split(/&&|\|\||;|\|/)) {
-    const first = segment.trim().split(/\s+/)[0] ?? ""
-    if (commands.has(first)) return segment.trim()
+/**
+ * The first stage of a statement whose first word is one of `commands`, if any.
+ *
+ * Only a first stage: a `grep` fed by a pipe filters output, not files. And a whole-file reader only
+ * when nothing follows it — `cat Big.php | wc -l` prints nothing whole.
+ */
+function segmentFor(command: string, commands: Set<string>, unpiped: boolean): string {
+  for (const statement of command.split(/&&|\|\||;/)) {
+    const stages = statement.split("|")
+    const first = stages[0]!.trim()
+    if (!commands.has(first.split(/\s+/)[0] ?? "")) continue
+    if (unpiped && stages.length > 1) continue
+    return first
   }
   return ""
 }
@@ -202,7 +241,7 @@ function howToCall(host: Host): string {
   return host === 1
     ? ""
     : `In opencode 2 these run inside the \`execute\` tool; if \`tools.serena\` is not there yet, ` +
-        `\`await search({ query: "serena" })\` loads it.\n`
+        `\`search({ query: "serena" })\` finds it.\n`
 }
 
 /** `tools.serena.x` or `tools["serena"].x` — a symbolic call, as opencode 2 makes it. */
@@ -214,21 +253,75 @@ function isSymbolicCall(tool: string, args: Record<string, unknown>): boolean {
   return tool === "execute" && SERENA_IN_CODE.test(String(args.code ?? ""))
 }
 
-/**
- * A path as serena wants it: relative to the project when it lies inside it. The file tools pass
- * absolute paths, and `relative_path` is what every serena tool is declared with.
- */
-function projectRelative(path: string, directory: string | undefined): string {
-  if (!directory) return path
-  const root = directory.endsWith("/") ? directory : `${directory}/`
-  return path.startsWith(root) ? path.slice(root.length) : path
+/** The real path when it exists: `/tmp` and `/private/tmp` are one directory on macOS. */
+function real(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
+/** Where a file argument points, resolved against the session's directory when it is relative. */
+function absolute(path: string, directory: string | undefined): string {
+  return isAbsolute(path) || !directory ? path : resolve(directory, path)
 }
 
 /**
- * The decision, for either host: the sentence to refuse this call with, or nothing.
+ * A path as serena wants it — relative to the project — or `undefined` when the file lies outside
+ * the project, where JUNON has nothing to say and so neither has the gate. The file tools pass
+ * absolute paths, and `relative_path` is what every serena tool is declared with. An unknown project
+ * counts as containing everything, which is how the gate behaved before it asked.
+ */
+function withinProject(file: string, directory: string | undefined): string | undefined {
+  if (!directory) return file
+  // As written, then resolved: a path that does not exist has no real form, and comparing it with
+  // the project's real one would put every such path outside.
+  for (const [root, target] of [[directory, file], [real(directory), real(file)]] as const) {
+    const inside = relativeTo(root, target)
+    if (inside === "") return "."
+    if (!inside.startsWith("..") && !isAbsolute(inside)) return inside
+  }
+  return undefined
+}
+
+/**
+ * The first large source file a command prints whole, if any: `cat Big.php`, `nl src/x.ts`.
  *
- * Returned rather than thrown so both entry points share it unchanged; each throws it the way its
- * host expects a hook to refuse.
+ * A pipeline is left alone — `cat Big.php | grep x` is a search and `| head` a range — and so is a
+ * path this cannot resolve, such as one relative to a `cd` earlier in the line.
+ */
+function largeWholeFileRead(command: string, directory: string | undefined): { file: string; lines: number } | undefined {
+  for (const statement of command.split(/&&|\|\||;/)) {
+    if (statement.includes("|")) continue
+    const tokens = statement.trim().split(/\s+/)
+    if (!READ_COMMANDS.has(tokens[0] ?? "")) continue
+    for (const token of tokens.slice(1)) {
+      const bare = token.replace(/^["']|["']$/g, "")
+      if (bare.startsWith("-") || !CODE.test(bare)) continue
+      const file = absolute(bare, directory)
+      if (withinProject(file, directory) === undefined) continue
+      const lines = lineCount(file)
+      if (lines >= WHOLE_FILE_IS_FINE) return { file: bare, lines }
+    }
+  }
+  return undefined
+}
+
+/**
+ * What the gate decided about one call. Every host can refuse; opencode 2 can also answer a whole
+ * read of a large file with its outline, and does, keeping the refusal for when no outline comes.
+ */
+interface Decision {
+  readonly refusal: string
+  readonly outline?: { readonly path: string; readonly relative: string; readonly lines: number }
+}
+
+/**
+ * The decision, for either host: what to do instead of this call, or nothing.
+ *
+ * Returned rather than thrown so both entry points share it unchanged; each acts on it the way its
+ * host lets a hook act.
  */
 function gate(
   host: Host,
@@ -236,7 +329,7 @@ function gate(
   args: Record<string, unknown>,
   rawSession: unknown,
   directory?: string,
-): string | undefined {
+): Decision | undefined {
   const tool = String(rawTool ?? "").toLowerCase()
   const session = String(rawSession ?? "no-session")
 
@@ -250,8 +343,23 @@ function gate(
 
   // `bash` in opencode 1, `shell` in opencode 2 — measured from each host's own tool list.
   if (tool === "bash" || tool === "shell") {
+    const command = masked(String(args.command ?? ""))
+    // Ahead of the give-up: this is not a guess about intent, and a range is always there instead.
+    const large = largeWholeFileRead(command, directory)
+    if (large) {
+      unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+      return {
+        refusal:
+          `That command was not run, and will not be on another try: it prints ${large.file} ` +
+          `(${large.lines} lines) whole, and a source file this size is not read whole by any route.\n` +
+          `  ${serena(host, "ide_symbols_overview", `{ relative_path: "…" }`)}  — its declarations, with their lines\n` +
+          `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", include_body: true }`)}  — one declaration\n` +
+          howToCall(host) +
+          `For the text itself, print a range — \`sed -n '120,180p' ${large.file}\`, or \`read\` with ` +
+          `offset and limit. A range is never refused.`,
+      }
+    }
     if (!worthNudging(session)) return undefined
-    const command = String(args.command ?? "")
     const words = firstWords(command)
     const searching = words.find((word) => SEARCH_COMMANDS.has(word))
     const reading = words.find((word) => READ_COMMANDS.has(word))
@@ -259,52 +367,58 @@ function gate(
     // What it is aimed at, not just what it is. Judging the verb alone refused
     // `cat .serena/project.yml` during a diagnosis — a config file, which this rule's own message
     // promises to let through. The tool-level rules were always careful here; this one was not.
-    const segment = segmentFor(command, searching ? SEARCH_COMMANDS : READ_COMMANDS)
-    if (!segment || !segmentAsksAboutSymbols(segment, Boolean(searching))) return undefined
+    const segment = searching
+      ? segmentFor(command, SEARCH_COMMANDS, false)
+      : segmentFor(command, READ_COMMANDS, true)
+    if (!segment || !segmentAsksAboutSymbols(segment, Boolean(searching), directory)) return undefined
 
     const key = `${session}:shell:${command.slice(0, 120)}`
     if (alreadyNudged.has(key)) return undefined
     alreadyNudged.add(key)
     unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
 
-    return (
-      `That command was not run: it uses \`${searching ?? reading}\` to answer a question the ` +
-      `symbol index answers better, and running it through the shell reaches the same dead end as ` +
-      `the tool would.\n` +
-      `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where something is defined\n` +
-      `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
-      `  ${serena(host, "ide_read_symbol", '{ name: "…" }')}  — one declaration, from the running IDE\n` +
-      howToCall(host) +
-      `If the command is really about text or files — a log, a config, a build output — run it ` +
-      `again and it will go through.`
-    )
+    return {
+      refusal:
+        `That command was not run: it uses \`${searching ?? reading}\` to answer a question the ` +
+        `symbol index answers better, and running it through the shell reaches the same dead end as ` +
+        `the tool would.\n` +
+        `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where something is defined\n` +
+        `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
+        `  ${serena(host, "ide_read_symbol", '{ name: "…" }')}  — one declaration, from the running IDE\n` +
+        howToCall(host) +
+        `If the command is really about text or files — a log, a config, a build output — run it ` +
+        `again and it will go through.`,
+    }
   }
 
   if (tool !== "read" && tool !== "grep") return undefined
-  if (!worthNudging(session)) return undefined
 
   if (tool === "grep") {
+    if (!worthNudging(session)) return undefined
     const pattern = String(args.pattern ?? "")
     // A regex is a text search and this has no opinion about it. A bare identifier is a question
     // about a symbol, and grep answers it with every comment, string and unrelated name that
     // happens to contain it.
     if (!IDENTIFIER.test(pattern)) return undefined
+    const where = args.path === undefined ? undefined : String(args.path)
+    if (where && withinProject(absolute(where, directory), directory) === undefined) return undefined
 
     const key = `${session}:grep:${pattern}`
     if (alreadyNudged.has(key)) return undefined
     alreadyNudged.add(key)
     unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
 
-    return (
-      `grep "${pattern}" was not run. Ask the index instead — it resolves what a text search ` +
-      `cannot:\n` +
-      `  ${serena(host, "find_symbol", `{ name_path_pattern: "${pattern}" }`)}  — the definition\n` +
-      `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — real callers, including overrides\n` +
-      `  ${serena(host, "ide_find_symbol", `{ query: "${pattern}" }`)}  — the same, from the running IDE\n` +
-      howToCall(host) +
-      `If you genuinely want text — a log line, a config value, a string — run the same grep ` +
-      `again and it will go through, or pass a regex.`
-    )
+    return {
+      refusal:
+        `grep "${pattern}" was not run. Ask the index instead — it resolves what a text search ` +
+        `cannot:\n` +
+        `  ${serena(host, "find_symbol", `{ name_path_pattern: "${pattern}" }`)}  — the definition\n` +
+        `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — real callers, including overrides\n` +
+        `  ${serena(host, "ide_find_symbol", `{ query: "${pattern}" }`)}  — the same, from the running IDE\n` +
+        howToCall(host) +
+        `If you genuinely want text — a log line, a config value, a string — run the same grep ` +
+        `again and it will go through, or pass a regex.`,
+    }
   }
 
   // `filePath` in opencode 1, `path` in opencode 2 — measured from each host's tool schema.
@@ -312,29 +426,50 @@ function gate(
   if (!path || !CODE.test(path)) return undefined
   // A range means the caller already knows what they want. Nothing to teach.
   if (args.offset !== undefined || args.limit !== undefined) return undefined
-  const relative = projectRelative(path, directory)
+  const file = absolute(path, directory)
+  const relative = withinProject(file, directory)
+  if (relative === undefined) return undefined
+  const lines = lineCount(file)
 
-  const lines = lineCount(path)
+  // Not a guess, so ahead of the give-up and never let through on a second try: the way out is a
+  // range, which every agent has. opencode 2 answers it with the outline instead of this refusal.
+  if (lines >= WHOLE_FILE_IS_FINE) {
+    if (host === 1) unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+    return {
+      refusal:
+        `read of ${path} (${lines} lines) was not run, and will not be on another try — the whole ` +
+        `file would enter the context to answer a question about part of it:\n` +
+        `  ${serena(host, "ide_symbols_overview", `{ relative_path: "${relative}" }`)}  — its declarations, with their lines, from the running IDE\n` +
+        `  ${serena(host, "get_symbols_overview", `{ relative_path: "${relative}", depth: 1 }`)}  — the same from serena's language server\n` +
+        `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}  — one declaration\n` +
+        howToCall(host) +
+        `For the text itself, pass offset and limit — a range is never refused.`,
+      outline: { path, relative, lines },
+    }
+  }
+
+  if (!worthNudging(session)) return undefined
   const used = (spent.get(session) ?? 0) + 1
   spent.set(session, used)
   const overBudget = used > budgetFor(session)
 
-  if (lines < WHOLE_FILE_IS_FINE && !overBudget) {
+  if (!overBudget) {
     // A project of small files was a way to read everything without ever being asked: each read
     // is under the threshold and the budget is never spent. One nudge per session closes it, and
     // only where there is something to teach.
     if (usesSymbolicTools.has(session) || nudgedAboutSmallFiles.has(session)) return undefined
     nudgedAboutSmallFiles.add(session)
     unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
-    return (
-      `read of ${path} was not run — this session has not asked the index anything yet, and a ` +
-      `short file is still a file read whole:\n` +
-      `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "${relative}" }`)}  — one declaration, from the running IDE\n` +
-      `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}\n` +
-      howToCall(host) +
-      `Said once per session. Run the same read again and it will go through, as will every ` +
-      `short file after it.`
-    )
+    return {
+      refusal:
+        `read of ${path} was not run — this session has not asked the index anything yet, and a ` +
+        `short file is still a file read whole:\n` +
+        `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "${relative}" }`)}  — one declaration, from the running IDE\n` +
+        `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}\n` +
+        howToCall(host) +
+        `Said once per session. Run the same read again and it will go through, as will every ` +
+        `short file after it.`,
+    }
   }
 
   const key = `${session}:read:${path}`
@@ -342,28 +477,95 @@ function gate(
   alreadyNudged.add(key)
   unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
 
-  if (overBudget && lines < WHOLE_FILE_IS_FINE) {
-    return (
+  return {
+    refusal:
       `read of ${path} was not run — that is ${used} whole files opened in this session. Reading ` +
       `them one after another to find something is the search the symbol index does in one call:\n` +
       `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where it is defined\n` +
       `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
       `  ${serena(host, "search_for_pattern", '{ substring_pattern: "…" }')}  — text, but scoped\n` +
       howToCall(host) +
-      `Run the same read again and it will go through.`
-    )
+      `Run the same read again and it will go through.`,
   }
+}
 
-  return (
-    `read of ${path} (${lines} lines) was not run — the whole file would enter the context to ` +
-    `answer a question about part of it:\n` +
-    `  ${serena(host, "get_symbols_overview", `{ relative_path: "${relative}" }`)}  — what is in it\n` +
-    `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}  — one declaration\n` +
-    `  ${serena(host, "ide_read_document", `{ relative_path: "${relative}" }`)}  — the file as the ` +
-    `editor holds it, unsaved edits included — which the disk does not have\n` +
-    howToCall(host) +
-    `If you do need the raw file, pass offset/limit, or run the same read again and it will go through.`
-  )
+/** What an outline answer starts with — and what `junon-usage.py` counts outlines by. */
+const OUTLINED = "answered with its outline by JUNON"
+
+/**
+ * The `execute` program opencode 2 runs in place of a whole read of a large file.
+ *
+ * Measured in the real opencode 2 before it was written (2026-09-24): a hook that sets `event.tool`
+ * and `event.input` runs the new call, and its output comes back to the model as the answer to the
+ * `read` it made — the database still records a `read`, with the program's output. `edit` needs no
+ * prior `read` there, so answering the read with an outline cannot block an edit.
+ *
+ * Inside `execute`, the catalog is fixed for the turn: in a session's first turn serena can be missing
+ * from it while `ctx.mcp.list()` already reports it connected, and there is no timer to wait with.
+ * A server missing from it still has `tools.serena`, which throws "Unknown tool" when called.
+ *
+ * The IDE's outline first, because it carries lines: the next read can then be the range. Serena's
+ * language server second. And when neither answers, the refusal the other hosts get — as the read's
+ * result rather than an error, so the model reads why and what to do.
+ */
+function outlineProgram(outline: NonNullable<Decision["outline"]>, refusal: string): string {
+  const header =
+    `read of ${outline.path} (${outline.lines} lines) ${OUTLINED}, not with its text — a whole ` +
+    `read of a source file this size always is.\n` +
+    `For the text you need, read that range: offset and limit, with the lines listed below. A range ` +
+    `is never touched.\n` +
+    `One declaration: await tools.serena.ide_read_symbol({ name: "…", relative_path: ` +
+    `"${outline.relative}" }), inside execute.\n`
+  return `/* junon-first: outline */
+const relative = ${JSON.stringify(outline.relative)}
+const header = ${JSON.stringify(header)}
+const refusal = ${JSON.stringify(refusal)}
+const text = (answer) => {
+  const value = answer && typeof answer === "object" && "result" in answer ? answer.result : answer
+  return typeof value === "string" ? value : JSON.stringify(value)
+}
+const absent = refusal + "\\n(No outline: serena is not in this turn's tool catalog — once it is connected, the next call has it.)"
+if (typeof tools !== "object" || tools === null || tools.serena === undefined) return absent
+const why = []
+try {
+  const answer = text(await tools.serena.ide_symbols_overview({ relative_path: relative }))
+  let parsed
+  try { parsed = JSON.parse(answer) } catch { why.push("the IDE: " + answer.slice(0, 240)) }
+  const rows = []
+  const walk = (symbols, depth) => {
+    for (const symbol of Array.isArray(symbols) ? symbols : []) {
+      if (rows.length >= 400) return
+      const locator = (symbol && symbol.locator) || {}
+      const range = (symbol && symbol.range) || {}
+      const first = ((range.start && range.start.line) || 0) + 1
+      const last = ((range.end && range.end.line) || 0) + 1
+      rows.push("  ".repeat(depth) + first + "-" + last + "  " + (locator.kind || "symbol") + " " + (locator.name || "?"))
+      if (depth < 1) walk(symbol && symbol.children, depth + 1)
+    }
+  }
+  if (parsed) {
+    walk(parsed.symbols, 0)
+    if (rows.length) return header + "\\nFrom the IDE — first-last line, kind, name:\\n" + rows.join("\\n")
+    why.push("the IDE listed no declarations")
+  }
+} catch (error) {
+  // A server missing from the turn's catalog shows only when called: \`tools.serena\` is still there.
+  if (/Unknown tool/.test(String(error))) return absent
+  why.push("the IDE: " + String(error).slice(0, 240))
+}
+try {
+  const overview = text(await tools.serena.get_symbols_overview({ relative_path: relative, depth: 1 }))
+  let parsed
+  try { parsed = JSON.parse(overview) } catch { why.push("serena: " + overview.slice(0, 240)) }
+  if (parsed && typeof parsed === "object" && Object.keys(parsed).length) {
+    return header + "\\nFrom serena's language server — names only; find_symbol gives their lines:\\n" + overview.slice(0, 12000)
+  }
+  if (parsed) why.push("serena listed no declarations")
+} catch (error) {
+  why.push("serena: " + String(error).slice(0, 240))
+}
+return refusal + "\\n(No outline: " + why.join("; ") + ")"
+`
 }
 
 // --- the entry points ---------------------------------------------------------------------------
@@ -375,8 +577,9 @@ interface V1Context {
 /** opencode 1's plugin: called once per project instance, its hook once per tool call. */
 const opencode1 = async (ctx?: V1Context) => ({
   "tool.execute.before": async (input: any, output: any) => {
-    const refusal = gate(1, input?.tool, (output?.args ?? {}) as Record<string, unknown>, input?.sessionID, ctx?.directory)
-    if (refusal !== undefined) throw new Error(refusal)
+    // opencode 1 cannot change which tool runs, so an outline is not on offer here: it refuses.
+    const decision = gate(1, input?.tool, (output?.args ?? {}) as Record<string, unknown>, input?.sessionID, ctx?.directory)
+    if (decision !== undefined) throw new Error(decision.refusal)
   },
 })
 
@@ -410,8 +613,12 @@ export default {
   async setup(ctx: V2Context) {
     const directory = ctx.location?.directory
     const registration = await ctx.tool.hook("execute.before", async (event) => {
-      const refusal = gate(2, event.tool, (event.input ?? {}) as Record<string, unknown>, event.sessionID, directory)
-      if (refusal !== undefined) throw new Error(refusal)
+      const decision = gate(2, event.tool, (event.input ?? {}) as Record<string, unknown>, event.sessionID, directory)
+      if (decision === undefined) return
+      if (decision.outline === undefined) throw new Error(decision.refusal)
+      // The read is answered rather than refused: the same call, carried out by JUNON.
+      event.tool = "execute"
+      event.input = { code: outlineProgram(decision.outline, decision.refusal) }
     })
     return () => registration.dispose()
   },

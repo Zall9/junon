@@ -508,16 +508,18 @@ behind it looks like.
 scripts/install-agent-gate.sh          # --dry-run first, if you prefer
 ```
 
-An opencode plugin and a Claude Code hook, refusing what follows, **once per target** — the table
-is the list, and carries no count beside it, because that count has already gone stale twice:
+An opencode plugin and a Claude Code hook. The first row is **never** let through; the others are
+refused **once per target** — guesses about intent, which repeating the call overrules. Everything
+applies to files inside the session's project only. The table is the list, and carries no count
+beside it, because that count has already gone stale twice:
 
 | Refused | Why | To proceed anyway |
 | --- | --- | --- |
+| `read` of a source file of 300 lines or more with no range — or `cat`, `bat`, `less`, `more`, `nl` of one | the whole file enters the context to answer a question about part of it | **never on a second try.** Pass offset/limit, or `sed -n 'a,bp'`. Under opencode 2 the `read` is not refused at all: it is **answered with the file's outline** |
 | `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
-| `read` of a code file over 300 lines with no range | the whole file enters the context to answer a question about part of it | repeat it, or pass offset/limit |
 | a whole-file code read past the session's budget — the **sixth** where the index has been used, the **fourth** where it has not | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
 | the **first** short source file, in a session that has never used a symbolic tool | a project of small files was a way to read all of it without ever being asked: every read under the threshold, the budget never spent | repeat it — this is said once per session and never again |
-| `bash grep`/`rg` for a bare identifier, `cat` of a source file | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or point the command at something that is not source |
+| `bash grep`/`rg` for a bare identifier, `cat` of a short source file | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or point the command at something that is not source |
 
 Both numbers were swept over a fortnight of recorded calls rather than chosen by taste — what share
 of the calls that actually happened each setting would have refused:
@@ -555,10 +557,11 @@ Five refusals, zero symbolic calls. Both causes are in those three lines, and bo
 
 **bash was an open door.** This section used to call that a deliberate hole, on the grounds that
 closing it means parsing shell. It does not: reading the first word of each `&&`-separated segment
-catches `cd /somewhere && grep -rn thing .`, which is the shape that was actually used. What remains
-open is stated as a limit rather than a principle — quoting, subshells, aliases and anything cleverer
-go through, because a gate that tries to understand shell is one that breaks a build at three in the
-morning.
+catches `cd /somewhere && grep -rn thing .`, which is the shape that was actually used. Separators
+inside quotes are not separators — since 0.3.12, when `grep -E "tool|error" x.log` stopped reading as
+`grep "tool`. What remains open is stated as a limit rather than a principle — subshells, aliases and
+anything cleverer go through, because a gate that tries to understand shell is one that breaks a build
+at three in the morning.
 
 **Some agents cannot comply.** `gitlab-review-orchestrator` has no serena in its `mcps`, so a refusal
 named a tool it could not call; three of the five were that. Neither host tells a hook which agent is
@@ -569,13 +572,55 @@ which was reached before an agent had really had the chance to change course. Th
 and no configuration decides it.
 
 **What it never touches**, so the boundary is a fact rather than a discovery: `glob`, `list`, every
-`read` that carries `offset`/`limit`, every file that is not source (markdown, JSON, lock files,
-logs), every source file under 300 lines while the budget holds — except the first one in a session
-that has never used the index, said once — every `grep` whose pattern is a real
-regex or shorter than three characters, every path that cannot be read, every command that is not a
-search or a `cat` — `git`, `pnpm`, `tail`, `ls` — and every symbolic call, which it observes rather
-than judges: a `serena_*` tool under opencode 1, an `execute` whose code calls `tools.serena` under
-opencode 2.
+`read` that carries `offset`/`limit`, every file outside the session's project, every file that is
+not source (markdown, JSON, lock files, logs), every source file under 300 lines while the budget
+holds — except the first one in a session that has never used the index, said once — every `grep`
+whose pattern is a real regex (a quoted `"a|b"` included) or shorter than three characters, every
+`grep` fed by a pipe, every path that cannot be read, every command that is not a search or a
+whole-file print — `git`, `pnpm`, `sed -n`, `head`, `tail`, `ls`, `cat x | wc -l` — and every
+symbolic call, which it observes rather than judges: a `serena_*` tool under opencode 1, an `execute`
+whose code calls `tools.serena` under opencode 2.
+
+### Stricter since 0.3.12: a large file is never read whole
+
+Asked for after the agents kept reading, and measured first — `opencode.db`, the 21 hours after the
+0.3.10 gate was installed, opencode 2 only. After a refusal the agent went to the shell (`sed -n`,
+`cat`, `head`) or another file tool 67 times, to serena 28, to a different `read` 22, and **repeated
+the call — which the gate then let through — 18**. 121 whole-file reads of source ran anyway, and 8
+of the 10 sessions that never used serena were sessions the gate had **given up on** after three
+ignored refusals: a rule written for agents without serena, when every agent in the active preset has
+it.
+
+So a whole read of a source file of 300 lines or more, inside the project, is now refused **every
+time**, by `read` or by `cat`, and that rule does not give up: its way out is a range, which every
+agent has, so nothing becomes unreachable and no agent can loop. The ranges agents already pass were
+all 300 lines or fewer — they are used for what they are.
+
+**Under opencode 2 the read is answered, not refused.** A hook there can change which tool runs, so
+the gate turns the `read` into an `execute` that asks JUNON for the file's outline — the IDE's, with
+the first and last line of every declaration, else serena's language server's — and that is what the
+model gets back as the result of its `read`:
+
+```
+read of …/app/Services/LinkService.php (774 lines) answered with its outline by JUNON, not with its text …
+From the IDE — first-last line, kind, name:
+32-774  class LinkService
+  43-51  method showChannel
+  53-61  method browseRoot
+```
+
+The next read is then the range `43-51`. When no outline can be made, the refusal comes back as the
+read's result instead, saying why. One case measured and not avoidable from a plugin: in a session's
+first turn, serena can be missing from the catalog `execute` is given even though it is connected —
+the catalog is fixed for the turn and the sandbox has no timer — so that read gets the refusal and the
+next one the outline. `junon-usage.py` counts outlines in a column of their own. opencode 1 and Claude
+Code cannot change which tool runs, so there the read is refused, with the same advice.
+
+Proved in the real hosts before release: opencode 2 with a real JUNON (serena's outline), through the
+machine's shared instance on a project PhpStorm had open (the IDE's outline, lines matching the file),
+and with no serena at all (the refusal as the result); opencode 1 refusing on every try and editing
+after a ranged read; and `edit` under opencode 2 needing no prior `read`, so an outline in place of a
+read cannot block an edit.
 
 The shell rule looks at **what a command is aimed at**, not only what it is, and it took two
 corrections to get there. Judging the verb alone refused `cat .serena/project.yml` — a config file the
@@ -590,12 +635,12 @@ The refusal names the call that answers better — `find_symbol`, `find_referenc
 MCP tools the same way ([OPENCODE.md](OPENCODE.md)). opencode 1 has a tool per MCP tool, so it is told
 `serena_find_symbol({ name_path_pattern: "X" })`. opencode 2 has none: a model reaches MCP tools only
 through the `execute` meta-tool, as code — measured in real sessions — so it is told
-`execute → await tools.serena.find_symbol({ name_path_pattern: "X" })`, and that `search` loads
+`execute → await tools.serena.find_symbol({ name_path_pattern: "X" })`, and that `search` finds
 `tools.serena` if it is not there yet. Until 0.3.10 opencode 2 models were told the opencode 1 name, a
-tool they could not call. **Repeating the call runs it**, so nothing is ever unreachable: a log file, a
-genuine text search, a file outside any project all go through, most on the first attempt. That is
-the difference from `{"tools": {"read": false}}` above — a ban an agent cannot escape becomes a new
-failure, and this one always has an exit.
+tool they could not call. **Nothing is ever unreachable**: repeating a guess runs it, and a large file
+can always be read by range — a log file, a genuine text search, a file outside the project all go
+through, most on the first attempt. That is the difference from `{"tools": {"read": false}}` above — a
+ban an agent cannot escape becomes a new failure, and this one always has an exit.
 
 Two things it is careful about. It fires only where the symbolic route genuinely wins, so a short
 file, a ranged read, a regex and a missing path are never touched. And it fails open: any error
@@ -841,7 +886,8 @@ module it imported at start-up.
 | A source change has no effect anywhere | Nothing was redeployed. Step 9 — the plugin is a built jar, and the editable install may point at a different checkout |
 | A dashboard link opens something that is not a dashboard | A stale entry whose pid was reused. Entries predating the `started_at` field are trusted on their pid alone; `rm -f ~/.ide-bridge/dashboards/*.json` once, with nothing running |
 | A file changed on disk is not visible to reads | Up to ~15 s: an unfocused IDE only refreshes when asked, and the adapter asks on a timer |
-| A `read` or `grep` came back refused, naming a `serena_*` call | The gate, working. Make the call it names, or repeat yours — the second attempt always runs. §7 |
+| A `read` or `grep` came back refused, naming a `serena_*` call | The gate, working. Make the call it names, or repeat yours — a guess runs on the second attempt; a whole read of a large source file never does, so read a range. §7 |
+| A `read` came back as an outline under opencode 2 | The gate, answering a whole read of a large source file. Read the range of the declaration you need |
 | The gate never refuses anything | The host has not been restarted since it was installed; plugins and hooks are read at start-up. `python3 integrations/agent-hosts/junon-usage.py --days 1` |
 | A refusal names a tool the agent does not have | That agent's `mcps` list excludes `serena`. Repeat the call to proceed, then add it — the gate assumes what §7 installs |
 | Answers look right but behave oddly | The halves may be different releases. `doctor` names the `versions` check; see [RELEASING.md](RELEASING.md) |
@@ -855,7 +901,8 @@ module it imported at start-up.
   is out of scope — say so rather than adding it.
 - Do not modify `TASK.md`; it is the authoritative scope.
 - A refused `read` or `grep` naming a `serena_*` call is the gate, not a broken tool. Make the call it
-  names, or repeat yours — the second attempt always runs. Do not route around it with `bash cat`.
+  names, or repeat yours — a guess runs on the second attempt. A whole read of a large source file
+  never does: read a range. `bash cat` of it is refused the same way.
 - Nothing here reaches the network on its own. `--check-updates` and the dashboard's *Check for a new
   release* button are the only outbound requests in the product, and both are things a person types
   or clicks. Do not add a check on start-up, on a timer, or "while we are here" — the guarantee is
