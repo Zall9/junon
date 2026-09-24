@@ -1,6 +1,7 @@
 # A gate agents cannot walk around, and reads JUNON answers itself
 
-**Status:** in progress — see the [update log](#update-log).
+**Status:** done — released in 0.3.12; see the [update log](#update-log). What is left is measuring
+it in real sessions once opencode has restarted: `junon-usage.py --days 2`, its `outlined` column.
 
 ## Why
 
@@ -97,13 +98,25 @@ project-relative path, and it has behaviour tests of its own — it has had none
 
 ### Phase 4 — release
 
-**Status:** pending
+**Status:** done 2026-09-24 — 0.3.12 (`699ba4e`, `1d99a3d`).
 
-Three suites, mutations on copies, both real opencodes, then 0.3.12 and the machine checked.
+524 TypeScript, 475 Python and 301 Kotlin on 0.3.12; `typecheck`, `lint` and `format:check` report
+only what predates this work. After `update-all.sh` the machine's gates are this release's — each
+previous copy kept — and `doctor` reports `agent-gates: pass, current`. In the Claude Code session
+that built it, the installed hook refused a whole read of a 1172-line file twice, let the range
+through, and let `grep -E "tool|error"` through on the first try — the command it had refused that
+morning. opencode reads its plugin at start-up, so the outline reaches the user's sessions when the
+opencode service restarts; the installed file is byte-identical to the one proved in both real hosts.
+
+The Kotlin run re-records `packages/conformance/captures/jetbrains.json` with fresh random ids every
+time; that was restored rather than committed with the release.
+
+**Acceptance:** three suites green, 0.3.12 pushed, and the machine checked after the update.
 
 ## Update log
 
 | When | What |
 | --- | --- |
+| 2026-09-24 | Phase 4 done: 0.3.12 released, installed, and seen refusing in the real Claude Code; `doctor` pass. |
 | 2026-09-24 | Phases 1–3 done. 524 TypeScript, 475 Python, 301 Kotlin (run fresh). Fifteen mutations on copies — nine on the opencode gate, five on the Claude Code gate, one on the usage report — controls green first, all red — one missed at first (the give-up re-applied to `cat` went unseen: the test covered `read` only), the test extended and the mutation re-run. |
 | 2026-09-24 | Plan written, Phase 0 measured. |
