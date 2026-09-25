@@ -15,6 +15,23 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.14
+
+- **No more browser tab per instance.** Serena's configuration opens its dashboard on every launch,
+  and every shared JUNON instance is a launch nobody asked to watch: one tab per project per wave of
+  sessions and subagents. `junon serve` now tells serena not to open one; the dashboard still runs,
+  one link away. `--open-web-dashboard true` in a host's `junon attach` arguments brings it back.
+- **A relay that outlived an upgrade no longer launches an instance every two minutes.** A relay was
+  offered only an instance of exactly its own version, so one started before an upgrade — the old
+  JUNON in memory, the new one on disk — launched instances it then refused, one per 120-second start
+  timeout, forever. Seen on 2026-09-25: thirteen instances on one project, none attached, each opening
+  a tab. A relay now takes an instance running the JUNON installed on disk, else one running its own
+  — never merely a newer one, which after a rollback would bring back the release rolled away from —
+  waits for the one it launched by its pid, and stops one that never answered.
+- **What you have to do about it:** the usual update, then quit and restart opencode and Claude
+  Code — the relays that loop are the ones started before the update, and only a restart replaces
+  them. `junon instances --stop` ends the instances they left behind.
+
 ## 0.3.13
 
 - **The IDE first.** Counted over opencode 2's first three days, agents asked serena's language
