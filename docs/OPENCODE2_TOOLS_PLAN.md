@@ -1,6 +1,6 @@
 # JUNON's IDE tools as opencode 2 tools, and the IDE after every edit
 
-**Status:** in progress — see the [update log](#update-log).
+**Status:** released in 0.3.15 (`ce27871`, `87f578b`); what remains is measuring it in real sessions — see the [update log](#update-log).
 
 ## Why
 
@@ -83,11 +83,17 @@ machine's instance on `vod/core` with PhpStorm — the Pest file's outline with 
 
 ### Phase 4 — release
 
-**Status:** pending
+**Status:** done 2026-09-25 — 545 TypeScript, 486 Python, 301 Kotlin; eleven mutations on copies,
+controls green first, all red — three had first gone through because of weak tests (a registry handed
+over once where the host hands it over several times; two fakes whose exception the plugin rightly
+swallows, which then proved nothing), fixed to count calls. Installed: `doctor` reports
+`agent-gates: pass`. To measure once opencode has run on it: `junon-usage.py --days 1`, its
+`junon`, `answered` and `checked` columns.
 
 ## Update log
 
 | When | What |
 | --- | --- |
+| 2026-09-25 | 0.3.15 released and installed. |
 | 2026-09-25 | Phases 1–3 done in the real opencode 2; opencode 1 and an opencode 2 without serena unchanged. |
 | 2026-09-25 | Plan written, Phase 0 measured. |
