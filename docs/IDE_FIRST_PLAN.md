@@ -1,6 +1,7 @@
 # The IDE first, wherever it can answer
 
-**Status:** in progress — see the [update log](#update-log).
+**Status:** Phases 1–3 released in 0.3.13 (`330ae41`, `69dda10`); Phase 4 awaits a decision — see
+the [update log](#update-log).
 
 ## Why
 
@@ -98,5 +99,6 @@ Proposed on 2026-09-25: make `find_symbol`, `get_symbols_overview`, `find_refere
 
 | When | What |
 | --- | --- |
+| 2026-09-25 | 0.3.13 released and installed: 535 TypeScript, 478 Python, 301 Kotlin; eleven mutations on copies, controls green first, all red. On the machine `doctor` reports `agent-gates: pass`, and the installed Claude Code hook refused a whole read naming `ide_symbols_overview` and `ide_read_symbol` first. |
 | 2026-09-25 | Phases 1–3 done, proved in both real opencodes and through PhpStorm. |
 | 2026-09-25 | Plan written, Phase 0 measured, Phase 4 examined. |
