@@ -39,7 +39,9 @@ def installed(monkeypatch: pytest.MonkeyPatch):
     """Pins what "the installed JUNON" is, so these tests do not move with the repository."""
 
     def use(version: str) -> None:
+        # Both halves of "installed": what this process runs, and what the disk holds now.
         monkeypatch.setattr(instances, "running_version", lambda: version)
+        monkeypatch.setattr(instances, "version_on_disk", lambda: version)
 
     use("0.3.1")
     return use

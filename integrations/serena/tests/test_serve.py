@@ -228,6 +228,19 @@ class TestArguments:
         assert argv[argv.index("--project") + 1] == instances.normalise_root("/tmp")
         assert argv[-2:] == ["--enable-web-dashboard", "false"], "Serena's own flags pass through untouched"
 
+    def test_an_instance_never_opens_a_browser_unless_asked(self) -> None:
+        """A shared instance starts in the background for whichever session needed it; Serena's
+        configuration opened a tab each time — one every two minutes on 2026-09-25."""
+        options, rest = parse(["--project", "/tmp"])
+        argv = serena_argv(options, 4242, rest)
+        assert argv[argv.index("--open-web-dashboard") + 1] == "false"
+
+        # Asked for explicitly, it still opens: the passthrough comes after, and the last one wins.
+        options, rest = parse(["--project", "/tmp", "--open-web-dashboard", "true"])
+        argv = serena_argv(options, 4242, rest)
+        assert argv[-2:] == ["--open-web-dashboard", "true"]
+        assert argv.index("--open-web-dashboard") < len(argv) - 2
+
     def test_the_idle_period_defaults_to_thirty_minutes(self) -> None:
         options, _ = parse(["--project", "/tmp"])
         assert options.idle_minutes == 30.0

@@ -207,6 +207,13 @@ def serena_argv(options: argparse.Namespace, port: int, passthrough: list[str]) 
         str(port),
         "--project",
         instances.normalise_root(options.project),
+        # A shared instance starts because some session needed it, in the background, and nobody
+        # asked for a browser tab. Serena's own configuration opens one on every launch, which on
+        # this machine meant a tab per project per session wave — and one every two minutes on
+        # 2026-09-25, when a relay kept launching instances. The dashboard itself still runs, and
+        # stays one link away. Before the passthrough, so `--open-web-dashboard true` still wins.
+        "--open-web-dashboard",
+        "false",
         *passthrough,
     ]
 

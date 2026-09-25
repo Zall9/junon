@@ -71,6 +71,18 @@ class Clock:
         return self.now
 
 
+class Ticking:
+    """Ten fake seconds per glance: a wait that should end at once reaches its deadline anyway,
+    so a regression fails with `StartFailed` rather than hanging the suite on a still clock."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        self.now += 10
+        return self.now
+
+
 class TestFindOrStart:
     def test_a_live_answering_instance_is_reused_and_nothing_is_started(self, tmp_path: Path) -> None:
         instances.publish_instance(tmp_path, 5000)
@@ -115,14 +127,70 @@ class TestFindOrStart:
                 self.now += 10
                 return self.now
 
+        stopped: list[int] = []
         with pytest.raises(StartFailed) as failure:
             find_or_start(
                 str(tmp_path), start_timeout=50, launch=lambda r, i, p: 424242, alive=lambda url: False,
-                clock=TickingClock(), poll_seconds=0,
+                clock=TickingClock(), poll_seconds=0, stop=stopped.append,
             )
 
         assert "424242" in str(failure.value)
         assert "logs" in str(failure.value)
+        # Launched, never answered, used by nobody: stopped rather than left to idle out with its
+        # dashboard open while the next attempt launches another.
+        assert stopped == [424242]
+
+    def test_a_relay_that_outlived_an_upgrade_uses_the_installed_instance_rather_than_starting_its_own(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The loop of 2026-09-25: a relay holding 0.3.12 in memory, instances running 0.3.13 from
+        disk. Requiring its own version, it started one every 120 s and attached to none."""
+        monkeypatch.setattr("junon.client.JUNON_VERSION", "0.3.12")
+        monkeypatch.setattr(instances, "version_on_disk", lambda: "0.3.13")
+        instances.publish_instance(tmp_path, 5000, pid=os.getpid(), version="0.3.13")
+        started: list[str] = []
+
+        found = find_or_start(str(tmp_path), launch=lambda r, i, p: started.append(r) or 1, alive=lambda url: True)
+
+        assert found.port == 5000
+        assert started == []
+
+    def test_a_relay_attaches_to_what_it_launched_whatever_version_it_reports(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("junon.client.JUNON_VERSION", "0.3.12")
+        mine = os.getpid()
+
+        def launch(root: str, idle: float, passthrough: list[str]) -> int:
+            instances.publish_instance(root, 6000, pid=mine, version="0.3.13")  # the code on disk
+            return mine
+
+        found = find_or_start(
+            str(tmp_path), launch=launch, alive=lambda url: True, clock=Ticking(), poll_seconds=0,
+            stop=lambda pid: pytest.fail("an instance that answered must not be stopped"),
+        )
+
+        assert (found.port, found.version) == (6000, "0.3.13")
+
+    def test_a_relay_newer_than_the_disk_attaches_to_what_it_launched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The same loop the other way round: the disk rolled back under a running relay. What it
+        launches is older than itself and would never be offered to it — but it is the only code
+        there is to launch, and refusing it is launching another every start timeout."""
+        monkeypatch.setattr("junon.client.JUNON_VERSION", "0.3.14")
+        mine = os.getpid()
+
+        def launch(root: str, idle: float, passthrough: list[str]) -> int:
+            instances.publish_instance(root, 6100, pid=mine, version="0.3.13")
+            return mine
+
+        found = find_or_start(
+            str(tmp_path), launch=launch, alive=lambda url: True, clock=Ticking(), poll_seconds=0,
+            stop=lambda pid: pytest.fail("an instance that answered must not be stopped"),
+        )
+
+        assert (found.port, found.version) == (6100, "0.3.13")
 
     def test_the_instance_is_launched_from_this_package_not_the_installed_one(self) -> None:
         command = serve_command("/tmp/x", 30, ["--log-level", "ERROR"])
@@ -454,3 +522,45 @@ class TestTwoSessions:
             for proc in _serve_processes():
                 if proc.pid not in before:
                     proc.send_signal(signal.SIGTERM)
+
+
+class TestWhichInstanceIsOffered:
+    """Two versions are legitimate for a relay: the one it runs, and the one installed now."""
+
+    @staticmethod
+    def offered(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, running: str, installed: str, live: list) -> object:
+        monkeypatch.setattr("junon.client.JUNON_VERSION", running)
+        monkeypatch.setattr(instances, "version_on_disk", lambda: installed)
+        monkeypatch.setattr(instances, "live_instances", lambda: [
+            instances.Instance(pid=pid, root=str(tmp_path.resolve()), port=7000 + pid, version=version)
+            for pid, version in live
+        ])
+        chosen = instances.instance_for(tmp_path)
+        return chosen.pid if chosen else None
+
+    def test_a_relay_that_outlived_an_upgrade_is_offered_the_installed_release_first(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        live = [(101, "0.3.12"), (102, "0.3.14"), (103, "0.3.13"), (104, "0.3.10-SNAPSHOT")]
+
+        assert self.offered(tmp_path, monkeypatch, running="0.3.12", installed="0.3.13", live=live) == 103
+
+    def test_its_own_release_when_nothing_runs_the_installed_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        live = [(101, "0.3.12"), (102, "0.3.14")]
+
+        assert self.offered(tmp_path, monkeypatch, running="0.3.12", installed="0.3.13", live=live) == 101
+
+    def test_after_a_rollback_a_newer_instance_is_not_offered(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """"Newer is fine" would hand a new session the release that was just rolled away from."""
+        live = [(102, "0.3.14")]
+
+        assert self.offered(tmp_path, monkeypatch, running="0.3.13", installed="0.3.13", live=live) is None
+
+    def test_an_older_one_is_never_offered(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        live = [(101, "0.3.12"), (105, None)]
+
+        assert self.offered(tmp_path, monkeypatch, running="0.3.13", installed="0.3.13", live=live) is None

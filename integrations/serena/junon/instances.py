@@ -191,11 +191,33 @@ def instance_for(root: str | Path) -> Instance | None:
     A superseded instance is left running rather than killed — the sessions already on it are using
     it, and it exits on its own once they are gone. It simply stops being offered to new ones. An
     entry with no version was written before this field existed, which makes it older by definition.
+
+    **Two versions are legitimate, not one: the JUNON this process runs, and the one installed now** —
+    the installed one first. Offering only the first made a relay started before an upgrade — the old
+    JUNON in memory, the new one on disk — launch an instance, which imports the new code, and then
+    refuse it: it waited out the start timeout and launched another, one every 120 s. Measured on
+    2026-09-25: thirteen instances of 0.3.13 on one project for a relay holding 0.3.12, none
+    attached, each opening a dashboard tab. "Newer is fine" would have been the wrong repair: after a
+    rollback it hands a new session the release that was just rolled away from. The disk says which
+    release is wanted, whichever way it moved.
     """
     wanted = normalise_root(root)
-    current = running_version()
-    matches = [i for i in live_instances() if i.root == wanted and i.version == current]
-    return matches[-1] if matches else None
+    live = [i for i in live_instances() if i.root == wanted]
+    for version in dict.fromkeys((version_on_disk(), running_version())):
+        matches = [i for i in live if i.version == version]
+        if matches:
+            return matches[-1]
+    return None
+
+
+def instance_with_pid(root: str | Path, pid: int) -> Instance | None:
+    """The live instance for this root with this pid, whatever JUNON it runs.
+
+    For a relay that has just launched one: it runs the code on disk, which is exactly what the relay
+    asked for when it started it, so its version is not a question.
+    """
+    wanted = normalise_root(root)
+    return next((i for i in live_instances() if i.root == wanted and i.pid == pid), None)
 
 
 def stop_free(

@@ -164,6 +164,16 @@ class StartFailed(RuntimeError):
     pass
 
 
+def _stop_launched(pid: int) -> None:
+    """Stops an instance this relay launched and could not use. Only ever the pid it launched."""
+    import signal
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        pass  # already gone
+
+
 def find_or_start(
     root: str,
     idle_minutes: float = DEFAULT_IDLE_MINUTES,
@@ -173,6 +183,7 @@ def find_or_start(
     alive: Callable[[str], bool] = answers,
     clock: Callable[[], float] = time.monotonic,
     poll_seconds: float = 0.25,
+    stop: Callable[[int], None] | None = None,
 ) -> Instance:
     """The live instance for `root`, starting one if there is none that answers.
 
@@ -180,6 +191,7 @@ def find_or_start(
     it is starting, crashed short of listening, or wedged, and in every case a session needs one
     that answers. Under the root lock, so concurrent attaches converge on one instance.
     """
+    stop = stop if stop is not None else _stop_launched
     with _root_lock(root):
         existing = instances.instance_for(root)
         if existing is not None and alive(existing.url):
@@ -208,10 +220,16 @@ def find_or_start(
         pid = launch(root, idle_minutes, passthrough or [])
         deadline = clock() + start_timeout
         while clock() < deadline:
-            candidate = instances.instance_for(root)
-            if candidate is not None and candidate.pid == pid and alive(candidate.url):
+            # By pid, not through `instance_for`: what was just launched runs the code on disk, which
+            # a relay started before an upgrade does not hold in memory. Asked for by version, it
+            # was never found, and the relay launched another every start timeout (2026-09-25).
+            candidate = instances.instance_with_pid(root, pid)
+            if candidate is not None and alive(candidate.url):
                 return candidate
             time.sleep(poll_seconds)
+        # Launched by this relay and never used by anyone: left running, it would sit out its idle
+        # period — thirty minutes, a dashboard open — and the next attempt would add another.
+        stop(pid)
         raise StartFailed(
             f"the shared JUNON for {root} (pid {pid}) did not answer within {start_timeout:.0f}s; "
             f"its output is under {instances.registry_dir() / 'logs'}"

@@ -404,6 +404,23 @@ So the whole recipe is: `junon instances --stop`, quit the agent hosts, restart 
 each IDE. Nothing needs starting again by hand — the next session starts the instance it needs, on
 the installed JUNON.
 
+**A relay that outlived an upgrade uses the newer instance (0.3.14).** Until then a relay was offered
+only an instance of exactly its own version. One started before an upgrade — the old JUNON in its
+memory, the new one on disk — launched an instance, which imported the new code, refused it for not
+being its own version, waited out the 120-second start timeout, and launched another. Measured on
+2026-09-25: thirteen instances of 0.3.13 on `vod/core`, none attached, one more every two minutes,
+for a relay holding 0.3.12 since the morning. Now a relay takes an instance running the JUNON
+installed on disk, else one running its own, waits for the one it launched by its pid, and stops one
+that never answered instead of leaving it to idle for thirty minutes. Not "its own or newer": after a
+rollback that would hand new sessions the release just rolled away from, and the disk says which
+release is wanted, whichever way it moved.
+
+**An instance never opens a browser tab (0.3.14).** Serena's configuration here opens the dashboard
+on every launch, and every shared instance is a launch nobody asked to watch — one tab per project
+per wave of sessions, and one every two minutes during the loop above. `junon serve` passes
+`--open-web-dashboard false`; the dashboard still runs, one link away, and `--open-web-dashboard
+true` in a host's `junon attach` arguments brings the tab back.
+
 **Keeping the server named `serena` is deliberate**, in all three. The tools take the server's name —
 `mcp__serena__ide_read_symbol` in Claude Code, `serena_ide_read_symbol` in opencode 1,
 `tools.serena.ide_read_symbol(...)` inside `execute` in opencode 2 ([OPENCODE.md](OPENCODE.md)) — and
