@@ -11,16 +11,17 @@
  * session id rather than resetting anything.
  */
 
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import * as gateModule from "./junon-first.ts";
 
 const plugin = gateModule.default;
 
-type Hook = (event: { tool: string; sessionID: string; input: unknown }) => Promise<void>;
+type Hook = (event: { tool: string; sessionID: string; input: unknown; [key: string]: unknown }) => Promise<void>;
 
 let project: string;
 let smallFile: string;
@@ -37,18 +38,20 @@ beforeAll(async () => {
 
   v1 = await plugin.server({ directory: project });
 
-  let captured: Hook | undefined;
+  // This opencode 2 has no `tool.transform`, as an early 2.0 would not: nothing is promoted, and the
+  // advice keeps naming `execute`. `withRegistry` below builds one that has it.
+  const hooks: Record<string, Hook> = {};
   await plugin.setup({
     location: { directory: project },
     tool: {
-      async hook(_name, callback) {
-        captured = callback as Hook;
+      async hook(name, callback) {
+        hooks[name] = callback as Hook;
         return { dispose: async () => {} };
       },
     },
   });
-  if (!captured) throw new Error("opencode 2's setup registered no hook");
-  v2 = captured;
+  if (!hooks["execute.before"]) throw new Error("opencode 2's setup registered no execute.before hook");
+  v2 = hooks["execute.before"];
 });
 
 const asV1 = (tool: string, session: string, args: Record<string, unknown>, callID = "c") =>
@@ -63,12 +66,76 @@ async function afterV2(tool: string, session: string, input: Record<string, unkn
   return event as { tool: string; input: Record<string, unknown> };
 }
 
-/** Runs an outline program the way `execute` does: an async body with `tools` and `search` in scope. */
-async function runOutline(code: string, tools: Record<string, unknown>): Promise<string> {
+/** What the model reads back from a call answered by the plugin: what its `execute` returns. */
+async function answerOf(event: { input: Record<string, unknown> }): Promise<string> {
   const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
     ...args: string[]
-  ) => (tools: unknown, search: unknown) => Promise<string>;
-  return new AsyncFunction("tools", "search", code)(tools, async () => ({ items: [] }));
+  ) => () => Promise<string>;
+  return new AsyncFunction(String(event.input.code))();
+}
+
+/** A serena tool's answer, the shape opencode 2's registry returns it in. */
+const reply = (value: unknown) => ({ content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] });
+
+type SerenaTool = (args: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * A fresh copy of the plugin, set up by an opencode 2 whose registry holds `read`, `grep` and the
+ * serena tools given — each module load has its own state, as each host process does.
+ */
+async function withRegistry(serena: Record<string, SerenaTool>) {
+  vi.resetModules();
+  const fresh = (await import("./junon-first.ts")).default;
+  const tools: { id: string; description?: string; options?: Record<string, unknown>; execute: (a: unknown, c: unknown) => Promise<unknown> }[] = [
+    { id: "read", description: "Read a file.", options: {}, execute: async () => ({}) },
+    { id: "grep", description: "Search file contents.", options: {}, execute: async () => ({}) },
+    ...Object.entries(serena).map(([name, run]) => ({
+      id: `serena_${name}`,
+      description: `serena's ${name}`,
+      options: { namespace: "serena", codemode: true },
+      execute: async (args: unknown) => run(args as Record<string, unknown>),
+    })),
+  ];
+  const registry = {
+    list: () => tools,
+    get: (id: string) => tools.find((t) => t.id === id),
+    update: (id: string, change: (tool: (typeof tools)[number]) => void) => {
+      const tool = tools.find((t) => t.id === id);
+      if (tool) change(tool);
+    },
+  };
+  const hooks: Record<string, Hook> = {};
+  await fresh.setup({
+    location: { directory: project },
+    tool: {
+      async hook(name, callback) {
+        hooks[name] = callback as Hook;
+        return { dispose: async () => {} };
+      },
+      async transform(change: (r: typeof registry) => void) {
+        // Handed over more than once, as the real host does when its tool set changes.
+        change(registry);
+        change(registry);
+        return { dispose: async () => {} };
+      },
+    },
+  } as never);
+  const before = async (tool: string, session: string, input: Record<string, unknown>) => {
+    const event = { tool, sessionID: session, input, id: "c", agent: "build", messageID: "m" };
+    await hooks["execute.before"]!(event);
+    return event;
+  };
+  const after = async (
+    tool: string,
+    input: Record<string, unknown>,
+    content: unknown[] = [{ type: "text", text: "Edited." }],
+    status = "completed",
+  ) => {
+    const event = { tool, sessionID: "s-after", input, id: "c", status, result: { content } };
+    await hooks["execute.after"]!(event as never);
+    return event.result.content as { text: string }[];
+  };
+  return { tools, before, after };
 }
 
 describe("one file, loadable by both hosts", () => {
@@ -215,7 +282,7 @@ describe("a whole read of a large source file is never let through", () => {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const call = await afterV2("read", "v2-strict", { path: largeFile });
       expect(call.tool).toBe("execute");
-      expect(String(call.input.code)).toContain('const relative = "src-large.ts"');
+      expect(await answerOf(call)).toContain('relative_path: "src-large.ts"');
     }
     const ranged = await afterV2("read", "v2-strict", { path: largeFile, offset: 1, limit: 80 });
     expect(ranged).toMatchObject({ tool: "read", input: { path: largeFile, offset: 1, limit: 80 } });
@@ -289,74 +356,118 @@ describe("the shell reads a whole file the same way", () => {
   });
 });
 
-describe("the outline opencode 2 runs instead", () => {
-  const symbols = {
-    symbols: [
-      {
-        locator: { name: "Ledger", kind: "class" },
-        range: { start: { line: 0 }, end: { line: 304 } },
-        children: [{ locator: { name: "entry0", kind: "method" }, range: { start: { line: 2 }, end: { line: 5 } }, children: [] }],
-      },
-    ],
-  };
-  const program = async () => String((await afterV2("read", "v2-program", { path: largeFile })).input.code);
+describe("opencode 2's registry: the IDE's tools as tools of their own", () => {
+  // Measured in the real host on 2026-09-25: a serena tool out of code mode is offered to the model
+  // from the next turn, and is gone from `execute`.
+  const everyTool = ["ide_status", "ide_find_symbol", "ide_read_symbol", "ide_symbols_overview", "ide_hierarchy",
+    "ide_read_document", "ide_diagnostics", "ide_refactor", "ide_apply_fix", "ide_todos", "find_symbol",
+    "get_symbols_overview", "find_referencing_symbols", "search_for_pattern", "read_memory"];
+  const serenaWithEveryTool = () => Object.fromEntries(everyTool.map((name) => [name, async () => reply("{}")]));
+
+  it("promotes exactly the seven IDE tools, and leaves the rest inside execute", async () => {
+    const { tools } = await withRegistry(serenaWithEveryTool());
+    const direct = tools.filter((t) => t.options?.namespace === "serena" && t.options.codemode === false).map((t) => t.id);
+
+    expect(direct.sort()).toEqual(
+      ["ide_diagnostics", "ide_find_symbol", "ide_hierarchy", "ide_read_document", "ide_read_symbol", "ide_status", "ide_symbols_overview"].map((n) => `serena_${n}`),
+    );
+    expect(tools.find((t) => t.id === "serena_find_symbol")?.options?.codemode).toBe(true);
+  });
+
+  it("points read and grep at them, once however often the registry is handed over", async () => {
+    const { tools } = await withRegistry(serenaWithEveryTool());
+    const read = tools.find((t) => t.id === "read")!;
+
+    expect(read.description).toMatch(/serena_ide_symbols_overview/);
+    expect(tools.find((t) => t.id === "grep")!.description).toMatch(/serena_ide_find_symbol/);
+    expect(read.description!.split("JUNON:").length).toBe(2);
+  });
+
+  it("names the promoted tools directly in its advice, and the others inside execute", async () => {
+    const { before } = await withRegistry(serenaWithEveryTool());
+    const refusal = await before("shell", "reg-advice", { command: "grep -rn startWorkflow src" }).then(
+      () => "",
+      (error: Error) => error.message,
+    );
+
+    expect(refusal).toMatch(/  serena_ide_find_symbol\(\{ query: "…" \}\)/);
+    expect(refusal).not.toMatch(/tools\.serena\.ide_find_symbol/);
+    expect(refusal).toMatch(/No IDE with this project open: tools\.serena\.find_symbol/);
+    expect(refusal).toMatch(/serena_ide_\* tools are tools of their own/);
+  });
+
+  it("refuses an execute calling a promoted tool, naming the tool to call instead", async () => {
+    const { before } = await withRegistry(serenaWithEveryTool());
+    const refusal = await before("execute", "reg-execute", {
+      code: 'return await tools.serena.ide_read_symbol({ name: "x" })',
+    }).then(() => "", (error: Error) => error.message);
+
+    expect(refusal).toMatch(/tools\.serena\.ide_read_symbol is not inside execute any more — serena_ide_read_symbol is a tool of its own/);
+    // What stays inside execute is left alone.
+    await expect(before("execute", "reg-execute", { code: 'return await tools.serena.find_symbol({ name_path_pattern: "x" })' })).resolves.toMatchObject({ tool: "execute" });
+  });
+});
+
+describe("the outline opencode 2 answers a whole read with", () => {
+  const declared = (name: string, kind: string, first: number, last: number, children: unknown[] = []) => ({
+    locator: { name, kind },
+    range: { start: { line: first - 1 }, end: { line: last - 1 } },
+    children,
+  });
 
   it("lists the IDE's declarations with their lines, one level deep", async () => {
-    const answer = await runOutline(await program(), {
-      serena: { ide_symbols_overview: async () => ({ result: JSON.stringify(symbols) }) },
+    const { before } = await withRegistry({
+      ide_symbols_overview: async () => reply({ symbols: [declared("Ledger", "class", 1, 305, [declared("entry0", "method", 3, 6)])] }),
     });
+    const answer = await answerOf(await before("read", "out-ide", { path: largeFile }));
 
     expect(answer).toContain("answered with its outline by JUNON");
     expect(answer).toContain("1-305  class Ledger");
     expect(answer).toContain("  3-6  method entry0");
+    expect(answer).toContain('serena_ide_read_symbol({ name: "…", relative_path: "src-large.ts" })');
+  });
+
+  it("names the ranges outside every declaration when they are most of the file", async () => {
+    const { before } = await withRegistry({ ide_symbols_overview: async () => reply({ symbols: [declared("mockProducer", "function", 29, 34)] }) });
+    const answer = await answerOf(await before("read", "out-gaps", { path: largeFile }));
+
+    expect(answer).toContain("These declarations cover 6 of 400 lines. Outside every one of them: 1-28, 35-400");
+  });
+
+  it("says nothing of the kind when they cover the file", async () => {
+    const { before } = await withRegistry({ ide_symbols_overview: async () => reply({ symbols: [declared("Ledger", "class", 1, 390)] }) });
+
+    expect(await answerOf(await before("read", "out-covered", { path: largeFile }))).not.toContain("These declarations cover");
   });
 
   it("falls back to serena's language server when the IDE explains instead of answering", async () => {
-    const answer = await runOutline(await program(), {
-      serena: {
-        ide_symbols_overview: async () => ({ result: "No IDE has this project open." }),
-        get_symbols_overview: async () => ({ result: JSON.stringify({ Class: ["Ledger"] }) }),
-      },
+    const { before } = await withRegistry({
+      ide_symbols_overview: async () => reply("No IDE has this project open."),
+      get_symbols_overview: async () => reply({ Class: ["Ledger"] }),
     });
+    const answer = await answerOf(await before("read", "out-lsp", { path: largeFile }));
 
     expect(answer).toContain("From serena's language server");
     expect(answer).toContain('{"Class":["Ledger"]}');
   });
 
-  it("answers with the refusal, as the read's result, when serena is not configured", async () => {
-    const answer = await runOutline(await program(), { browser: {} });
+  it("answers with the refusal when serena is not connected yet — no registry entry", async () => {
+    const { before } = await withRegistry({});
+    const answer = await answerOf(await before("read", "out-absent", { path: largeFile }));
 
     expect(answer).toMatch(/was not run/);
-    expect(answer).toContain("serena is not in this turn's tool catalog");
+    expect(answer).toContain("serena is not connected in this session yet");
     expect(answer).not.toContain("answered with its outline");
   });
 
-  it("does the same when serena is missing from the turn's catalog, which shows only when called", async () => {
-    // Measured in opencode 2's sandbox: a session's first turn can lack serena while it is connected,
-    // and `tools.serena` still exists — calling through it throws "Unknown tool".
-    const missing = new Proxy(
-      {},
-      {
-        get: (_target, name) => async () => {
-          throw new Error(`Unknown tool 'serena.${String(name)}'. Did you mean tools.browser.files.get?`);
-        },
-      },
-    );
-    const answer = await runOutline(await program(), { browser: {}, serena: missing });
-
-    expect(answer).toMatch(/was not run/);
-    expect(answer).toContain("serena is not in this turn's tool catalog");
-  });
-
   it("says what each one answered when neither can outline it", async () => {
-    const answer = await runOutline(await program(), {
-      serena: {
-        ide_symbols_overview: async () => ({ result: "No IDE has this project open." }),
-        get_symbols_overview: async () => {
-          throw new Error("language server terminated");
-        },
+    const { before } = await withRegistry({
+      ide_symbols_overview: async () => reply("No IDE has this project open."),
+      get_symbols_overview: async () => {
+        throw new Error("language server terminated");
       },
     });
+    const answer = await answerOf(await before("read", "out-neither", { path: largeFile }));
 
     expect(answer).toMatch(/was not run/);
     expect(answer).toContain("the IDE: No IDE has this project open.");
@@ -364,56 +475,19 @@ describe("the outline opencode 2 runs instead", () => {
   });
 });
 
-describe("an outline says what it leaves out", () => {
-  // Seen on 2026-09-25: a 315-line Pest test file outlined as `29-34 function mockProducer` — its
-  // it() blocks are not declarations, and the outline gave no sign that most of the file was missing.
-  const program = async () => String((await afterV2("read", "v2-coverage", { path: largeFile })).input.code);
-  const ide = (symbols: unknown[]) => ({ serena: { ide_symbols_overview: async () => ({ result: JSON.stringify({ symbols }) }) } });
-  const declared = (name: string, first: number, last: number) => ({
-    locator: { name, kind: "function" },
-    range: { start: { line: first - 1 }, end: { line: last - 1 } },
-    children: [],
+describe("the grep opencode 2 answers from the index", () => {
+  const declaration = (name: string, kind: string, file: string, line: number) => ({
+    locator: { name, kind, documentUri: `file://${project}/${file}` },
+    range: { start: { line: line - 1 } },
   });
-
-  it("names the ranges outside every declaration when they are most of the file", async () => {
-    const answer = await runOutline(await program(), ide([declared("mockProducer", 29, 34)]));
-
-    expect(answer).toContain("29-34  function mockProducer");
-    expect(answer).toContain("These declarations cover 6 of 400 lines. Outside every one of them: 1-28, 35-400");
-  });
-
-  it("says nothing when the declarations cover the file", async () => {
-    const answer = await runOutline(await program(), ide([declared("Ledger", 1, 390)]));
-
-    expect(answer).not.toContain("These declarations cover");
-  });
-});
-
-describe("the grep opencode 2 answers instead", () => {
-  const program = async (session: string, input: Record<string, unknown> = {}) =>
-    String((await afterV2("grep", session, { pattern: "startWorkflow", ...input })).input.code);
-  const found = {
-    symbols: [
-      {
-        locator: { name: "startWorkflow", kind: "method", documentUri: `file://${join("/", "p")}/x` },
-        range: { start: { line: 9 }, end: { line: 20 } },
-      },
-    ],
-  };
 
   it("answers from the IDE's index: the declaration, and the callers of a single callable", async () => {
-    const declaration = { ...found.symbols[0]!, locator: { ...found.symbols[0]!.locator, documentUri: `file://${project}/src/Upload.ts` } };
-    const answer = await runOutline(await program("v2-lookup-ide"), {
-      serena: {
-        ide_find_symbol: async () => ({ result: JSON.stringify({ symbols: [declaration], truncated: false }) }),
-        ide_hierarchy: async () => ({
-          result: JSON.stringify({
-            locations: [{ location: { uri: `file://${project}/src/Caller.ts`, range: { start: { line: 4 } } }, symbol: { locator: { name: "handle" } } }],
-            truncated: false,
-          }),
-        }),
-      },
+    const { before } = await withRegistry({
+      ide_find_symbol: async () => reply({ symbols: [declaration("startWorkflow", "method", "src/Upload.ts", 10)], truncated: false }),
+      ide_hierarchy: async () =>
+        reply({ locations: [{ location: { uri: `file://${project}/src/Caller.ts`, range: { start: { line: 4 } } }, symbol: { locator: { name: "handle" } } }], truncated: false }),
     });
+    const answer = await answerOf(await before("grep", "lk-ide", { pattern: "startWorkflow" }));
 
     expect(answer).toContain('grep "startWorkflow" answered from the index by JUNON');
     expect(answer).toContain("method startWorkflow — src/Upload.ts:10");
@@ -422,64 +496,142 @@ describe("the grep opencode 2 answers instead", () => {
   });
 
   it("falls back to serena's language server when no IDE answers", async () => {
-    const answer = await runOutline(await program("v2-lookup-lsp"), {
-      serena: {
-        ide_find_symbol: async () => ({ result: "No IDE Bridge daemon is reachable." }),
-        find_symbol: async () => ({
-          result: JSON.stringify([
-            { name_path: "UploadService/startWorkflow", kind: "Method", relative_path: "app/UploadService.php", body_location: { start_line: 41, end_line: 60 } },
-          ]),
-        }),
-      },
+    const { before } = await withRegistry({
+      ide_find_symbol: async () => reply("No IDE Bridge daemon is reachable."),
+      find_symbol: async () =>
+        reply([{ name_path: "UploadService/startWorkflow", kind: "Method", relative_path: "app/UploadService.php", body_location: { start_line: 41, end_line: 60 } }]),
     });
+    const answer = await answerOf(await before("grep", "lk-lsp", { pattern: "startWorkflow" }));
 
     expect(answer).toContain("From serena's language server — no IDE answered:\n  Method UploadService/startWorkflow — app/UploadService.php:42");
   });
 
-  it("takes only exact names, and a name that is no symbol gets the refusal: the grep runs next time", async () => {
-    const near = { symbols: [{ locator: { name: "startWorkflowLater", kind: "method", documentUri: "file:///p/x" }, range: {} }] };
-    const answer = await runOutline(await program("v2-lookup-none"), {
-      serena: {
-        ide_find_symbol: async () => ({ result: JSON.stringify(near) }),
-        find_symbol: async () => ({ result: "[]" }),
-      },
+  it("takes only exact names, and a name nothing declares is a text search: the grep runs next time", async () => {
+    const { before } = await withRegistry({
+      ide_find_symbol: async () => reply({ symbols: [declaration("startWorkflowLater", "method", "x.ts", 1)] }),
+      find_symbol: async () => reply("[]"),
     });
+    const answer = await answerOf(await before("grep", "lk-none", { pattern: "startWorkflow" }));
 
     expect(answer).toMatch(/^grep "startWorkflow" was not run: nothing in this project is declared as startWorkflow/);
-    expect(answer).toContain("run the same grep again and it runs");
     expect(answer).toContain("the IDE's index has no symbol named startWorkflow; serena has no symbol named startWorkflow");
     expect(answer).not.toContain("startWorkflowLater");
-    // Not sent back to the index that has just answered.
     expect(answer).not.toContain("ide_find_symbol");
   });
 
   it("keeps the full refusal when an index could not answer at all", async () => {
-    const answer = await runOutline(await program("v2-lookup-broken"), {
-      serena: {
-        ide_find_symbol: async () => ({ result: "No IDE Bridge daemon is reachable." }),
-        find_symbol: async () => {
-          throw new Error("language server terminated");
-        },
+    const { before } = await withRegistry({
+      ide_find_symbol: async () => reply("No IDE Bridge daemon is reachable."),
+      find_symbol: async () => {
+        throw new Error("language server terminated");
       },
     });
+    const answer = await answerOf(await before("grep", "lk-broken", { pattern: "startWorkflow" }));
 
     expect(answer).toMatch(/^grep "startWorkflow" was not run\. Ask the index instead/);
     expect(answer).toContain("(No answer from the index: the IDE: No IDE Bridge daemon is reachable.; serena: Error: language server terminated)");
   });
 
-  it("answers with the refusal when serena is missing from the turn's catalog", async () => {
-    const missing = new Proxy({}, { get: () => async () => Promise.reject(new Error("Unknown tool 'serena.ide_find_symbol'")) });
-    const answer = await runOutline(await program("v2-lookup-missing"), { serena: missing });
+  it("answers with the refusal when serena is not connected yet", async () => {
+    const { before } = await withRegistry({});
 
-    expect(answer).toContain("serena is not in this turn's tool catalog");
+    expect(await answerOf(await before("grep", "lk-absent", { pattern: "startWorkflow" }))).toContain("serena is not connected in this session yet");
   });
 
   it("says the index answers for the whole project when the grep was scoped", async () => {
-    const answer = await runOutline(await program("v2-lookup-scope", { path: join(project, "src") }), {
-      serena: { ide_find_symbol: async () => ({ result: JSON.stringify(found) }) },
+    const { before } = await withRegistry({
+      ide_find_symbol: async () => reply({ symbols: [declaration("startWorkflow", "class", "x.ts", 1)] }),
     });
+    const answer = await answerOf(await before("grep", "lk-scope", { pattern: "startWorkflow", path: join(project, "src") }));
 
     expect(answer).toContain(`the index answers for the whole project, not only ${join(project, "src")}`);
+  });
+});
+
+describe("the IDE after every edit", () => {
+  // Only about the content just written: the IDE's contentHash — measured equal to the file's
+  // SHA-256 on disk (PhpStorm, 2026-09-25) — must match, and the analysis must be complete.
+  process.env.JUNON_GATE_EDIT_WAIT_MS = "400";
+  const edited = () => {
+    const file = join(project, "edited.ts");
+    writeFileSync(file, `export const edited = ${Date.now()}\n`);
+    return { file, hash: `sha256:${createHash("sha256").update(readFileSync(file)).digest("hex")}` };
+  };
+  const snapshot = (hash: string, diagnostics: unknown[], incomplete = false) =>
+    reply({
+      documents: [{ document: { uri: `file://${project}/edited.ts`, revision: { contentHash: hash } }, diagnostics }],
+      ...(incomplete ? { incomplete_note: "This snapshot is incomplete" } : {}),
+    });
+  const error = (line: number, message: string) => ({ severity: "error", message, range: { start: { line: line - 1 } } });
+
+  it("appends the errors the IDE finds in the content just written", async () => {
+    const { file, hash } = edited();
+    const { after } = await withRegistry({ ide_diagnostics: async () => snapshot(hash, [error(1, "Cannot find name 'x'"), { severity: "warning", message: "unused" }]) });
+    const content = await after("edit", { path: file });
+
+    expect(content.at(-1)!.text).toContain("JUNON: the IDE finds 1 error(s) in this file after the edit:\n  line 1: Cannot find name 'x'");
+    expect(content[0]!.text).toBe("Edited.");
+  });
+
+  it("says the file is clean when the IDE finished and found nothing", async () => {
+    const { file, hash } = edited();
+    const { after } = await withRegistry({ ide_diagnostics: async () => snapshot(hash, []) });
+
+    expect((await after("write", { path: file })).at(-1)!.text).toContain("the IDE finds no errors in this file after the edit");
+  });
+
+  it("says nothing while the IDE has analysed the previous content — never a stale diagnostic", async () => {
+    const { file } = edited();
+    const { after } = await withRegistry({
+      ide_diagnostics: async () => snapshot("sha256:" + "0".repeat(64), [error(1, "about the old text")]),
+      get_diagnostics_for_file: async () => reply({ "edited.ts": { Error: { x: [{}] } } }),
+    });
+    const content = await after("edit", { path: file });
+
+    expect(content).toHaveLength(1);
+  });
+
+  it("asks again until the analysis of this content is complete", async () => {
+    const { file, hash } = edited();
+    let asked = 0;
+    const { after } = await withRegistry({
+      ide_diagnostics: async () => (++asked < 2 ? snapshot(hash, [], true) : snapshot(hash, [error(2, "late")])),
+    });
+
+    expect((await after("edit", { path: file })).at(-1)!.text).toContain("line 2: late");
+    expect(asked).toBe(2);
+  });
+
+  it("asks serena's language server when no IDE has the project", async () => {
+    const { file } = edited();
+    const { after } = await withRegistry({
+      ide_diagnostics: async () => reply("The IDE refused: [WORKSPACE_NOT_FOUND]"),
+      get_diagnostics_for_file: async () => reply({ "edited.ts": { Error: { "<file>": [{ message: "bad" }] } } }),
+    });
+
+    expect((await after("edit", { path: file })).at(-1)!.text).toContain("serena's language server reports errors in this file after the edit");
+  });
+
+  it("leaves a failed edit alone", async () => {
+    const { file, hash } = edited();
+    let asked = 0;
+    const { after } = await withRegistry({ ide_diagnostics: async () => (asked++, snapshot(hash, [])) });
+
+    expect(await after("edit", { path: file }, undefined, "error")).toHaveLength(1);
+    expect(asked).toBe(0);
+  });
+
+  it("leaves alone what is not a source file inside the project", async () => {
+    let asked = 0;
+    const { after } = await withRegistry({ ide_diagnostics: async () => (asked++, reply("{}")) });
+    const notes = join(project, "notes.md");
+    writeFileSync(notes, "x\n");
+    const elsewhere = join(mkdtempSync(join(tmpdir(), "junon-gate-edit-")), "x.ts");
+    writeFileSync(elsewhere, "x\n");
+
+    expect(await after("edit", { path: notes })).toHaveLength(1);
+    expect(await after("edit", { path: elsewhere })).toHaveLength(1);
+    expect(asked).toBe(0);
   });
 });
 

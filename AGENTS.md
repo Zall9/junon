@@ -205,8 +205,9 @@ IDE is connected, prefer the `ide_*` tools over `read`, `grep` and `glob`.
 
 They are served by the MCP named **`serena`**, which is started as `junon attach` — plain `serena`
 publishes none of them. How a host names them differs: `mcp__serena__ide_status` in Claude Code,
-`serena_ide_status` in opencode 1, `await tools.serena.ide_status()` inside `execute` in opencode 2
-([docs/OPENCODE.md](docs/OPENCODE.md)). `ide_status` says whether an IDE is connected and what it has
+`serena_ide_status` in opencode 1 — and in opencode 2 since 0.3.15, whose file-tool gate makes the
+seven IDE tools tools of their own; serena's others are reached inside `execute` there, as
+`tools.serena.find_symbol(...)` ([docs/OPENCODE.md](docs/OPENCODE.md)). `ide_status` says whether an IDE is connected and what it has
 open; call it first, because every other `ide_*` tool refuses without one.
 
 | Instead of                         | Use                                                                               |

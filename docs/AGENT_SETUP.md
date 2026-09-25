@@ -662,6 +662,35 @@ have answered about four times as often as they asked the IDE — `find_symbol` 
   a range — that is compliance — and counting it had switched the bare-identifier nudge off in the
   sessions that had followed the rule. Found in the real opencode 1, not by a test.
 
+### Under opencode 2: the IDE's tools as tools, and the IDE after every edit (0.3.15)
+
+opencode 2 offers a model no MCP tool of its own: they exist only inside `execute`, after a `search`
+— and agents went back to `read` and `grep`. The gate now uses what opencode 2 gives a plugin (every
+row measured, [OPENCODE.md](OPENCODE.md#the-tool-registry-what-a-plugin-can-change)):
+
+- **Seven IDE tools become tools of their own** — `serena_ide_status`, `serena_ide_find_symbol`,
+  `serena_ide_read_symbol`, `serena_ide_symbols_overview`, `serena_ide_hierarchy`,
+  `serena_ide_read_document`, `serena_ide_diagnostics` — offered next to `read` from the turn serena
+  connects. Seven and not thirteen because each one's schema is sent on every request: the thirteen
+  IDE and symbol tools weighed 17,419 characters against a 13,620-character tool list, these seven
+  6,955. serena's language-server tools and the rest stay inside `execute`, where a promoted tool is
+  no longer: an `execute` calling one is refused, naming the tool to call instead.
+- **`read`'s and `grep`'s descriptions name them** — what a model chooses a tool by.
+- **Every edit or write of a source file is checked by the IDE**, and the errors it finds are
+  appended to what the model reads back — the only place JUNON can stand in a write, since `execute`
+  cannot write. Only about the content just written: the IDE reports the SHA-256 of the text it
+  analysed (measured equal to the file's on disk, PhpStorm), and until it matches and the analysis is
+  complete nothing is said — five seconds at most. With no IDE on the project, serena's language
+  server, which rereads the file itself.
+- **The outline and grep answers are asked by the plugin**, through the registry — no longer by a
+  program inside `execute`, which the promoted tools have left, and which could not reach serena on
+  a session's first turn.
+
+An agent denied `serena_*` — how oh-my-opencode-slim writes an agent without serena in its `mcps` —
+is offered none of these tools, and the plugin's own calls on its behalf are refused too: the
+promotion widens nothing. opencode 1 and Claude Code are unchanged: their MCP tools were always tools
+of their own. `junon-usage.py` counts the checked edits in a `checked` column.
+
 **Serena's own tools are not made to answer from the IDE**, though it was considered. Agents program
 against their answers — 36 of 157 calls to `find_symbol`, `get_symbols_overview` and
 `find_referencing_symbols` process the result in code, by its fields (`name_path`, `body_location`) —

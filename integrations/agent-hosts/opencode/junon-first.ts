@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { readFileSync, realpathSync } from "node:fs"
 import { isAbsolute, relative as relativeTo, resolve } from "node:path"
 
@@ -230,10 +231,11 @@ type Host = 1 | 2
  * none of them. A model reaches them through the `execute` meta-tool, as code — measured in the
  * user's own sessions on 2026-09-23: `await tools.serena.find_symbol({...})`, after `search` has
  * loaded them. Until this was written the gate named `serena_find_symbol` to opencode 2 models too:
- * a tool they could not call.
+ * a tool they could not call. Since 0.3.15 the IDE's tools this plugin promoted are tools of their
+ * own under opencode 2 as well, and are named as such — they are no longer inside `execute`.
  */
 function serena(host: Host, name: string, args: string): string {
-  return host === 1 ? `serena_${name}(${args})` : `execute → await tools.serena.${name}(${args})`
+  return host === 1 || promoted.has(name) ? `serena_${name}(${args})` : `execute → await tools.serena.${name}(${args})`
 }
 
 /**
@@ -250,11 +252,21 @@ function withoutAnIde(host: Host, ...names: string[]): string {
 
 /** The line only an opencode 2 model needs: where those calls go, and how to load them. */
 function howToCall(host: Host): string {
-  return host === 1
-    ? ""
-    : `In opencode 2 these run inside the \`execute\` tool; if \`tools.serena\` is not there yet, ` +
-        `\`search({ query: "serena" })\` finds it.\n`
+  if (host === 1) return ""
+  if (promoted.size) {
+    return (
+      `In opencode 2 the serena_ide_* tools are tools of their own; serena's others run inside the ` +
+      `\`execute\` tool, as tools.serena.<name>(...) — \`search({ query: "serena" })\` finds them.\n`
+    )
+  }
+  return (
+    `In opencode 2 these run inside the \`execute\` tool; if \`tools.serena\` is not there yet, ` +
+    `\`search({ query: "serena" })\` finds it.\n`
+  )
 }
+
+/** Every serena tool an `execute`'s code calls: `tools.serena.x(` or `tools["serena"].x(`. */
+const SERENA_CALLS = /\btools\s*(?:\.\s*serena|\[\s*["']serena["']\s*\])\s*\.\s*(\w+)/g
 
 /** `tools.serena.x` or `tools["serena"].x` — a symbolic call, as opencode 2 makes it. */
 const SERENA_IN_CODE = /\btools\s*(?:\.\s*serena\b|\[\s*["']serena["']\s*\])/
@@ -352,6 +364,20 @@ function gate(
   if (isSymbolicCall(tool, args)) {
     usesSymbolicTools.add(session)
     unheeded.set(session, 0)
+    // A promoted tool is gone from `execute`: calling it there fails with opencode 2's own error,
+    // which points at `initial_instructions`. Said plainly instead, with the call to make.
+    if (tool === "execute" && promoted.size) {
+      const moved = [...new Set([...String(args.code ?? "").matchAll(SERENA_CALLS)].map((m) => m[1]!))].filter((n) => promoted.has(n))
+      if (moved.length) {
+        return {
+          refusal:
+            `That execute was not run: ${moved.map((n) => `tools.serena.${n}`).join(", ")} is not inside ` +
+            `execute any more — ${moved.map((n) => `serena_${n}`).join(", ")} is a tool of its own now, in ` +
+            `your tool list. Call it directly, with the same arguments. serena's other tools — ` +
+            `find_symbol, search_for_pattern, the memories — are still reached inside execute.`,
+        }
+      }
+    }
     return undefined
   }
 
@@ -513,47 +539,135 @@ function gate(
 /** What an outline answer starts with — and what `junon-usage.py` counts outlines by. */
 const OUTLINED = "answered with its outline by JUNON"
 
+/** What an answered grep starts with — and what `junon-usage.py` counts those answers by. */
+const LOOKED_UP = "answered from the index by JUNON"
+
+// --- opencode 2's tool registry --------------------------------------------------------------------
+
 /**
- * The `execute` program opencode 2 runs in place of a whole read of a large file.
+ * The part of opencode 2's tool registry this uses, declared here so nothing has to be imported.
  *
- * Measured in the real opencode 2 before it was written (2026-09-24): a hook that sets `event.tool`
- * and `event.input` runs the new call, and its output comes back to the model as the answer to the
- * `read` it made — the database still records a `read`, with the program's output. `edit` needs no
- * prior `read` there, so answering the read with an outline cannot block an edit.
- *
- * Inside `execute`, the catalog is fixed for the turn: in a session's first turn serena can be missing
- * from it while `ctx.mcp.list()` already reports it connected, and there is no timer to wait with.
- * A server missing from it still has `tools.serena`, which throws "Unknown tool" when called.
- *
- * The IDE's outline first, because it carries lines: the next read can then be the range. Serena's
- * language server second. And when neither answers, the refusal the other hosts get — as the read's
- * result rather than an error, so the model reads why and what to do.
+ * Measured in the real host on 2026-09-25: `ctx.tool.transform` hands a plugin the registry every
+ * tool lives in — `read` and `grep` as much as serena's thirty-nine, which appear once serena
+ * connects, as `serena_<tool>` in namespace `serena`, flagged `codemode` because opencode 2 offers MCP
+ * tools only inside `execute`. Flipping that flag offers one to the model as a tool of its own from
+ * the next turn — and takes it out of `execute`. An agent denied `serena_*` — which is how
+ * oh-my-opencode-slim writes an agent's `mcps` — is offered none of them either way.
  */
-function outlineProgram(outline: NonNullable<Decision["outline"]>, refusal: string): string {
-  const header =
-    `read of ${outline.path} (${outline.lines} lines) ${OUTLINED}, not with its text — a whole ` +
-    `read of a source file this size always is.\n` +
-    `For the text you need, read that range: offset and limit, with the lines listed below. A range ` +
-    `is never touched.\n` +
-    `One declaration: await tools.serena.ide_read_symbol({ name: "…", relative_path: ` +
-    `"${outline.relative}" }), inside execute.\n`
-  return `/* junon-first: outline */
-const relative = ${JSON.stringify(outline.relative)}
-const header = ${JSON.stringify(header)}
-const refusal = ${JSON.stringify(refusal)}
-const text = (answer) => {
-  const value = answer && typeof answer === "object" && "result" in answer ? answer.result : answer
-  return typeof value === "string" ? value : JSON.stringify(value)
+interface RegistryTool {
+  readonly id: string
+  description?: string
+  options?: { namespace?: string; codemode?: boolean; [key: string]: unknown }
+  execute(args: unknown, context: unknown): Promise<unknown>
 }
-const absent = refusal + "\\n(No outline: serena is not in this turn's tool catalog — once it is connected, the next call has it.)"
-// Seen on 2026-09-25: a 315-line Pest test file outlined as one function — its it() blocks are not
-// declarations. An outline that leaves most of the file out says which lines, so they can be read.
-const uncovered = (symbols) => {
-  const total = ${outline.lines}
-  const spans = (Array.isArray(symbols) ? symbols : [])
-    .map((s) => [((s && s.range && s.range.start && s.range.start.line) || 0) + 1, ((s && s.range && s.range.end && s.range.end.line) || 0) + 1])
+interface Registry {
+  list(): RegistryTool[]
+  get(id: string): RegistryTool | undefined
+  update(id: string, change: (tool: RegistryTool) => void): void
+}
+
+/** What a tool call carries for the tool it runs — built from the hook's event. */
+interface CallContext {
+  readonly sessionID: string
+  readonly agent?: string
+  readonly messageID?: string
+  readonly id: string
+  progress(update: unknown): void
+  readonly signal: AbortSignal
+}
+
+/**
+ * The tool list opencode 2 hands to every agent — and the one place this plugin can make the IDE's
+ * tools as visible as `read`. Seven, chosen by what they answer and what they cost: measured on the
+ * request the model receives, the thirteen IDE and symbol tools weighed 17,419 characters of schema
+ * against a 13,620-character list; these seven weigh 6,955. serena's language-server tools, the
+ * refactoring ones and `ide_todos` stay inside `execute`.
+ */
+const DIRECT = new Set([
+  "ide_status",
+  "ide_find_symbol",
+  "ide_read_symbol",
+  "ide_symbols_overview",
+  "ide_hierarchy",
+  "ide_read_document",
+  "ide_diagnostics",
+])
+
+/** The ones this process has promoted: none under opencode 1, nor before serena has connected. */
+const promoted = new Set<string>()
+
+/** Appended to the descriptions a model chooses `read` and `grep` by. Also the mark that it was. */
+const POINTERS: Record<string, string> = {
+  read:
+    "\n\nJUNON: for source code in this project, serena_ide_symbols_overview lists a file's declarations " +
+    "with their lines, serena_ide_read_symbol reads one of them, and serena_ide_find_symbol finds where " +
+    "something is declared — from the IDE, and for a fraction of the context. A whole read of a source " +
+    "file of 300 lines or more is answered with its outline.",
+  grep:
+    "\n\nJUNON: to find where something is declared, or who calls it, serena_ide_find_symbol and " +
+    "serena_ide_hierarchy answer from the IDE's index, without the comments and strings a text search " +
+    "matches. A grep for a bare identifier is answered from that index.",
+}
+
+/** Takes JUNON's IDE tools out of code mode, and points `read` and `grep` at them. Idempotent. */
+function promote(registry: Registry): void {
+  for (const tool of registry.list()) {
+    const name = String(tool.id ?? "")
+    if (tool.options?.namespace === "serena" && DIRECT.has(name.replace(/^serena_/, ""))) {
+      registry.update(tool.id, (t) => {
+        t.options = { ...(t.options ?? {}), codemode: false }
+      })
+      promoted.add(name.replace(/^serena_/, ""))
+    }
+    const pointer = POINTERS[name]
+    if (pointer !== undefined && !String(tool.description ?? "").includes(pointer)) {
+      registry.update(tool.id, (t) => {
+        t.description = `${t.description ?? ""}${pointer}`
+      })
+    }
+  }
+}
+
+/** The text of a registry tool's answer: its content when it has some, its `result` when that is all. */
+function answerText(answer: any): string {
+  const content = Array.isArray(answer?.content) ? answer.content : []
+  const text = content.find((part: any) => typeof part?.text === "string")?.text
+  if (typeof text === "string") return text
+  const output = answer?.output
+  const value = output && typeof output === "object" && "result" in output ? output.result : output
+  return typeof value === "string" ? value : JSON.stringify(value ?? answer)
+}
+
+/** Asks serena through the registry. `undefined` when the tool is not there — serena not connected. */
+async function askSerena(registry: Registry | undefined, name: string, args: object, context: CallContext): Promise<string | undefined> {
+  const tool = registry?.get(`serena_${name}`)
+  if (tool === undefined) return undefined
+  return answerText(await tool.execute(args, context))
+}
+
+/** An answer serena gave as JSON, or `undefined` when it explained instead — no IDE, no symbol. */
+function parsed(text: string | undefined): any {
+  if (text === undefined) return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
+// --- answers, in place of the call ------------------------------------------------------------------
+
+/**
+ * The ranges of a file outside every top-level declaration, said when they are most of it.
+ *
+ * Seen on 2026-09-25: a 315-line Pest test file outlined as one function — its `it()` blocks are not
+ * declarations, and the outline gave no sign that most of the file was missing.
+ */
+function uncovered(symbols: any[], total: number): string {
+  const spans = symbols
+    .map((s) => [(s?.range?.start?.line ?? 0) + 1, (s?.range?.end?.line ?? 0) + 1] as const)
     .sort((a, b) => a[0] - b[0])
-  const gaps = []
+  const gaps: [number, number][] = []
   let next = 1
   let covered = 0
   for (const [first, last] of spans) {
@@ -563,145 +677,218 @@ const uncovered = (symbols) => {
   }
   if (next <= total) gaps.push([next, total])
   if (covered * 2 >= total) return ""
-  const listed = gaps.filter(([a, b]) => b - a >= 2).slice(0, 12).map(([a, b]) => a + "-" + b)
-  return "\\n\\nThese declarations cover " + covered + " of " + total + " lines. Outside every one of them: " +
-    listed.join(", ") + " — a test file's it() and test() blocks, a script's statements and a config's " +
-    "arrays are not declarations. Read those ranges."
+  const listed = gaps.filter(([a, b]) => b - a >= 2).slice(0, 12).map(([a, b]) => `${a}-${b}`)
+  return (
+    `\n\nThese declarations cover ${covered} of ${total} lines. Outside every one of them: ${listed.join(", ")} — ` +
+    `a test file's it() and test() blocks, a script's statements and a config's arrays are not ` +
+    `declarations. Read those ranges.`
+  )
 }
-if (typeof tools !== "object" || tools === null || tools.serena === undefined) return absent
-const why = []
-try {
-  const answer = text(await tools.serena.ide_symbols_overview({ relative_path: relative }))
-  let parsed
-  try { parsed = JSON.parse(answer) } catch { why.push("the IDE: " + answer.slice(0, 240)) }
-  const rows = []
-  const walk = (symbols, depth) => {
-    for (const symbol of Array.isArray(symbols) ? symbols : []) {
-      if (rows.length >= 400) return
-      const locator = (symbol && symbol.locator) || {}
-      const range = (symbol && symbol.range) || {}
-      const first = ((range.start && range.start.line) || 0) + 1
-      const last = ((range.end && range.end.line) || 0) + 1
-      rows.push("  ".repeat(depth) + first + "-" + last + "  " + (locator.kind || "symbol") + " " + (locator.name || "?"))
-      if (depth < 1) walk(symbol && symbol.children, depth + 1)
-    }
-  }
-  if (parsed) {
-    walk(parsed.symbols, 0)
-    if (rows.length) return header + "\\nFrom the IDE — first-last line, kind, name:\\n" + rows.join("\\n") + uncovered(parsed.symbols)
-    why.push("the IDE listed no declarations")
-  }
-} catch (error) {
-  // A server missing from the turn's catalog shows only when called: \`tools.serena\` is still there.
-  if (/Unknown tool/.test(String(error))) return absent
-  why.push("the IDE: " + String(error).slice(0, 240))
-}
-try {
-  const overview = text(await tools.serena.get_symbols_overview({ relative_path: relative, depth: 1 }))
-  let parsed
-  try { parsed = JSON.parse(overview) } catch { why.push("serena: " + overview.slice(0, 240)) }
-  if (parsed && typeof parsed === "object" && Object.keys(parsed).length) {
-    return header + "\\nFrom serena's language server — names only; find_symbol gives their lines:\\n" + overview.slice(0, 12000)
-  }
-  if (parsed) why.push("serena listed no declarations")
-} catch (error) {
-  why.push("serena: " + String(error).slice(0, 240))
-}
-return refusal + "\\n(No outline: " + why.join("; ") + ")"
-`
-}
-
-/** What an answered grep starts with — and what `junon-usage.py` counts those answers by. */
-const LOOKED_UP = "answered from the index by JUNON"
 
 /**
- * The `execute` program opencode 2 runs in place of a grep for a bare identifier.
+ * What opencode 2 answers a whole read of a large source file with: the file's outline.
  *
- * The same question, put to the IDE's index first — `ide_find_symbol`, then `ide_hierarchy` for the
- * callers when exactly one callable carries the name — and to serena's language server when no IDE
- * answers. A name that is no symbol at all is a text search after all, so that answer is the refusal:
- * it says the same grep runs the second time, which it does. Everything the outline program measured
- * about `execute` holds here too.
+ * The IDE's first, because it carries lines — the next read can then be the range. Serena's language
+ * server second. The refusal the other hosts get when neither answers, as the read's result rather
+ * than an error, so the model reads why and what to do. Asked by this plugin through the registry:
+ * the IDE's tools are not inside `execute` any more once promoted, and a session's first turn could
+ * not reach serena there anyway (measured, 2026-09-24).
  */
-function lookupProgram(lookup: NonNullable<Decision["lookup"]>, refusal: string, directory: string | undefined): string {
+async function outlineAnswer(
+  registry: Registry | undefined,
+  outline: NonNullable<Decision["outline"]>,
+  refusal: string,
+  context: CallContext,
+): Promise<string> {
   const header =
-    `grep "${lookup.pattern}" ${LOOKED_UP}, not run — a bare identifier is a question about a ` +
+    `read of ${outline.path} (${outline.lines} lines) ${OUTLINED}, not with its text — a whole ` +
+    `read of a source file this size always is.\n` +
+    `For the text you need, read that range: offset and limit, with the lines listed below. A range ` +
+    `is never touched.\n` +
+    `One declaration: serena_ide_read_symbol({ name: "…", relative_path: "${outline.relative}" }).\n`
+  const why: string[] = []
+  try {
+    const text = await askSerena(registry, "ide_symbols_overview", { relative_path: outline.relative }, context)
+    if (text === undefined) return `${refusal}\n(No outline: serena is not connected in this session yet.)`
+    const answer = parsed(text)
+    const symbols: any[] = Array.isArray(answer?.symbols) ? answer.symbols : []
+    const rows: string[] = []
+    const walk = (list: any[], depth: number) => {
+      for (const symbol of list) {
+        if (rows.length >= 400) return
+        const first = (symbol?.range?.start?.line ?? 0) + 1
+        const last = (symbol?.range?.end?.line ?? 0) + 1
+        rows.push(`${"  ".repeat(depth)}${first}-${last}  ${symbol?.locator?.kind ?? "symbol"} ${symbol?.locator?.name ?? "?"}`)
+        if (depth < 1 && Array.isArray(symbol?.children)) walk(symbol.children, depth + 1)
+      }
+    }
+    walk(symbols, 0)
+    if (rows.length) return `${header}\nFrom the IDE — first-last line, kind, name:\n${rows.join("\n")}${uncovered(symbols, outline.lines)}`
+    why.push(answer === undefined ? `the IDE: ${text.slice(0, 240)}` : "the IDE listed no declarations")
+  } catch (error) {
+    why.push(`the IDE: ${String(error).slice(0, 240)}`)
+  }
+  try {
+    const text = await askSerena(registry, "get_symbols_overview", { relative_path: outline.relative, depth: 1 }, context)
+    const answer = parsed(text)
+    if (answer && typeof answer === "object" && Object.keys(answer).length) {
+      return `${header}\nFrom serena's language server — names only; serena_ide_find_symbol gives their lines:\n${String(text).slice(0, 12000)}`
+    }
+    why.push(answer ? "serena listed no declarations" : `serena: ${String(text).slice(0, 240)}`)
+  } catch (error) {
+    why.push(`serena: ${String(error).slice(0, 240)}`)
+  }
+  return `${refusal}\n(No outline: ${why.join("; ")})`
+}
+
+/**
+ * What opencode 2 answers a grep for a bare identifier with: the IDE's index, first.
+ *
+ * The declarations carrying that exact name — the index searches the way Go to Symbol does, and a
+ * near miss offered for a config key would answer a question nobody asked — and their callers when
+ * exactly one callable carries it; serena's language server when no IDE answers. A name nothing
+ * declares is a text search after all, and the answer says so: the same grep runs the second time.
+ */
+async function lookupAnswer(
+  registry: Registry | undefined,
+  lookup: NonNullable<Decision["lookup"]>,
+  refusal: string,
+  directory: string | undefined,
+  context: CallContext,
+): Promise<string> {
+  const pattern = lookup.pattern
+  const header =
+    `grep "${pattern}" ${LOOKED_UP}, not run — a bare identifier is a question about a ` +
     `symbol${lookup.scope ? `, and the index answers for the whole project, not only ${lookup.scope}` : ""}.\n` +
     `For its text occurrences too — comments, strings, config — run the same grep again: it runs the ` +
     `second time. A regex runs the first.\n`
-  return `/* junon-first: lookup */
-const pattern = ${JSON.stringify(lookup.pattern)}
-const root = ${JSON.stringify(directory ?? "")}
-const header = ${JSON.stringify(header)}
-const refusal = ${JSON.stringify(refusal)}
-const text = (answer) => {
-  const value = answer && typeof answer === "object" && "result" in answer ? answer.result : answer
-  return typeof value === "string" ? value : JSON.stringify(value)
-}
-const where = (uri) => {
-  const path = decodeURIComponent(String(uri || "").replace(/^file:\\/\\//, ""))
-  return root && path.startsWith(root + "/") ? path.slice(root.length + 1) : path
-}
-const line = (range) => ((range && range.start && range.start.line) || 0) + 1
-const absent = refusal + "\\n(No answer from the index: serena is not in this turn's tool catalog — once it is connected, the next call has it.)"
-if (typeof tools !== "object" || tools === null || tools.serena === undefined) return absent
-const why = []
-try {
-  const answer = text(await tools.serena.ide_find_symbol({ query: pattern, limit: 30 }))
-  let parsed
-  try { parsed = JSON.parse(answer) } catch { why.push("the IDE: " + answer.slice(0, 240)) }
-  if (parsed) {
-    const symbols = Array.isArray(parsed.symbols) ? parsed.symbols : []
-    // Exact names only: the index searches the way Go to Symbol does, and a near miss offered for a
-    // config key would be an answer to a question nobody asked.
-    const exact = symbols.filter((s) => ((s && s.locator) || {}).name === pattern)
-    if (exact.length) {
-      const rows = exact.slice(0, 20).map((s) => {
-        const locator = s.locator || {}
-        return "  " + (locator.kind || "symbol") + " " + locator.name + " — " + where(locator.documentUri) + ":" + line(s.range || locator.selectionRange)
-      })
-      let out = header + "\\nFrom the IDE's index — declared as " + pattern + ":\\n" + rows.join("\\n")
-      if (exact.length === 1 && /^(method|function|constructor)$/.test(String(exact[0].locator.kind))) {
-        try {
-          const tree = JSON.parse(text(await tools.serena.ide_hierarchy({ name: pattern, relation: "callers" })))
-          const callers = (tree.locations || []).slice(0, 20).map((c) => {
-            const caller = (c.symbol && c.symbol.locator) || {}
-            return "  " + (caller.name || "?") + " — " + where(c.location && c.location.uri) + ":" + line(c.location && c.location.range)
-          })
-          out += "\\n\\nIts callers, from the IDE" + (tree.truncated ? ", more than shown" : "") + ":\\n" + (callers.length ? callers.join("\\n") : "  none")
-        } catch (error) {
-          out += "\\n\\n(No callers: " + String(error).slice(0, 160) + ")"
+  const root = directory ?? ""
+  const where = (uri: unknown) => {
+    const path = decodeURIComponent(String(uri ?? "").replace(/^file:\/\//, ""))
+    return root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path
+  }
+  const line = (range: any) => (range?.start?.line ?? 0) + 1
+  const why: string[] = []
+  try {
+    const text = await askSerena(registry, "ide_find_symbol", { query: pattern, limit: 30 }, context)
+    if (text === undefined) return `${refusal}\n(No answer from the index: serena is not connected in this session yet.)`
+    const answer = parsed(text)
+    if (answer === undefined) why.push(`the IDE: ${text.slice(0, 240)}`)
+    else {
+      const exact = (Array.isArray(answer.symbols) ? answer.symbols : []).filter((s: any) => s?.locator?.name === pattern)
+      if (exact.length) {
+        const rows = exact
+          .slice(0, 20)
+          .map((s: any) => `  ${s.locator.kind ?? "symbol"} ${s.locator.name} — ${where(s.locator.documentUri)}:${line(s.range ?? s.locator.selectionRange)}`)
+        let out = `${header}\nFrom the IDE's index — declared as ${pattern}:\n${rows.join("\n")}`
+        if (exact.length === 1 && /^(method|function|constructor)$/.test(String(exact[0].locator.kind))) {
+          try {
+            const tree = parsed(await askSerena(registry, "ide_hierarchy", { name: pattern, relation: "callers" }, context))
+            const callers = (tree?.locations ?? [])
+              .slice(0, 20)
+              .map((c: any) => `  ${c?.symbol?.locator?.name ?? "?"} — ${where(c?.location?.uri)}:${line(c?.location?.range)}`)
+            out += `\n\nIts callers, from the IDE${tree?.truncated ? ", more than shown" : ""}:\n${callers.length ? callers.join("\n") : "  none"}`
+          } catch (error) {
+            out += `\n\n(No callers: ${String(error).slice(0, 160)})`
+          }
         }
+        if (exact.length > 20 || answer.truncated) out += "\n(The IDE had more matches than shown.)"
+        return out
       }
-      if (exact.length > 20 || parsed.truncated) out += "\\n(The IDE had more matches than shown.)"
-      return out
+      why.push(`the IDE's index has no symbol named ${pattern}`)
     }
-    why.push("the IDE's index has no symbol named " + pattern)
+  } catch (error) {
+    why.push(`the IDE: ${String(error).slice(0, 240)}`)
   }
-} catch (error) {
-  if (/Unknown tool/.test(String(error))) return absent
-  why.push("the IDE: " + String(error).slice(0, 240))
-}
-try {
-  const answer = text(await tools.serena.find_symbol({ name_path_pattern: pattern }))
-  let parsed
-  try { parsed = JSON.parse(answer) } catch { why.push("serena: " + answer.slice(0, 240)) }
-  if (Array.isArray(parsed) && parsed.length) {
-    const rows = parsed.slice(0, 20).map((s) => "  " + s.kind + " " + s.name_path + " — " + s.relative_path + ":" + (((s.body_location || {}).start_line || 0) + 1))
-    return header + "\\nFrom serena's language server — no IDE answered:\\n" + rows.join("\\n")
+  try {
+    const text = await askSerena(registry, "find_symbol", { name_path_pattern: pattern }, context)
+    const answer = parsed(text)
+    if (Array.isArray(answer) && answer.length) {
+      const rows = answer
+        .slice(0, 20)
+        .map((s: any) => `  ${s.kind} ${s.name_path} — ${s.relative_path}:${(s.body_location?.start_line ?? 0) + 1}`)
+      return `${header}\nFrom serena's language server — no IDE answered:\n${rows.join("\n")}`
+    }
+    why.push(Array.isArray(answer) ? `serena has no symbol named ${pattern}` : `serena: ${String(text).slice(0, 240)}`)
+  } catch (error) {
+    why.push(`serena: ${String(error).slice(0, 240)}`)
   }
-  if (Array.isArray(parsed)) why.push("serena has no symbol named " + pattern)
-} catch (error) {
-  why.push("serena: " + String(error).slice(0, 240))
+  // Both indexes answered, and neither knows the name: a text search after all. Advising the index
+  // here would send the agent to ask it again what it has just said.
+  if (why.length && why.every((reason) => / has no symbol named /.test(reason))) {
+    return (
+      `grep "${pattern}" was not run: nothing in this project is declared as ${pattern}, so it is a ` +
+      `text search — run the same grep again and it runs.\n(No answer from the index: ${why.join("; ")})`
+    )
+  }
+  return `${refusal}\n(No answer from the index: ${why.join("; ")})`
 }
-// Both indexes answered, and neither knows the name: a text search after all. Advising the index
-// here would send the agent to ask it again what it has just said.
-if (why.length && why.every((reason) => / has no symbol named /.test(reason))) {
-  return "grep \\"" + pattern + "\\" was not run: nothing in this project is declared as " + pattern +
-    ", so it is a text search — run the same grep again and it runs.\\n(No answer from the index: " + why.join("; ") + ")"
+
+// --- the IDE after every edit ------------------------------------------------------------------------
+
+/**
+ * How long an edit waits for the IDE to have analysed what it wrote, before saying nothing. Five
+ * seconds: the IDE's first answer for a file arrives before its analysis pass finishes, and the pass
+ * took about six on a real IntelliJ for a file it had not looked at (measured with `ide_diagnostics`).
+ * `JUNON_GATE_EDIT_WAIT_MS` changes it — the tests shorten it.
+ */
+function editWaitMs(): number {
+  const configured = Number(process.env.JUNON_GATE_EDIT_WAIT_MS)
+  return Number.isFinite(configured) && configured >= 0 ? configured : 5000
 }
-return refusal + "\\n(No answer from the index: " + why.join("; ") + ")"
-`
+
+/**
+ * What the IDE — else serena's language server — finds wrong in a source file just written.
+ *
+ * The only place JUNON can stand in a write under opencode 2: `execute` cannot write, so a write
+ * cannot go through JUNON, but what it produced can be checked by it before the model reads the
+ * result. **Only about the content just written.** The IDE reports, with every diagnosed document,
+ * the SHA-256 of the text it analysed — measured equal to the file's bytes on disk (PhpStorm,
+ * `vod/core`, 2026-09-25). Until it matches, and until the analysis is complete, the IDE is asked
+ * again; if it has not caught up within the wait, nothing is said, since a diagnostic about the
+ * previous content is worse than none. serena's language server rereads the file itself, so its
+ * answer is always about this content.
+ */
+async function afterEdit(registry: Registry | undefined, file: string, relative: string, context: CallContext): Promise<string | undefined> {
+  if (registry === undefined) return undefined
+  let bytes: Buffer
+  try {
+    bytes = readFileSync(file)
+  } catch {
+    return undefined
+  }
+  const written = new Set([
+    `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+    // The IDE holds a document with its line separators normalised.
+    `sha256:${createHash("sha256").update(bytes.toString("utf8").replace(/\r\n?/g, "\n"), "utf8").digest("hex")}`,
+  ])
+  const deadline = Date.now() + editWaitMs()
+  let theIdeHasIt = false
+  for (;;) {
+    const answer = parsed(await askSerena(registry, "ide_diagnostics", { relative_path: relative }, context).catch(() => undefined))
+    if (answer === undefined) break // no IDE for this project, or serena not connected
+    theIdeHasIt = true
+    const documents: any[] = Array.isArray(answer.documents) ? answer.documents : []
+    const document = documents.find((d) => String(d?.document?.uri ?? "").endsWith(`/${relative}`)) ?? documents[0]
+    if (document && written.has(document.document?.revision?.contentHash) && !answer.incomplete_note) {
+      const errors = (document.diagnostics ?? []).filter((d: any) => d?.severity === "error")
+      if (!errors.length) return "\n\n(JUNON: the IDE finds no errors in this file after the edit.)"
+      const rows = errors.slice(0, 8).map((d: any) => `  line ${(d.range?.start?.line ?? 0) + 1}: ${String(d.message ?? "").slice(0, 200)}`)
+      return `\n\nJUNON: the IDE finds ${errors.length} error(s) in this file after the edit:\n${rows.join("\n")}` +
+        (errors.length > 8 ? `\n  … and ${errors.length - 8} more: serena_ide_diagnostics({ relative_path: "${relative}" })` : "")
+    }
+    // Never past the deadline: the last look is taken at it, not a pause after it.
+    const left = deadline - Date.now()
+    if (left <= 0) break
+    await new Promise((settle) => setTimeout(settle, Math.min(750, left)))
+  }
+  if (theIdeHasIt) return undefined
+  const text = await askSerena(registry, "get_diagnostics_for_file", { relative_path: relative, min_severity: 1 }, context).catch(() => undefined)
+  const answer = parsed(text)
+  if (answer === undefined || typeof answer !== "object") return undefined
+  const found = JSON.stringify(answer) !== "{}" && Object.values(answer).some((v) => v && typeof v === "object" && Object.keys(v).length)
+  if (!found) return "\n\n(JUNON: serena's language server finds no errors in this file after the edit.)"
+  return `\n\nJUNON: serena's language server reports errors in this file after the edit:\n${String(text).slice(0, 1500)}`
 }
 
 // --- the entry points ---------------------------------------------------------------------------
@@ -719,14 +906,39 @@ const opencode1 = async (ctx?: V1Context) => ({
   },
 })
 
+/** A hook's event, as opencode 2 hands it over — `result` only after the call has run. */
+interface V2Event {
+  tool: string
+  readonly sessionID: string
+  readonly agent?: string
+  readonly messageID?: string
+  readonly id?: string
+  input: unknown
+  readonly status?: string
+  result?: { content?: unknown[]; [key: string]: unknown }
+}
+
 /** The part of opencode 2's plugin context this uses — declared here so nothing has to be imported. */
 interface V2Context {
   readonly location?: { readonly directory?: string }
   readonly tool: {
     hook(
-      name: "execute.before",
-      callback: (event: { tool: string; readonly sessionID: string; input: unknown }) => Promise<void> | void,
+      name: "execute.before" | "execute.after",
+      callback: (event: V2Event) => Promise<void> | void,
     ): Promise<{ dispose(): Promise<void> }>
+    transform?(change: (registry: Registry) => void): Promise<{ dispose(): Promise<void> } | void>
+  }
+}
+
+/** What a tool this plugin calls on the model's behalf is told about the call it stands in for. */
+function contextOf(event: V2Event): CallContext {
+  return {
+    sessionID: event.sessionID,
+    agent: event.agent,
+    messageID: event.messageID,
+    id: `${event.id ?? "call"}:junon`,
+    progress: () => {},
+    signal: new AbortController().signal,
   }
 }
 
@@ -748,22 +960,43 @@ export default {
   server: opencode1,
   async setup(ctx: V2Context) {
     const directory = ctx.location?.directory
-    const registration = await ctx.tool.hook("execute.before", async (event) => {
+    let registry: Registry | undefined
+    const transformed = await ctx.tool.transform?.((r) => {
+      registry = r
+      promote(r)
+    })
+    const before = await ctx.tool.hook("execute.before", async (event) => {
       const decision = gate(2, event.tool, (event.input ?? {}) as Record<string, unknown>, event.sessionID, directory)
       if (decision === undefined) return
-      // The call is answered rather than refused: the same question, put to JUNON.
-      if (decision.outline !== undefined) {
-        event.tool = "execute"
-        event.input = { code: outlineProgram(decision.outline, decision.refusal) }
-        return
-      }
-      if (decision.lookup !== undefined) {
-        event.tool = "execute"
-        event.input = { code: lookupProgram(decision.lookup, decision.refusal, directory) }
-        return
-      }
-      throw new Error(decision.refusal)
+      // The call is answered rather than refused: the same question, put to JUNON by this plugin,
+      // and the answer handed back through an `execute` that does nothing but return it.
+      const answer =
+        decision.outline !== undefined
+          ? await outlineAnswer(registry, decision.outline, decision.refusal, contextOf(event))
+          : decision.lookup !== undefined
+            ? await lookupAnswer(registry, decision.lookup, decision.refusal, directory, contextOf(event))
+            : undefined
+      if (answer === undefined) throw new Error(decision.refusal)
+      event.tool = "execute"
+      event.input = { code: `/* junon-first: answer */\nreturn ${JSON.stringify(answer)}` }
     })
-    return () => registration.dispose()
+    const after = await ctx.tool.hook("execute.after", async (event) => {
+      if (event.tool !== "edit" && event.tool !== "write") return
+      if (event.status !== undefined && event.status !== "completed") return
+      const path = String((event.input as Record<string, unknown> | undefined)?.path ?? "")
+      if (!CODE.test(path)) return
+      const file = absolute(path, directory)
+      const relative = withinProject(file, directory)
+      if (relative === undefined) return
+      const note = await afterEdit(registry, file, relative, contextOf(event))
+      if (note !== undefined && Array.isArray(event.result?.content)) {
+        event.result.content = [...event.result.content, { type: "text", text: note }]
+      }
+    })
+    return async () => {
+      await before.dispose()
+      await after.dispose()
+      if (transformed) await transformed.dispose()
+    }
   },
 }

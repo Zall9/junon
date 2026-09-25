@@ -54,6 +54,10 @@ NO_ANSWER = re.compile(r"\((No outline|No answer from the index): ")
 EXECUTE_SERENA = "execute → tools.serena"
 REFUSALS = "(refused by the gate)"
 ANSWERS = "(answered by the gate)"
+CHECKS = "(edits the IDE checked)"
+
+#: What the gate appends to an edit or write it had the IDE — else the language server — check.
+CHECKED = re.compile(r"(?:^|\n)\(?JUNON: (?:the IDE|serena's language server) (?:finds|reports)")
 
 
 def symbolic(name: str) -> bool:
@@ -63,6 +67,7 @@ def symbolic(name: str) -> bool:
 
 def summarise(label: str, counter: collections.Counter) -> None:
     refused = counter.pop(REFUSALS, 0)
+    checked = counter.pop(CHECKS, 0)
     total = sum(counter.values())
     if not total:
         print(f"  {label:24} —")
@@ -74,7 +79,7 @@ def summarise(label: str, counter: collections.Counter) -> None:
     files = sum(count for name, count in counter.items() if name in FILE_TOOLS)
     print(
         f"  {label:24} {total:6} calls   junon {junon:5} ({junon / total:5.1%})"
-        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}   answered {answered:4}"
+        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}   answered {answered:4}   checked {checked:4}"
     )
 
 
@@ -153,6 +158,8 @@ def opencode_2(connection: sqlite3.Connection, since_ms: float) -> dict[str, col
                 counter[tool_key(name, state.get("input"))] += 1
                 if was_refused(state.get("error")) or (UNANSWERED.match(head) and NO_ANSWER.search(text)):
                     counter[REFUSALS] += 1
+                if name in ("edit", "write") and CHECKED.search(json.dumps(state.get("content") or "").replace("\\n", "\n")):
+                    counter[CHECKS] += 1
     except sqlite3.OperationalError:
         pass  # a database from before opencode 2
     return per_agent
