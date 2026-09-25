@@ -15,6 +15,31 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.15
+
+Under opencode 2, which offers a model no MCP tool of its own — only `execute` and `search` — and
+whose agents went back to `read` and `grep`:
+
+- **JUNON's seven IDE tools are tools of their own**: `serena_ide_status`, `serena_ide_find_symbol`,
+  `serena_ide_read_symbol`, `serena_ide_symbols_overview`, `serena_ide_hierarchy`,
+  `serena_ide_read_document`, `serena_ide_diagnostics`, offered next to `read` from the turn serena
+  connects. The gate takes them out of opencode 2's code mode through its tool registry. Seven, not
+  all thirteen IDE and symbol tools: each schema is sent with every request, and the thirteen weighed
+  17,419 characters against a 13,620-character tool list. The others stay inside `execute`; an
+  `execute` calling a promoted tool is refused, naming the tool to call.
+- **`read` and `grep` describe them** — what a model chooses a tool by.
+- **Every edit or write of a source file is checked by the IDE**, and what it finds is appended to
+  the result the model reads — only when the IDE has analysed the content just written (its hash of
+  the text equals the file's), within five seconds, or nothing is said. serena's language server
+  when no IDE has the project.
+- **The outline and grep answers are asked by the gate itself**, no longer by a program inside
+  `execute` — which the promoted tools have left, and which could not reach serena on a session's
+  first turn.
+- An agent denied `serena_*` — oh-my-opencode-slim's `mcps` — is offered none of these tools, and the
+  gate's own calls on its behalf are refused too. opencode 1 and Claude Code are unchanged.
+- **`junon-usage.py`** counts the checked edits in a `checked` column.
+- **What you have to do about it:** the usual update, then restart opencode.
+
 ## 0.3.14
 
 - **No more browser tab per instance.** Serena's configuration opens its dashboard on every launch,
