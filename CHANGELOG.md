@@ -15,6 +15,31 @@ pnpm -r build                          # the daemon and the CLI, then restart th
 Both halves report what they are: `ide-bridge doctor` names any peer that is behind, and `ide_status`
 tells the agent — and through it, you.
 
+## 0.3.13
+
+- **The IDE first.** Counted over opencode 2's first three days, agents asked serena's language
+  server what the IDE could answer about four times as often as they asked the IDE — `find_symbol`
+  165 calls against `ide_find_symbol` 6 and `ide_read_symbol` 16 — and the file-tool gate had been
+  naming `find_symbol` first in every refusal. Both gates now name `ide_find_symbol`,
+  `ide_read_symbol`, `ide_hierarchy` and `ide_symbols_overview` first, and serena's tools as what
+  answers when no IDE has the project open.
+- **Under opencode 2, a `grep` for a bare identifier is answered from the IDE's index** instead of
+  refused: the declarations carrying that exact name, with file and line, and the callers when one
+  callable carries it — serena's language server when no IDE answers. A name nothing declares is a
+  text search after all, and the answer says so; the same grep runs the second time.
+- **An outline says what it leaves out.** When a file's declarations cover less than half of it — a
+  Pest test file's `it()` blocks are not declarations — the outline lists the lines outside them.
+- **A strict refusal no longer switches the other nudges off.** A session refused a whole read then
+  reads a range, which is compliance; counted as an ignored refusal, it had silenced the
+  bare-identifier nudge in the very sessions that followed the rule. Found in the real opencode 1.
+- **`junon-usage.py`**: the `outlined` column becomes `answered` — outlines and answered greps — and
+  recognises an answer by the first line of its output only, so a read of a file that merely contains
+  the sentence, such as the gate's own source, is counted as the read it is.
+- Serena's own tools are **not** made to answer from the IDE. Agents program against their answers —
+  36 of 157 such calls process the result by its fields — and an IDE answer in serena's shape would be
+  an approximation. See `docs/IDE_FIRST_PLAN.md`.
+- **What you have to do about it:** the usual update, then restart opencode and Claude Code.
+
 ## 0.3.12
 
 - **A large source file is never read whole.** A `read` with no range of a source file of 300 lines or

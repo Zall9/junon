@@ -1,6 +1,6 @@
 {
   "name": "@ide-bridge/cli",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "private": true,
   "description": "IDE Bridge CLI \u2014 foreground daemon lifecycle and authenticated health commands",
   "license": "Apache-2.0",
