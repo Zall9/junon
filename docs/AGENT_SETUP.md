@@ -516,7 +516,7 @@ beside it, because that count has already gone stale twice:
 | Refused | Why | To proceed anyway |
 | --- | --- | --- |
 | `read` of a source file of 300 lines or more with no range — or `cat`, `bat`, `less`, `more`, `nl` of one | the whole file enters the context to answer a question about part of it | **never on a second try.** Pass offset/limit, or `sed -n 'a,bp'`. Under opencode 2 the `read` is not refused at all: it is **answered with the file's outline** |
-| `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex |
+| `grep` for a bare identifier | a question about a symbol, which grep answers with every comment and string containing the name | repeat it, or use a regex. Under opencode 2 it is **answered from the IDE's index** — the declarations, and the callers of a single callable |
 | a whole-file code read past the session's budget — the **sixth** where the index has been used, the **fourth** where it has not | no single one is wrong; opening thirty files to find one function is the search a symbol index does in one call | repeat it, or pass offset/limit |
 | the **first** short source file, in a session that has never used a symbolic tool | a project of small files was a way to read all of it without ever being asked: every read under the threshold, the budget never spent | repeat it — this is said once per session and never again |
 | `bash grep`/`rg` for a bare identifier, `cat` of a short source file | the shell is not a different question — it is the same one, asked where the gate could not see | repeat it, or point the command at something that is not source |
@@ -613,14 +613,44 @@ The next read is then the range `43-51`. When no outline can be made, the refusa
 read's result instead, saying why. One case measured and not avoidable from a plugin: in a session's
 first turn, serena can be missing from the catalog `execute` is given even though it is connected —
 the catalog is fixed for the turn and the sandbox has no timer — so that read gets the refusal and the
-next one the outline. `junon-usage.py` counts outlines in a column of their own. opencode 1 and Claude
-Code cannot change which tool runs, so there the read is refused, with the same advice.
+next one the outline. `junon-usage.py` counts these answers in a column of their own, `answered`.
+opencode 1 and Claude Code cannot change which tool runs, so there the read is refused, with the same
+advice.
 
 Proved in the real hosts before release: opencode 2 with a real JUNON (serena's outline), through the
 machine's shared instance on a project PhpStorm had open (the IDE's outline, lines matching the file),
 and with no serena at all (the refusal as the result); opencode 1 refusing on every try and editing
 after a ranged read; and `edit` under opencode 2 needing no prior `read`, so an outline in place of a
 read cannot block an edit.
+
+### The IDE first (0.3.13)
+
+Counted in opencode 2's first three days: agents asked serena's language server what the IDE could
+have answered about four times as often as they asked the IDE — `find_symbol` 165 calls against
+`ide_find_symbol` 6 and `ide_read_symbol` 16, `get_symbols_overview` 23 against `ide_symbols_overview`
+1 — and every refusal of this gate had named `find_symbol` first. Now:
+
+- **Every refusal names the IDE's tool first**, and serena's as what answers when no IDE has the
+  project open.
+- **Under opencode 2 a bare-identifier `grep` is answered from the IDE's index**, like a whole read:
+  the declarations carrying that exact name, with file and line, and the callers when exactly one
+  callable carries it; serena's language server when no IDE answers. A name nothing declares is a text
+  search after all, and the answer says so: the same grep runs the second time. Seen in PhpStorm on
+  `vod/core`: `grep showChannel` came back as `method showChannel — app/Services/LinkService.php:43`,
+  no callers — which the real grep that followed confirmed, with one match, the declaration.
+- **An outline says what it leaves out.** A Pest test file's `it()` blocks are not declarations, so
+  its outline was one function; when the declarations cover less than half the file, the outline now
+  lists the lines outside every one of them.
+- **A strict refusal no longer counts towards the give-up.** A session refused a whole read then reads
+  a range — that is compliance — and counting it had switched the bare-identifier nudge off in the
+  sessions that had followed the rule. Found in the real opencode 1, not by a test.
+
+**Serena's own tools are not made to answer from the IDE**, though it was considered. Agents program
+against their answers — 36 of 157 calls to `find_symbol`, `get_symbols_overview` and
+`find_referencing_symbols` process the result in code, by its fields (`name_path`, `body_location`) —
+and rebuilding those shapes from the IDE would be an approximation. `read_file` has to read the disk,
+which is what every line-based edit writes to. And JUNON's tools are additive by a recorded decision:
+replacing one of serena's is done through `excluded_tools`, in a configuration a user can read.
 
 The shell rule looks at **what a command is aimed at**, not only what it is, and it took two
 corrections to get there. Judging the verb alone refused `cat .serena/project.yml` — a config file the
@@ -630,12 +660,14 @@ rule's own message promises to let through. Judging the whole command line then 
 scoped to the segment holding the command and asks *where* as well as *what*: a bare identifier
 searched across a tree is a symbol question; the same pattern pointed at a `.log` is not.
 
-The refusal names the call that answers better — `find_symbol`, `find_referencing_symbols`,
-`ide_read_document` — **in the asking host's own terms**, because the two opencodes do not expose
-MCP tools the same way ([OPENCODE.md](OPENCODE.md)). opencode 1 has a tool per MCP tool, so it is told
-`serena_find_symbol({ name_path_pattern: "X" })`. opencode 2 has none: a model reaches MCP tools only
+The refusal names the call that answers better — **the IDE's first**: `ide_find_symbol`,
+`ide_read_symbol`, `ide_hierarchy`, `ide_symbols_overview`, then serena's `find_symbol` and
+`find_referencing_symbols` as what answers when no IDE has the project open (since 0.3.13; see
+below) — **in the asking host's own terms**, because the two opencodes do not expose MCP tools the
+same way ([OPENCODE.md](OPENCODE.md)). opencode 1 has a tool per MCP tool, so it is told
+`serena_ide_find_symbol({ query: "X" })`. opencode 2 has none: a model reaches MCP tools only
 through the `execute` meta-tool, as code — measured in real sessions — so it is told
-`execute → await tools.serena.find_symbol({ name_path_pattern: "X" })`, and that `search` finds
+`execute → await tools.serena.ide_find_symbol({ query: "X" })`, and that `search` finds
 `tools.serena` if it is not there yet. Until 0.3.10 opencode 2 models were told the opencode 1 name, a
 tool they could not call. **Nothing is ever unreachable**: repeating a guess runs it, and a large file
 can always be read by range — a log file, a genuine text search, a file outside the project all go

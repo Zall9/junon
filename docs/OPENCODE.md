@@ -174,3 +174,4 @@ real service — `opencode.db` records every `execute` and its code — and ever
 | 0.3.9 | `prompts/list` answered from the recorded handshake; the relay stays up outside a project |
 | 0.3.10 | the file-tool gate advises in each host's terms, loads under both, and every update installs it |
 | 0.3.12 | a whole read of a large source file is never let through; opencode 2 answers it with the file's outline, by rewriting the `read` into an `execute` |
+| 0.3.13 | the same for a bare-identifier `grep`, answered from the IDE's index; the IDE's tools named first everywhere |

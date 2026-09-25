@@ -309,6 +309,17 @@ def refuse(reason: str) -> int:
     return 2
 
 
+def without_an_ide(*names: str) -> str:
+    """serena's language-server tools, named as what they are: the answer when no IDE has the project.
+
+    The IDE's tools come first in every refusal — asked for on 2026-09-25, after counting what agents
+    called: `find_symbol` 165 times against `ide_find_symbol` 6. This gate had been naming
+    `find_symbol` first.
+    """
+    called = ", ".join(f"mcp__serena__{name}" for name in names)
+    return f"  No IDE with this project open: {called} answer the same from serena's language server.\n"
+
+
 def main() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
@@ -330,16 +341,18 @@ def main() -> int:
     if tool == "Bash":
         command = masked(str(arguments.get("command") or ""))
         # Ahead of the give-up: this is not a guess about intent, and a range is always there instead.
+        # Nor does it count towards the give-up: a session refused here then reads a range, which is
+        # compliance — counted, it switched the guesses off in sessions that had followed this rule.
         large = large_whole_file_read(command, root)
         if large:
-            unheeded_count(session, increment=True)
             name, lines = large
             return refuse(
                 f"That command was not run, and will not be on another try: it prints {name} "
                 f"({lines} lines) whole, and a source file this size is not read whole by any route.\n"
                 f'  mcp__serena__ide_symbols_overview(relative_path="…")   its declarations, with their lines\n'
-                f"  mcp__serena__find_symbol(name_path_pattern=..., include_body=True)   one declaration\n"
-                f"For the text itself, print a range — `sed -n '120,180p' {name}` — or Read it with "
+                f'  mcp__serena__ide_read_symbol(name="…", relative_path="…")   one declaration\n'
+                + without_an_ide("get_symbols_overview", "find_symbol")
+                + f"For the text itself, print a range — `sed -n '120,180p' {name}` — or Read it with "
                 f"offset and limit. A range is never refused."
             )
         if not worth_nudging(session):
@@ -365,10 +378,11 @@ def main() -> int:
             f"That command was not run: it uses `{searching or reading}` to answer a question the "
             f"index answers better, and going through Bash reaches the same dead end as the tool "
             f"would.\n"
-            f"  mcp__serena__find_symbol(name_path_pattern=...)        where it is defined\n"
-            f"  mcp__serena__find_referencing_symbols(...)             who uses it\n"
-            f"  mcp__serena__ide_read_symbol / ide_read_document       from the running IDE\n"
-            f"If it is really about text or files — a log, a config, a build output — run it again "
+            f'  mcp__serena__ide_find_symbol(query="…")                      where it is defined, from the IDE\'s index\n'
+            f'  mcp__serena__ide_hierarchy(name="…", relation="callers")     who calls it\n'
+            f'  mcp__serena__ide_read_symbol(name="…")                       one declaration\n'
+            + without_an_ide("find_symbol", "find_referencing_symbols")
+            + f"If it is really about text or files — a log, a config, a build output — run it again "
             f"and it will go through."
         )
 
@@ -388,10 +402,10 @@ def main() -> int:
         unheeded_count(session, increment=True)
         return refuse(
             f'Grep "{pattern}" was not run. Ask the index, which resolves what a text search cannot:\n'
-            f'  mcp__serena__find_symbol(name_path_pattern="{pattern}")   the declaration\n'
-            f"  mcp__serena__find_referencing_symbols(...)                callers, including overrides\n"
-            f"  mcp__serena__ide_find_symbol / ide_hierarchy              the same, from the running IDE\n"
-            f"If you want text — a log line, a config value, a string — run the same Grep again and it "
+            f'  mcp__serena__ide_find_symbol(query="{pattern}")                     the declaration, from the IDE\'s index\n'
+            f'  mcp__serena__ide_hierarchy(name="{pattern}", relation="callers")    its real callers\n'
+            + without_an_ide("find_symbol", "find_referencing_symbols")
+            + f"If you want text — a log line, a config value, a string — run the same Grep again and it "
             f"will go through, or use a regex."
         )
 
@@ -410,17 +424,16 @@ def main() -> int:
         return 0
     lines = line_count(path)
 
-    # Not a guess, so ahead of the give-up and never let through on a second try: the way out is a
-    # range, which every agent has.
+    # Not a guess, so ahead of the give-up, never let through on a second try, and never counted
+    # towards the give-up: the way out is a range, which every agent has, and taking it is compliance.
     if lines >= WHOLE_FILE_IS_FINE:
-        unheeded_count(session, increment=True)
         return refuse(
             f"Read of {path} ({lines} lines) was not run, and will not be on another try — the whole "
             f"file would enter the context to answer a question about part of it:\n"
             f'  mcp__serena__ide_symbols_overview(relative_path="{relative}")   its declarations, with their lines\n'
-            f'  mcp__serena__get_symbols_overview(relative_path="{relative}", depth=1)   the same from serena\'s language server\n'
-            f'  mcp__serena__find_symbol(name_path_pattern=..., relative_path="{relative}", include_body=True)   one declaration\n'
-            f"For the text itself, pass offset and limit — a range is never refused."
+            f'  mcp__serena__ide_read_symbol(name="…", relative_path="{relative}")   one declaration\n'
+            + without_an_ide("get_symbols_overview", "find_symbol")
+            + f"For the text itself, pass offset and limit — a range is never refused."
         )
 
     if not worth_nudging(session):
@@ -433,9 +446,10 @@ def main() -> int:
         return refuse(
             f"Read of {path} was not run — this session has not asked the index anything yet, and a "
             f"short file is still a file read whole:\n"
-            f'  mcp__serena__ide_read_symbol(name=..., relative_path="{relative}")    one declaration, from the running IDE\n'
-            f'  mcp__serena__find_symbol(name_path_pattern=..., relative_path="{relative}", include_body=True)\n'
-            f"Said once per session. Run the same Read again and it will go through, as will every "
+            f'  mcp__serena__ide_read_symbol(name="…", relative_path="{relative}")   one declaration\n'
+            f'  mcp__serena__ide_symbols_overview(relative_path="{relative}")    what is in it\n'
+            + without_an_ide("find_symbol", "get_symbols_overview")
+            + f"Said once per session. Run the same Read again and it will go through, as will every "
             f"short file after it."
         )
     if already_nudged(session, "read", path):
@@ -444,10 +458,11 @@ def main() -> int:
     return refuse(
         f"Read of {path} was not run — that is {used} whole files opened in this session. Reading "
         f"them one after another to find something is the search the index does in one call:\n"
-        f"  mcp__serena__find_symbol(name_path_pattern=...)        where it is defined\n"
-        f"  mcp__serena__find_referencing_symbols(...)             who uses it\n"
-        f"  mcp__serena__search_for_pattern(substring_pattern=...) text, but scoped\n"
-        f"Run the same Read again and it will go through."
+        f'  mcp__serena__ide_find_symbol(query="…")                      where it is defined, from the IDE\'s index\n'
+        f'  mcp__serena__ide_hierarchy(name="…", relation="callers")     who calls it\n'
+        f'  mcp__serena__search_for_pattern(substring_pattern="…")       text, but scoped\n'
+        + without_an_ide("find_symbol", "find_referencing_symbols")
+        + f"Run the same Read again and it will go through."
     )
 
 

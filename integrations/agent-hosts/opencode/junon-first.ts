@@ -236,6 +236,18 @@ function serena(host: Host, name: string, args: string): string {
   return host === 1 ? `serena_${name}(${args})` : `execute → await tools.serena.${name}(${args})`
 }
 
+/**
+ * serena's language-server tools, named as what they are: the answer for a project no IDE has open.
+ *
+ * The IDE's tools come first everywhere — asked for on 2026-09-25, after counting what agents called
+ * under opencode 2: `find_symbol` 165 times against `ide_find_symbol` 6 and `ide_read_symbol` 16. The
+ * gate had been teaching that, naming `find_symbol` first in every refusal.
+ */
+function withoutAnIde(host: Host, ...names: string[]): string {
+  const called = names.map((name) => (host === 1 ? `serena_${name}` : `tools.serena.${name}`)).join(", ")
+  return `  No IDE with this project open: ${called} answer the same from serena's language server.\n`
+}
+
 /** The line only an opencode 2 model needs: where those calls go, and how to load them. */
 function howToCall(host: Host): string {
   return host === 1
@@ -315,6 +327,8 @@ function largeWholeFileRead(command: string, directory: string | undefined): { f
 interface Decision {
   readonly refusal: string
   readonly outline?: { readonly path: string; readonly relative: string; readonly lines: number }
+  /** A bare-identifier grep, which opencode 2 answers from the IDE's index instead. */
+  readonly lookup?: { readonly pattern: string; readonly scope?: string }
 }
 
 /**
@@ -345,15 +359,17 @@ function gate(
   if (tool === "bash" || tool === "shell") {
     const command = masked(String(args.command ?? ""))
     // Ahead of the give-up: this is not a guess about intent, and a range is always there instead.
+    // Nor does it count towards the give-up: a session refused here then reads a range, which is
+    // compliance — counted, it switched the guesses off in sessions that had followed this rule.
     const large = largeWholeFileRead(command, directory)
     if (large) {
-      unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
       return {
         refusal:
           `That command was not run, and will not be on another try: it prints ${large.file} ` +
           `(${large.lines} lines) whole, and a source file this size is not read whole by any route.\n` +
           `  ${serena(host, "ide_symbols_overview", `{ relative_path: "…" }`)}  — its declarations, with their lines\n` +
-          `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", include_body: true }`)}  — one declaration\n` +
+          `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "…" }`)}  — one declaration\n` +
+          withoutAnIde(host, "get_symbols_overview", "find_symbol") +
           howToCall(host) +
           `For the text itself, print a range — \`sed -n '120,180p' ${large.file}\`, or \`read\` with ` +
           `offset and limit. A range is never refused.`,
@@ -382,9 +398,10 @@ function gate(
         `That command was not run: it uses \`${searching ?? reading}\` to answer a question the ` +
         `symbol index answers better, and running it through the shell reaches the same dead end as ` +
         `the tool would.\n` +
-        `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where something is defined\n` +
-        `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
-        `  ${serena(host, "ide_read_symbol", '{ name: "…" }')}  — one declaration, from the running IDE\n` +
+        `  ${serena(host, "ide_find_symbol", '{ query: "…" }')}  — where something is defined, from the IDE's index\n` +
+        `  ${serena(host, "ide_hierarchy", '{ name: "…", relation: "callers" }')}  — who calls it\n` +
+        `  ${serena(host, "ide_read_symbol", '{ name: "…" }')}  — one declaration\n` +
+        withoutAnIde(host, "find_symbol", "find_referencing_symbols") +
         howToCall(host) +
         `If the command is really about text or files — a log, a config, a build output — run it ` +
         `again and it will go through.`,
@@ -406,15 +423,17 @@ function gate(
     const key = `${session}:grep:${pattern}`
     if (alreadyNudged.has(key)) return undefined
     alreadyNudged.add(key)
-    unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
+    // Under opencode 2 this is answered, not refused, so it is not a refusal left unheeded.
+    if (host === 1) unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
 
     return {
+      lookup: { pattern, scope: where ?? (args.include === undefined ? undefined : String(args.include)) },
       refusal:
         `grep "${pattern}" was not run. Ask the index instead — it resolves what a text search ` +
         `cannot:\n` +
-        `  ${serena(host, "find_symbol", `{ name_path_pattern: "${pattern}" }`)}  — the definition\n` +
-        `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — real callers, including overrides\n` +
-        `  ${serena(host, "ide_find_symbol", `{ query: "${pattern}" }`)}  — the same, from the running IDE\n` +
+        `  ${serena(host, "ide_find_symbol", `{ query: "${pattern}" }`)}  — the definition, from the IDE's index\n` +
+        `  ${serena(host, "ide_hierarchy", `{ name: "${pattern}", relation: "callers" }`)}  — its real callers\n` +
+        withoutAnIde(host, "find_symbol", "find_referencing_symbols") +
         howToCall(host) +
         `If you genuinely want text — a log line, a config value, a string — run the same grep ` +
         `again and it will go through, or pass a regex.`,
@@ -431,17 +450,17 @@ function gate(
   if (relative === undefined) return undefined
   const lines = lineCount(file)
 
-  // Not a guess, so ahead of the give-up and never let through on a second try: the way out is a
-  // range, which every agent has. opencode 2 answers it with the outline instead of this refusal.
+  // Not a guess, so ahead of the give-up, never let through on a second try, and never counted
+  // towards the give-up: the way out is a range, which every agent has, and taking it is compliance.
+  // opencode 2 answers it with the outline instead of this refusal.
   if (lines >= WHOLE_FILE_IS_FINE) {
-    if (host === 1) unheeded.set(session, (unheeded.get(session) ?? 0) + 1)
     return {
       refusal:
         `read of ${path} (${lines} lines) was not run, and will not be on another try — the whole ` +
         `file would enter the context to answer a question about part of it:\n` +
-        `  ${serena(host, "ide_symbols_overview", `{ relative_path: "${relative}" }`)}  — its declarations, with their lines, from the running IDE\n` +
-        `  ${serena(host, "get_symbols_overview", `{ relative_path: "${relative}", depth: 1 }`)}  — the same from serena's language server\n` +
-        `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}  — one declaration\n` +
+        `  ${serena(host, "ide_symbols_overview", `{ relative_path: "${relative}" }`)}  — its declarations, with their lines\n` +
+        `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "${relative}" }`)}  — one declaration\n` +
+        withoutAnIde(host, "get_symbols_overview", "find_symbol") +
         howToCall(host) +
         `For the text itself, pass offset and limit — a range is never refused.`,
       outline: { path, relative, lines },
@@ -464,8 +483,9 @@ function gate(
       refusal:
         `read of ${path} was not run — this session has not asked the index anything yet, and a ` +
         `short file is still a file read whole:\n` +
-        `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "${relative}" }`)}  — one declaration, from the running IDE\n` +
-        `  ${serena(host, "find_symbol", `{ name_path_pattern: "…", relative_path: "${relative}", include_body: true }`)}\n` +
+        `  ${serena(host, "ide_read_symbol", `{ name: "…", relative_path: "${relative}" }`)}  — one declaration\n` +
+        `  ${serena(host, "ide_symbols_overview", `{ relative_path: "${relative}" }`)}  — what is in it\n` +
+        withoutAnIde(host, "find_symbol", "get_symbols_overview") +
         howToCall(host) +
         `Said once per session. Run the same read again and it will go through, as will every ` +
         `short file after it.`,
@@ -481,9 +501,10 @@ function gate(
     refusal:
       `read of ${path} was not run — that is ${used} whole files opened in this session. Reading ` +
       `them one after another to find something is the search the symbol index does in one call:\n` +
-      `  ${serena(host, "find_symbol", '{ name_path_pattern: "…" }')}  — where it is defined\n` +
-      `  ${serena(host, "find_referencing_symbols", '{ name_path: "…", relative_path: "…" }')}  — who uses it\n` +
+      `  ${serena(host, "ide_find_symbol", '{ query: "…" }')}  — where it is defined, from the IDE's index\n` +
+      `  ${serena(host, "ide_hierarchy", '{ name: "…", relation: "callers" }')}  — who calls it\n` +
       `  ${serena(host, "search_for_pattern", '{ substring_pattern: "…" }')}  — text, but scoped\n` +
+      withoutAnIde(host, "find_symbol", "find_referencing_symbols") +
       howToCall(host) +
       `Run the same read again and it will go through.`,
   }
@@ -525,6 +546,28 @@ const text = (answer) => {
   return typeof value === "string" ? value : JSON.stringify(value)
 }
 const absent = refusal + "\\n(No outline: serena is not in this turn's tool catalog — once it is connected, the next call has it.)"
+// Seen on 2026-09-25: a 315-line Pest test file outlined as one function — its it() blocks are not
+// declarations. An outline that leaves most of the file out says which lines, so they can be read.
+const uncovered = (symbols) => {
+  const total = ${outline.lines}
+  const spans = (Array.isArray(symbols) ? symbols : [])
+    .map((s) => [((s && s.range && s.range.start && s.range.start.line) || 0) + 1, ((s && s.range && s.range.end && s.range.end.line) || 0) + 1])
+    .sort((a, b) => a[0] - b[0])
+  const gaps = []
+  let next = 1
+  let covered = 0
+  for (const [first, last] of spans) {
+    if (first > next) gaps.push([next, first - 1])
+    covered += Math.max(0, last - Math.max(first, next) + 1)
+    next = Math.max(next, last + 1)
+  }
+  if (next <= total) gaps.push([next, total])
+  if (covered * 2 >= total) return ""
+  const listed = gaps.filter(([a, b]) => b - a >= 2).slice(0, 12).map(([a, b]) => a + "-" + b)
+  return "\\n\\nThese declarations cover " + covered + " of " + total + " lines. Outside every one of them: " +
+    listed.join(", ") + " — a test file's it() and test() blocks, a script's statements and a config's " +
+    "arrays are not declarations. Read those ranges."
+}
 if (typeof tools !== "object" || tools === null || tools.serena === undefined) return absent
 const why = []
 try {
@@ -545,7 +588,7 @@ try {
   }
   if (parsed) {
     walk(parsed.symbols, 0)
-    if (rows.length) return header + "\\nFrom the IDE — first-last line, kind, name:\\n" + rows.join("\\n")
+    if (rows.length) return header + "\\nFrom the IDE — first-last line, kind, name:\\n" + rows.join("\\n") + uncovered(parsed.symbols)
     why.push("the IDE listed no declarations")
   }
 } catch (error) {
@@ -565,6 +608,99 @@ try {
   why.push("serena: " + String(error).slice(0, 240))
 }
 return refusal + "\\n(No outline: " + why.join("; ") + ")"
+`
+}
+
+/** What an answered grep starts with — and what `junon-usage.py` counts those answers by. */
+const LOOKED_UP = "answered from the index by JUNON"
+
+/**
+ * The `execute` program opencode 2 runs in place of a grep for a bare identifier.
+ *
+ * The same question, put to the IDE's index first — `ide_find_symbol`, then `ide_hierarchy` for the
+ * callers when exactly one callable carries the name — and to serena's language server when no IDE
+ * answers. A name that is no symbol at all is a text search after all, so that answer is the refusal:
+ * it says the same grep runs the second time, which it does. Everything the outline program measured
+ * about `execute` holds here too.
+ */
+function lookupProgram(lookup: NonNullable<Decision["lookup"]>, refusal: string, directory: string | undefined): string {
+  const header =
+    `grep "${lookup.pattern}" ${LOOKED_UP}, not run — a bare identifier is a question about a ` +
+    `symbol${lookup.scope ? `, and the index answers for the whole project, not only ${lookup.scope}` : ""}.\n` +
+    `For its text occurrences too — comments, strings, config — run the same grep again: it runs the ` +
+    `second time. A regex runs the first.\n`
+  return `/* junon-first: lookup */
+const pattern = ${JSON.stringify(lookup.pattern)}
+const root = ${JSON.stringify(directory ?? "")}
+const header = ${JSON.stringify(header)}
+const refusal = ${JSON.stringify(refusal)}
+const text = (answer) => {
+  const value = answer && typeof answer === "object" && "result" in answer ? answer.result : answer
+  return typeof value === "string" ? value : JSON.stringify(value)
+}
+const where = (uri) => {
+  const path = decodeURIComponent(String(uri || "").replace(/^file:\\/\\//, ""))
+  return root && path.startsWith(root + "/") ? path.slice(root.length + 1) : path
+}
+const line = (range) => ((range && range.start && range.start.line) || 0) + 1
+const absent = refusal + "\\n(No answer from the index: serena is not in this turn's tool catalog — once it is connected, the next call has it.)"
+if (typeof tools !== "object" || tools === null || tools.serena === undefined) return absent
+const why = []
+try {
+  const answer = text(await tools.serena.ide_find_symbol({ query: pattern, limit: 30 }))
+  let parsed
+  try { parsed = JSON.parse(answer) } catch { why.push("the IDE: " + answer.slice(0, 240)) }
+  if (parsed) {
+    const symbols = Array.isArray(parsed.symbols) ? parsed.symbols : []
+    // Exact names only: the index searches the way Go to Symbol does, and a near miss offered for a
+    // config key would be an answer to a question nobody asked.
+    const exact = symbols.filter((s) => ((s && s.locator) || {}).name === pattern)
+    if (exact.length) {
+      const rows = exact.slice(0, 20).map((s) => {
+        const locator = s.locator || {}
+        return "  " + (locator.kind || "symbol") + " " + locator.name + " — " + where(locator.documentUri) + ":" + line(s.range || locator.selectionRange)
+      })
+      let out = header + "\\nFrom the IDE's index — declared as " + pattern + ":\\n" + rows.join("\\n")
+      if (exact.length === 1 && /^(method|function|constructor)$/.test(String(exact[0].locator.kind))) {
+        try {
+          const tree = JSON.parse(text(await tools.serena.ide_hierarchy({ name: pattern, relation: "callers" })))
+          const callers = (tree.locations || []).slice(0, 20).map((c) => {
+            const caller = (c.symbol && c.symbol.locator) || {}
+            return "  " + (caller.name || "?") + " — " + where(c.location && c.location.uri) + ":" + line(c.location && c.location.range)
+          })
+          out += "\\n\\nIts callers, from the IDE" + (tree.truncated ? ", more than shown" : "") + ":\\n" + (callers.length ? callers.join("\\n") : "  none")
+        } catch (error) {
+          out += "\\n\\n(No callers: " + String(error).slice(0, 160) + ")"
+        }
+      }
+      if (exact.length > 20 || parsed.truncated) out += "\\n(The IDE had more matches than shown.)"
+      return out
+    }
+    why.push("the IDE's index has no symbol named " + pattern)
+  }
+} catch (error) {
+  if (/Unknown tool/.test(String(error))) return absent
+  why.push("the IDE: " + String(error).slice(0, 240))
+}
+try {
+  const answer = text(await tools.serena.find_symbol({ name_path_pattern: pattern }))
+  let parsed
+  try { parsed = JSON.parse(answer) } catch { why.push("serena: " + answer.slice(0, 240)) }
+  if (Array.isArray(parsed) && parsed.length) {
+    const rows = parsed.slice(0, 20).map((s) => "  " + s.kind + " " + s.name_path + " — " + s.relative_path + ":" + (((s.body_location || {}).start_line || 0) + 1))
+    return header + "\\nFrom serena's language server — no IDE answered:\\n" + rows.join("\\n")
+  }
+  if (Array.isArray(parsed)) why.push("serena has no symbol named " + pattern)
+} catch (error) {
+  why.push("serena: " + String(error).slice(0, 240))
+}
+// Both indexes answered, and neither knows the name: a text search after all. Advising the index
+// here would send the agent to ask it again what it has just said.
+if (why.length && why.every((reason) => / has no symbol named /.test(reason))) {
+  return "grep \\"" + pattern + "\\" was not run: nothing in this project is declared as " + pattern +
+    ", so it is a text search — run the same grep again and it runs.\\n(No answer from the index: " + why.join("; ") + ")"
+}
+return refusal + "\\n(No answer from the index: " + why.join("; ") + ")"
 `
 }
 
@@ -615,10 +751,18 @@ export default {
     const registration = await ctx.tool.hook("execute.before", async (event) => {
       const decision = gate(2, event.tool, (event.input ?? {}) as Record<string, unknown>, event.sessionID, directory)
       if (decision === undefined) return
-      if (decision.outline === undefined) throw new Error(decision.refusal)
-      // The read is answered rather than refused: the same call, carried out by JUNON.
-      event.tool = "execute"
-      event.input = { code: outlineProgram(decision.outline, decision.refusal) }
+      // The call is answered rather than refused: the same question, put to JUNON.
+      if (decision.outline !== undefined) {
+        event.tool = "execute"
+        event.input = { code: outlineProgram(decision.outline, decision.refusal) }
+        return
+      }
+      if (decision.lookup !== undefined) {
+        event.tool = "execute"
+        event.input = { code: lookupProgram(decision.lookup, decision.refusal, directory) }
+        return
+      }
+      throw new Error(decision.refusal)
     })
     return () => registration.dispose()
   },

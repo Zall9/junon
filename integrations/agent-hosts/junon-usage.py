@@ -41,16 +41,19 @@ SERENA_IN_CODE = re.compile(r"\btools\s*(?:\.\s*serena\b|\[\s*[\"']serena[\"']\s
 #: What the file-tool gate's refusals say, in every form it has had.
 REFUSED = "was not run"
 
-#: What an opencode 2 `read` answered with an outline instead of the file says, and what one says when
-#: no outline could be made and the refusal came back as its result. The database records both as a
-#: `read` with its original input: only the output tells them apart from a read that ran.
-OUTLINED = "answered with its outline by JUNON"
-NO_OUTLINE = "(No outline:"
+#: How an opencode 2 call the gate answered in its place begins: a `read` answered with the file's
+#: outline, a `grep` answered from the index. The database records the call the model made, with its
+#: original input, so only the output tells it from a call that ran — and only the output's first
+#: line: a `read` of a file that merely contains the sentence, such as the gate's own source, is a read.
+ANSWERED = re.compile(r'^(read of .* answered with its outline by JUNON|grep ".*" answered from the index by JUNON)')
+#: How one begins when no answer could be made and the refusal came back as its result.
+UNANSWERED = re.compile(r'^(read of .*|grep ".*") was not run')
+NO_ANSWER = re.compile(r"\((No outline|No answer from the index): ")
 
 #: The keys a counter uses beside tool names.
 EXECUTE_SERENA = "execute → tools.serena"
 REFUSALS = "(refused by the gate)"
-OUTLINES = "(read answered with an outline)"
+ANSWERS = "(answered by the gate)"
 
 
 def symbolic(name: str) -> bool:
@@ -64,15 +67,25 @@ def summarise(label: str, counter: collections.Counter) -> None:
     if not total:
         print(f"  {label:24} —")
         return
-    # An outline is JUNON answering in the agent's place, so it is neither the agent choosing serena
-    # nor a file entering the context: its own column.
-    outlined = counter.get(OUTLINES, 0)
+    # An answer is JUNON answering in the agent's place — an outline, an index lookup — so it is
+    # neither the agent choosing serena nor a file entering the context: its own column.
+    answered = counter.get(ANSWERS, 0)
     junon = sum(count for name, count in counter.items() if symbolic(name))
     files = sum(count for name, count in counter.items() if name in FILE_TOOLS)
     print(
         f"  {label:24} {total:6} calls   junon {junon:5} ({junon / total:5.1%})"
-        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}   outlined {outlined:4}"
+        f"   file {files:5} ({files / total:5.1%})   refused {refused:4}   answered {answered:4}"
     )
+
+
+def first_line(content: object) -> tuple[str, str]:
+    """The first line of a tool part's output, and the whole of its first text."""
+    items = content if isinstance(content, list) else [content]
+    for item in items:
+        text = item.get("text") if isinstance(item, dict) else item if isinstance(item, str) else None
+        if isinstance(text, str):
+            return text.split("\n", 1)[0], text
+    return "", ""
 
 
 def tool_key(name: str, arguments: object) -> str:
@@ -133,12 +146,12 @@ def opencode_2(connection: sqlite3.Connection, since_ms: float) -> dict[str, col
                     continue
                 state = part.get("state") or {}
                 name = part.get("name") or "?"
-                output = json.dumps(state.get("content") or "")
-                if name == "read" and OUTLINED in output:
-                    counter[OUTLINES] += 1
+                head, text = first_line(state.get("content")) if name in ("read", "grep") else ("", "")
+                if ANSWERED.match(head):
+                    counter[ANSWERS] += 1
                     continue
                 counter[tool_key(name, state.get("input"))] += 1
-                if was_refused(state.get("error")) or (name == "read" and NO_OUTLINE in output):
+                if was_refused(state.get("error")) or (UNANSWERED.match(head) and NO_ANSWER.search(text)):
                     counter[REFUSALS] += 1
     except sqlite3.OperationalError:
         pass  # a database from before opencode 2

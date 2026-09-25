@@ -43,6 +43,10 @@ def build(path: Path) -> None:
         {"type": "tool", "name": "read", "state": {"status": "completed", "input": {"path": "/c.ts"}, "content": [{"type": "text", "text": "read of /c.ts (812 lines) answered with its outline by JUNON, not with its text"}]}},
         # ...and one it could not outline: the refusal came back as the read's result, not an error.
         {"type": "tool", "name": "read", "state": {"status": "completed", "input": {"path": "/d.ts"}, "content": [{"type": "text", "text": "read of /d.ts (500 lines) was not run ...\n(No outline: serena is not in this turn's tool catalog)"}]}},
+        # A grep answered from the index.
+        {"type": "tool", "name": "grep", "state": {"status": "completed", "input": {"pattern": "startWorkflow"}, "content": [{"type": "text", "text": 'grep "startWorkflow" answered from the index by JUNON, not run\nFrom the IDE\'s index'}]}},
+        # A read of a file that merely contains the sentences — the gate's own source — is a read.
+        {"type": "tool", "name": "read", "state": {"status": "completed", "input": {"path": "/gate.ts"}, "content": [{"type": "text", "text": 'import { readFileSync } from "node:fs"\nconst OUTLINED = "answered with its outline by JUNON"\n(No outline: '}]}},
         {"type": "text", "text": "done"},
     ]
     db.execute("insert into session_message values ('sm1', 's2', 'assistant', 1, ?, ?, ?)", (NOW, NOW, json.dumps({"agent": "orchestrator", "content": content})))
@@ -84,11 +88,11 @@ class TestBothOpencodes:
 
         line = line_for(report(db), "opencode 2", "orchestrator")
 
-        assert count(line, "calls") == 5
+        assert count(line, "calls") == 7
         assert count(line, "junon") == 1, line    # the execute that calls tools.serena
         assert count(line, "refused") == 2, line  # the grep, and the read no outline could answer
-        assert count(line, "outlined") == 1, line
-        assert count(line, "file") == 2, line     # an outlined read is not a file entering the context
+        assert count(line, "answered") == 2, line  # the outline and the grep answered from the index
+        assert count(line, "file") == 3, line     # an answer is not a file entering the context; the gate's source read is
 
     def test_opencode_1_sessions_are_still_read_as_before(self, tmp_path: Path) -> None:
         db = tmp_path / "opencode.db"

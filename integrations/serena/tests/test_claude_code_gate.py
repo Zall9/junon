@@ -84,6 +84,15 @@ class TestAWholeLargeFile:
         assert ask("Bash", {"command": "cat src/big.ts"})[0] == 2
 
 
+    def test_does_not_count_towards_the_give_up(self, ask, project: Path) -> None:
+        # Seen in the real opencode 1 on 2026-09-25: strict refusals followed by ranges counted as
+        # ignored, and switched the guesses off in a session that had complied.
+        for _ in range(4):
+            ask("Read", {"file_path": str(project / "src/big.ts")})
+            ask("Bash", {"command": "cat src/big.ts"})
+        assert ask("Grep", {"pattern": "startWorkflow"})[0] == 2
+
+
 class TestTheShell:
     def test_cat_of_a_large_file_is_refused_on_every_try(self, ask) -> None:
         for _ in range(3):
@@ -122,6 +131,42 @@ class TestTheGuesses:
     def test_a_session_that_used_serena_is_not_nudged_about_short_files(self, ask, project: Path) -> None:
         assert ask("mcp__serena__find_symbol", {"name_path_pattern": "x"})[0] == 0
         assert ask("Read", {"file_path": str(project / "src/small.ts")})[0] == 0
+
+
+class TestTheIdeFirst:
+    """Asked for on 2026-09-25: `find_symbol` 165 calls against `ide_find_symbol` 6 under opencode 2,
+    and every refusal of the gates named `find_symbol` first."""
+
+    @staticmethod
+    def first_named(reason: str) -> str:
+        import re
+
+        found = re.search(r"mcp__serena__(\w+)", reason)
+        return found.group(1) if found else ""
+
+    def test_every_refusal_names_an_ide_tool_first_and_serena_as_the_fallback(self, ask, project: Path) -> None:
+        reasons = [
+            ask("Grep", {"pattern": "startWorkflow"}, session="a")[1],
+            ask("Read", {"file_path": str(project / "src/big.ts")}, session="b")[1],
+            ask("Read", {"file_path": str(project / "src/small.ts")}, session="c")[1],
+            ask("Bash", {"command": "grep -rn startWorkflow src"}, session="d")[1],
+            ask("Bash", {"command": "cat src/big.ts"}, session="e")[1],
+        ]
+        for reason in reasons:
+            assert "was not run" in reason
+            assert self.first_named(reason).startswith("ide_"), reason
+            assert "No IDE with this project open: mcp__serena__" in reason, reason
+
+    def test_the_budget_refusal_too(self, ask, project: Path) -> None:
+        ask("Read", {"file_path": str(project / "src/small.ts")}, session="f")
+        reason = ""
+        for n in range(4):
+            path = project / "src" / f"budget{n}.ts"
+            path.write_text("export const b = 1\n")
+            reason = ask("Read", {"file_path": str(path)}, session="f")[1] or reason
+
+        assert "whole files opened" in reason
+        assert self.first_named(reason) == "ide_find_symbol"
 
 
 class TestItsOwnHygiene:
